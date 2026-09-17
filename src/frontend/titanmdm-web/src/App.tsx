@@ -5,25 +5,135 @@ import {
 } from 'react-router-dom'
 
 import { ProtectedRoute } from './auth/ProtectedRoute'
-import { DashboardPage } from './pages/DashboardPage'
+import { AppLayout } from './components/layout/AppLayout'
+
 import { LoginPage } from './pages/LoginPage'
+import { DashboardPage } from './pages/DashboardPage'
+
+import { DevicesPage } from './pages/devices/DevicesPage'
+import { EnrollmentPage } from './pages/enrollment/EnrollmentPage'
+import { PoliciesPage } from './pages/policies/PoliciesPage'
+import { AppsPage } from './pages/apps/AppsPage'
+import { SecurityPage } from './pages/security/SecurityPage'
+import { CompliancePage } from './pages/compliance/CompliancePage'
+import { KioskPage } from './pages/kiosk/KioskPage'
+import { GeofencingPage } from './pages/geofencing/GeofencingPage'
+import { RemotePage } from './pages/remote/RemotePage'
+import { ReportsPage } from './pages/reports/ReportsPage'
+import { AuditPage } from './pages/audit/AuditPage'
+import { UsersPage } from './pages/users/UsersPage'
+import { RolesPage } from './pages/roles/RolesPage'
+import { SettingsPage } from './pages/settings/SettingsPage'
 
 function App() {
   return (
     <Routes>
+      {/* =========================================================
+          PUBLIC ROUTES
+         ========================================================= */}
+
       <Route
         path="/login"
         element={<LoginPage />}
       />
 
+      {/* =========================================================
+          PROTECTED TITANMDM CONSOLE
+         ========================================================= */}
+
       <Route
-        path="/"
         element={
           <ProtectedRoute>
-            <DashboardPage />
+            <AppLayout />
           </ProtectedRoute>
         }
-      />
+      >
+        {/* Dashboard */}
+        <Route
+          index
+          element={<DashboardPage />}
+        />
+
+        {/* Device Management */}
+        <Route
+          path="devices"
+          element={<DevicesPage />}
+        />
+
+        <Route
+          path="enrollment"
+          element={<EnrollmentPage />}
+        />
+
+        {/* Configuration */}
+        <Route
+          path="policies"
+          element={<PoliciesPage />}
+        />
+
+        <Route
+          path="apps"
+          element={<AppsPage />}
+        />
+
+        {/* Security */}
+        <Route
+          path="security"
+          element={<SecurityPage />}
+        />
+
+        <Route
+          path="compliance"
+          element={<CompliancePage />}
+        />
+
+        {/* Advanced MDM */}
+        <Route
+          path="kiosk"
+          element={<KioskPage />}
+        />
+
+        <Route
+          path="geofencing"
+          element={<GeofencingPage />}
+        />
+
+        <Route
+          path="remote"
+          element={<RemotePage />}
+        />
+
+        {/* Reporting */}
+        <Route
+          path="reports"
+          element={<ReportsPage />}
+        />
+
+        <Route
+          path="audit"
+          element={<AuditPage />}
+        />
+
+        {/* Administration */}
+        <Route
+          path="users"
+          element={<UsersPage />}
+        />
+
+        <Route
+          path="roles"
+          element={<RolesPage />}
+        />
+
+        <Route
+          path="settings"
+          element={<SettingsPage />}
+        />
+      </Route>
+
+      {/* =========================================================
+          UNKNOWN ROUTES
+         ========================================================= */}
 
       <Route
         path="*"
