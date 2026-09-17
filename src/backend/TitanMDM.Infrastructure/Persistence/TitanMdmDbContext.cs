@@ -37,10 +37,13 @@ public sealed class TitanMdmDbContext : DbContext
 
     public DbSet<Device> Devices =>
         Set<Device>();
+
+    public DbSet<DeviceCommand> DeviceCommands =>
+    Set<DeviceCommand>();
     
     public DbSet<DeviceCredential> DeviceCredentials =>
     Set<DeviceCredential>();
-    
+
     public DbSet<EnrollmentToken> EnrollmentTokens =>
     Set<EnrollmentToken>();
 
