@@ -8,4 +8,5 @@ public sealed record RegisterDeviceResultDto(
     string Status,
     string ComplianceStatus,
     bool IsManaged,
-    DateTime EnrolledAtUtc);
+    DateTime EnrolledAtUtc,
+    string DeviceSecret);

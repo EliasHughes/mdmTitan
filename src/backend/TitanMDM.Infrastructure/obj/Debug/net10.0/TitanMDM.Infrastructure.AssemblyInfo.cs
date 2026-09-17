@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TitanMDM.Infrastructure")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+10224237cde8ac240859ec3884e389b296f64b84")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+758dafb418fd2fc82537ac6b77799e2e4dec0781")]
 [assembly: System.Reflection.AssemblyProductAttribute("TitanMDM.Infrastructure")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TitanMDM.Infrastructure")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

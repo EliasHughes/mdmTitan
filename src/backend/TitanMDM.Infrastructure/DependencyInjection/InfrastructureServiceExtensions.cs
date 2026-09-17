@@ -17,6 +17,8 @@ using TitanMDM.Infrastructure.Devices;
 using TitanMDM.Application.Enrollment;
 using TitanMDM.Infrastructure.Enrollment;
 using TitanMDM.Application.Enrollment.DeviceRegistration;
+using TitanMDM.Application.Devices.Agent;
+using TitanMDM.Infrastructure.Devices.Agent;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
@@ -125,6 +127,8 @@ public static class InfrastructureServiceExtensions
     services.AddScoped<
     IDeviceRegistrationService,
     DeviceRegistrationService>();
+
+    services.AddScoped<IDeviceAgentService, DeviceAgentService>();
 
     services.AddScoped<IDeviceQueryService, DeviceQueryService>();
 
