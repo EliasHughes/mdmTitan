@@ -14,6 +14,8 @@ using TitanMDM.Application.Dashboard.Interfaces;
 using TitanMDM.Infrastructure.Dashboard;
 using TitanMDM.Application.Devices;
 using TitanMDM.Infrastructure.Devices;
+using TitanMDM.Application.Enrollment;
+using TitanMDM.Infrastructure.Enrollment;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
@@ -114,6 +116,10 @@ public static class InfrastructureServiceExtensions
     services.AddScoped<
     IDashboardService,
     DashboardService>();
+
+    services.AddScoped<
+    IEnrollmentService,
+    EnrollmentService>();
 
     services.AddScoped<IDeviceQueryService, DeviceQueryService>();
 
