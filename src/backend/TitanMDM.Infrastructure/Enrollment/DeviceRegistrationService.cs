@@ -19,112 +19,132 @@ public sealed class DeviceRegistrationService
         _dbContext = dbContext;
     }
 
-    public async Task<RegisterDeviceResultDto> RegisterAsync(
-        RegisterDeviceRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        ValidateRequest(request);
+   public async Task<RegisterDeviceResultDto> RegisterAsync(
+    RegisterDeviceRequest request,
+    CancellationToken cancellationToken = default)
+{
+    ValidateRequest(request);
 
-        var normalizedToken =
-            request.EnrollmentToken.Trim();
+    var normalizedToken =
+        request.EnrollmentToken.Trim();
 
-        var tokenHash =
-            ComputeSha256(normalizedToken);
+    var tokenHash =
+        ComputeSha256(normalizedToken);
 
-        await using var transaction =
-            await _dbContext.Database.BeginTransactionAsync(
-                cancellationToken);
+    var executionStrategy =
+        _dbContext.Database.CreateExecutionStrategy();
 
-        try
+    return await executionStrategy.ExecuteAsync(
+        async () =>
         {
-            var enrollmentToken =
-                await _dbContext.EnrollmentTokens
-                    .SingleOrDefaultAsync(
-                        x => x.TokenHash == tokenHash,
-                        cancellationToken);
-
-            if (enrollmentToken is null)
-            {
-                throw new DeviceRegistrationException(
-                    "INVALID_TOKEN",
-                    "La credencial de inscripción no es válida.");
-            }
-
-            ValidateEnrollmentToken(
-                enrollmentToken,
-                request.Platform);
-
-            var serialNumber =
-                request.SerialNumber.Trim();
-
-            var duplicateExists =
-                await _dbContext.Devices.AnyAsync(
-                    x =>
-                        x.OrganizationId ==
-                            enrollmentToken.OrganizationId &&
-                        x.SerialNumber == serialNumber &&
-                        !x.IsDeleted,
+            await using var transaction =
+                await _dbContext.Database.BeginTransactionAsync(
                     cancellationToken);
 
-            if (duplicateExists)
+            try
             {
-                throw new DeviceRegistrationException(
-                    "SERIAL_ALREADY_REGISTERED",
-                    "Ya existe un dispositivo con este número de serie.");
+                var enrollmentToken =
+                    await _dbContext.EnrollmentTokens
+                        .SingleOrDefaultAsync(
+                            x => x.TokenHash == tokenHash,
+                            cancellationToken);
+
+                if (enrollmentToken is null)
+                {
+                    throw new DeviceRegistrationException(
+                        "INVALID_TOKEN",
+                        "La credencial de inscripción no es válida.");
+                }
+
+                ValidateEnrollmentToken(
+                    enrollmentToken,
+                    request.Platform);
+
+                var serialNumber =
+                    request.SerialNumber.Trim();
+
+                var duplicateExists =
+                    await _dbContext.Devices.AnyAsync(
+                        x =>
+                            x.OrganizationId ==
+                                enrollmentToken.OrganizationId &&
+                            x.SerialNumber == serialNumber &&
+                            !x.IsDeleted,
+                        cancellationToken);
+
+                if (duplicateExists)
+                {
+                    throw new DeviceRegistrationException(
+                        "SERIAL_ALREADY_REGISTERED",
+                        "Ya existe un dispositivo con este número de serie.");
+                }
+
+                var device =
+                    new Device(
+                        enrollmentToken.OrganizationId,
+                        request.DeviceName.Trim(),
+                        enrollmentToken.Platform,
+                        serialNumber);
+
+                device.UpdateInventory(
+                    Normalize(request.Manufacturer),
+                    Normalize(request.Model),
+                    Normalize(request.OperatingSystem),
+                    Normalize(request.OperatingSystemVersion),
+                    Normalize(request.AgentVersion),
+                    null,
+                    Normalize(request.MacAddress));
+
+                device.RegisterHeartbeat(
+                    Normalize(request.IpAddress),
+                    null);
+
+                device.CompleteEnrollment();
+
+                var deviceSecret = 
+                GenerateDeviceSecret();
+
+                var deviceSecretHash =
+                    ComputeSha256(deviceSecret);
+
+                var deviceCredential =
+                    new DeviceCredential(
+                        device.Id,
+                        device.OrganizationId,
+                        deviceSecretHash);
+
+                enrollmentToken.RegisterUse();
+
+                _dbContext.Devices.Add(device);
+                _dbContext.DeviceCredentials.Add(deviceCredential);
+
+                await _dbContext.SaveChangesAsync(
+                    cancellationToken);
+
+                await transaction.CommitAsync(
+                    cancellationToken);
+
+                return new RegisterDeviceResultDto(
+                            device.Id,
+                            device.OrganizationId,
+                            device.DeviceName,
+                            device.Platform.ToString(),
+                            device.Status.ToString(),
+                            device.ComplianceStatus.ToString(),
+                            device.IsManaged,
+                            device.EnrolledAtUtc
+                                ?? DateTime.UtcNow,
+                            deviceSecret);
             }
+            catch
+            {
+                await transaction.RollbackAsync(
+                    cancellationToken);
 
-            var device =
-                new Device(
-                    enrollmentToken.OrganizationId,
-                    request.DeviceName.Trim(),
-                    enrollmentToken.Platform,
-                    serialNumber);
-
-            device.UpdateInventory(
-                Normalize(request.Manufacturer),
-                Normalize(request.Model),
-                Normalize(request.OperatingSystem),
-                Normalize(request.OperatingSystemVersion),
-                Normalize(request.AgentVersion),
-                null,
-                Normalize(request.MacAddress));
-
-            device.RegisterHeartbeat(
-                Normalize(request.IpAddress),
-                null);
-
-            device.CompleteEnrollment();
-
-            enrollmentToken.RegisterUse();
-
-            _dbContext.Devices.Add(device);
-
-            await _dbContext.SaveChangesAsync(
-                cancellationToken);
-
-            await transaction.CommitAsync(
-                cancellationToken);
-
-            return new RegisterDeviceResultDto(
-                device.Id,
-                device.OrganizationId,
-                device.DeviceName,
-                device.Platform.ToString(),
-                device.Status.ToString(),
-                device.ComplianceStatus.ToString(),
-                device.IsManaged,
-                device.EnrolledAtUtc
-                    ?? DateTime.UtcNow);
-        }
-        catch
-        {
-            await transaction.RollbackAsync(
-                cancellationToken);
-
-            throw;
-        }
-    }
-
+                throw;
+            }
+        });
+}
     private static void ValidateRequest(
         RegisterDeviceRequest request)
     {
@@ -163,6 +183,13 @@ public sealed class DeviceRegistrationService
                 "La plataforma debe ser Windows o Android.");
         }
     }
+
+    private static string GenerateDeviceSecret()
+{
+    var bytes = RandomNumberGenerator.GetBytes(32);
+
+    return Convert.ToHexString(bytes);
+}
 
     private static void ValidateEnrollmentToken(
         EnrollmentToken token,
