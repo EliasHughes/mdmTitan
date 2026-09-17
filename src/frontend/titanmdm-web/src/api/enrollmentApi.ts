@@ -11,7 +11,7 @@ export const enrollmentApi = {
   async getTokens(): Promise<EnrollmentToken[]> {
     const response =
       await apiClient.get<EnrollmentToken[]>(
-        '/api/enrollment/tokens',
+        '/enrollment/tokens',
       )
 
     return response.data
@@ -22,7 +22,7 @@ export const enrollmentApi = {
   ): Promise<CreatedEnrollmentToken> {
     const response =
       await apiClient.post<CreatedEnrollmentToken>(
-        '/api/enrollment/tokens',
+        '/enrollment/tokens',
         request,
       )
 
@@ -33,7 +33,7 @@ export const enrollmentApi = {
     enrollmentTokenId: string,
   ): Promise<void> {
     await apiClient.post(
-      `/api/enrollment/tokens/${enrollmentTokenId}/revoke`,
+      `/enrollment/tokens/${enrollmentTokenId}/revoke`,
     )
   },
 
@@ -43,7 +43,7 @@ export const enrollmentApi = {
   ): Promise<EnrollmentTokenValidationResult> {
     const response =
       await apiClient.post<EnrollmentTokenValidationResult>(
-        '/api/enrollment/validate',
+        '/enrollment/validate',
         {
           token,
           platform,
