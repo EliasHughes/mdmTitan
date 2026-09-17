@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TitanMDM.Application.Commands.Agent;
+using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -21,7 +22,31 @@ public sealed class DeviceCommandAgentService
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
+        if (deviceId == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "DeviceId no es válido.");
+        }
+
         var now = DateTime.UtcNow;
+
+        var expiredCommands =
+            await _dbContext.DeviceCommands
+                .Where(x =>
+                    x.DeviceId == deviceId &&
+                    (
+                        x.Status == DeviceCommandStatus.Pending ||
+                        x.Status == DeviceCommandStatus.Queued ||
+                        x.Status == DeviceCommandStatus.Dispatching ||
+                        x.Status == DeviceCommandStatus.Sent
+                    ) &&
+                    x.ExpiresAtUtc <= now)
+                .ToListAsync(cancellationToken);
+
+        foreach (var expiredCommand in expiredCommands)
+        {
+            expiredCommand.MarkTimeout();
+        }
 
         var commands =
             await _dbContext.DeviceCommands
@@ -36,16 +61,13 @@ public sealed class DeviceCommandAgentService
                 .Take(20)
                 .ToListAsync(cancellationToken);
 
-        var result = new List<AgentCommandDto>();
+        var result =
+            new List<AgentCommandDto>();
 
         foreach (var command in commands)
         {
-            /*
-             * AQUÍ llamaremos al método de dominio que ya existe
-             * para pasar el comando a Sent/Dispatching.
-             *
-             * No asignes command.Status directamente.
-             */
+            command.MarkDispatching();
+            command.MarkSent();
 
             result.Add(
                 new AgentCommandDto(
@@ -73,9 +95,7 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        /*
-         * command.MarkDelivered();
-         */
+        command.MarkDelivered();
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -92,9 +112,7 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        /*
-         * command.MarkExecuting();
-         */
+        command.MarkExecuting();
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -112,9 +130,8 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        /*
-         * command.MarkSuccess(resultJson);
-         */
+        command.CompleteSuccess(
+            resultJson);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -128,29 +145,50 @@ public sealed class DeviceCommandAgentService
         string? resultJson,
         CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(errorCode))
+        {
+            errorCode = "COMMAND_FAILED";
+        }
+
+        if (string.IsNullOrWhiteSpace(errorMessage))
+        {
+            errorMessage =
+                "El agente informó que el comando falló.";
+        }
+
         var command =
             await GetCommandAsync(
                 deviceId,
                 commandId,
                 cancellationToken);
 
-        /*
-         * command.MarkFailed(
-         *     errorCode,
-         *     errorMessage,
-         *     resultJson);
-         */
+        command.CompleteFailure(
+            errorCode,
+            errorMessage,
+            resultJson);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
     }
 
-    private async Task<TitanMDM.Domain.Entities.DeviceCommand>
+    private async Task<DeviceCommand>
         GetCommandAsync(
             Guid deviceId,
             Guid commandId,
             CancellationToken cancellationToken)
     {
+        if (deviceId == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "DeviceId no es válido.");
+        }
+
+        if (commandId == Guid.Empty)
+        {
+            throw new InvalidOperationException(
+                "CommandId no es válido.");
+        }
+
         var command =
             await _dbContext.DeviceCommands
                 .SingleOrDefaultAsync(
