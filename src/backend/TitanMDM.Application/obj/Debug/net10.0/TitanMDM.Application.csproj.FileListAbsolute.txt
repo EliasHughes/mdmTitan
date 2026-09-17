@@ -1,0 +1,15 @@
+C:\TitanMDM\src\backend\TitanMDM.Application\bin\Debug\net10.0\TitanMDM.Application.deps.json
+C:\TitanMDM\src\backend\TitanMDM.Application\bin\Debug\net10.0\TitanMDM.Application.dll
+C:\TitanMDM\src\backend\TitanMDM.Application\bin\Debug\net10.0\TitanMDM.Application.pdb
+C:\TitanMDM\src\backend\TitanMDM.Application\bin\Debug\net10.0\TitanMDM.Domain.dll
+C:\TitanMDM\src\backend\TitanMDM.Application\bin\Debug\net10.0\TitanMDM.Domain.pdb
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.csproj.AssemblyReference.cache
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.GeneratedMSBuildEditorConfig.editorconfig
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.AssemblyInfoInputs.cache
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.AssemblyInfo.cs
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.csproj.CoreCompileInputs.cache
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.5B761857.Up2Date
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.dll
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\refint\TitanMDM.Application.dll
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.pdb
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\ref\TitanMDM.Application.dll
