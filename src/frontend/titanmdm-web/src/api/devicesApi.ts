@@ -20,7 +20,7 @@ export const devicesApi = {
   ): Promise<DeviceListResult> {
     const response =
       await apiClient.get<DeviceListResult>(
-        '/api/devices',
+        '/devices',
         {
           params: {
             search:
@@ -47,7 +47,7 @@ export const devicesApi = {
   ): Promise<DeviceDetails> {
     const response =
       await apiClient.get<DeviceDetails>(
-        `/api/devices/${deviceId}`,
+        `/devices/${deviceId}`,
       )
 
     return response.data

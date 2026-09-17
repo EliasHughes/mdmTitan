@@ -2,6 +2,7 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TitanMDM.Application.Enrollment;
+using TitanMDM.Application.Enrollment.DeviceRegistration;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -9,13 +10,18 @@ namespace TitanMDM.Api.Controllers;
 [Route("api/enrollment")]
 public sealed class EnrollmentController : ControllerBase
 {
+
+    private readonly IDeviceRegistrationService
+    _deviceRegistrationService;
     private readonly IEnrollmentService _enrollmentService;
 
-    public EnrollmentController(
-        IEnrollmentService enrollmentService)
-    {
-        _enrollmentService = enrollmentService;
-    }
+  public EnrollmentController(
+    IEnrollmentService enrollmentService,
+    IDeviceRegistrationService deviceRegistrationService)
+{
+    _enrollmentService = enrollmentService;
+    _deviceRegistrationService = deviceRegistrationService;
+}
 
     [Authorize]
     [HttpPost("tokens")]
@@ -74,6 +80,69 @@ public sealed class EnrollmentController : ControllerBase
                 message = ex.Message
             });
         }
+
+[AllowAnonymous]
+[HttpPost("register")]
+public async Task<IActionResult> RegisterDevice(
+    [FromBody] RegisterDeviceRequest request,
+    CancellationToken cancellationToken)
+{
+    try
+    {
+        var result =
+            await _deviceRegistrationService.RegisterAsync(
+                request,
+                cancellationToken);
+
+        return StatusCode(
+            StatusCodes.Status201Created,
+            result);
+    }
+    catch (DeviceRegistrationException ex)
+    {
+        var statusCode =
+            ex.Code switch
+            {
+                "INVALID_REQUEST" =>
+                    StatusCodes.Status400BadRequest,
+
+                "INVALID_PLATFORM" =>
+                    StatusCodes.Status400BadRequest,
+
+                "INVALID_TOKEN" =>
+                    StatusCodes.Status401Unauthorized,
+
+                "TOKEN_EXPIRED" =>
+                    StatusCodes.Status401Unauthorized,
+
+                "TOKEN_REVOKED" =>
+                    StatusCodes.Status401Unauthorized,
+
+                "TOKEN_EXHAUSTED" =>
+                    StatusCodes.Status409Conflict,
+
+                "TOKEN_NOT_ACTIVE" =>
+                    StatusCodes.Status409Conflict,
+
+                "PLATFORM_MISMATCH" =>
+                    StatusCodes.Status409Conflict,
+
+                "SERIAL_ALREADY_REGISTERED" =>
+                    StatusCodes.Status409Conflict,
+
+                _ =>
+                    StatusCodes.Status400BadRequest
+            };
+
+        return StatusCode(
+            statusCode,
+            new
+            {
+                code = ex.Code,
+                message = ex.Message
+            });
+    }
+}
     }
 
     [Authorize]

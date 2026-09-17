@@ -11,7 +11,7 @@ import { LoginPage } from './pages/LoginPage'
 import { DashboardPage } from './pages/DashboardPage'
 
 import { DevicesPage } from './pages/devices/DevicesPage'
-import { EnrollmentPage } from './pages/enrollment/EnrollmentPage'
+import EnrollmentPage from './pages/enrollment/EnrollmentPage'
 import { PoliciesPage } from './pages/policies/PoliciesPage'
 import { AppsPage } from './pages/apps/AppsPage'
 import { SecurityPage } from './pages/security/SecurityPage'
