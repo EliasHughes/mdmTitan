@@ -73,16 +73,19 @@ public sealed class EnrollmentController : ControllerBase
                 message = ex.Message
             });
         }
-        catch (InvalidOperationException ex)
-        {
-            return BadRequest(new
-            {
-                message = ex.Message
-            });
-        }
+      catch (InvalidOperationException ex)
+{
+    return BadRequest(new
+    {
+        message = ex.Message
+    });
+}
+}
 
 [AllowAnonymous]
 [HttpPost("register")]
+
+
 public async Task<IActionResult> RegisterDevice(
     [FromBody] RegisterDeviceRequest request,
     CancellationToken cancellationToken)
@@ -143,7 +146,7 @@ public async Task<IActionResult> RegisterDevice(
             });
     }
 }
-    }
+    
 
     [Authorize]
     [HttpGet("tokens")]
@@ -222,6 +225,7 @@ public async Task<IActionResult> RegisterDevice(
 
     [AllowAnonymous]
     [HttpPost("validate")]
+
     public async Task<IActionResult> ValidateToken(
         [FromBody] ValidateEnrollmentTokenRequest request,
         CancellationToken cancellationToken = default)
