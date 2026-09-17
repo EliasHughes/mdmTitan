@@ -8,13 +8,7 @@ export function AppLayout() {
     useState(false)
 
   return (
-    <div
-      className={
-        sidebarCollapsed
-          ? 'application-shell sidebar-is-collapsed'
-          : 'application-shell'
-      }
-    >
+    <div className="app-layout">
       <Sidebar
         collapsed={sidebarCollapsed}
         onToggle={() =>
@@ -22,10 +16,10 @@ export function AppLayout() {
         }
       />
 
-      <div className="application-main">
+      <div className="app-layout__main">
         <Header />
 
-        <main className="application-content">
+        <main className="app-layout__content">
           <Outlet />
         </main>
       </div>
