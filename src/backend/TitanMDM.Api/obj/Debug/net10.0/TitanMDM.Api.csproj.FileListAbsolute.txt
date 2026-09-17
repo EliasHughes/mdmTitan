@@ -171,3 +171,4 @@ C:\TitanMDM\src\backend\TitanMDM.Api\bin\Debug\net10.0\runtimes\win-x64\native\m
 C:\TitanMDM\src\backend\TitanMDM.Api\bin\Debug\net10.0\runtimes\win-x86\native\msalruntime_x86.dll
 C:\TitanMDM\src\backend\TitanMDM.Api\bin\Debug\net10.0\Microsoft.AspNetCore.Authentication.JwtBearer.dll
 C:\TitanMDM\src\backend\TitanMDM.Api\bin\Debug\net10.0\Microsoft.Bcl.Cryptography.dll
+C:\TitanMDM\src\backend\TitanMDM.Api\obj\Debug\net10.0\TitanMDM.Api.sourcelink.json

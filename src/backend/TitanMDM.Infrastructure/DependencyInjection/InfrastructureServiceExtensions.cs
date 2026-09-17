@@ -10,6 +10,10 @@ using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Authentication;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Seed;
+using TitanMDM.Application.Dashboard.Interfaces;
+using TitanMDM.Infrastructure.Dashboard;
+using TitanMDM.Application.Devices;
+using TitanMDM.Infrastructure.Devices;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
@@ -107,7 +111,15 @@ public static class InfrastructureServiceExtensions
     IAuthenticationService,
     AuthenticationService>();
 
+    services.AddScoped<
+    IDashboardService,
+    DashboardService>();
+
+    services.AddScoped<IDeviceQueryService, DeviceQueryService>();
+
 services.AddScoped<TitanMdmSeeder>();
+
+
 
 return services;
     }

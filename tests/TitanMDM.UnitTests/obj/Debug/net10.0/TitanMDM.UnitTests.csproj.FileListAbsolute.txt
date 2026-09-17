@@ -100,3 +100,4 @@ C:\TitanMDM\tests\TitanMDM.UnitTests\obj\Debug\net10.0\refint\TitanMDM.UnitTests
 C:\TitanMDM\tests\TitanMDM.UnitTests\obj\Debug\net10.0\TitanMDM.UnitTests.pdb
 C:\TitanMDM\tests\TitanMDM.UnitTests\obj\Debug\net10.0\TitanMDM.UnitTests.genruntimeconfig.cache
 C:\TitanMDM\tests\TitanMDM.UnitTests\obj\Debug\net10.0\ref\TitanMDM.UnitTests.dll
+C:\TitanMDM\tests\TitanMDM.UnitTests\obj\Debug\net10.0\TitanMDM.UnitTests.sourcelink.json

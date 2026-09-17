@@ -4,8 +4,9 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 import { NavLink } from 'react-router-dom'
-import { navigationItems } from '../../config/navigation'
+
 import { useAuth } from '../../auth/AuthContext'
+import { navigationItems } from '../../config/navigation'
 
 interface SidebarProps {
   collapsed: boolean
@@ -26,27 +27,32 @@ export function Sidebar({
     <aside
       className={
         collapsed
-          ? 'app-sidebar app-sidebar-collapsed'
-          : 'app-sidebar'
+          ? 'sidebar sidebar--collapsed'
+          : 'sidebar'
       }
     >
-      <div className="sidebar-brand">
-        <div className="sidebar-brand-icon">
+      <div className="sidebar__brand">
+        <div className="sidebar__brand-mark">
           T
         </div>
 
         {!collapsed && (
-          <div className="sidebar-brand-copy">
+          <div className="sidebar__brand-text">
             <strong>TitanMDM</strong>
-            <span>ENTERPRISE</span>
+            <span>Enterprise</span>
           </div>
         )}
 
         <button
           type="button"
-          className="sidebar-toggle"
+          className="sidebar__collapse"
           onClick={onToggle}
           aria-label={
+            collapsed
+              ? 'Expandir menú'
+              : 'Contraer menú'
+          }
+          title={
             collapsed
               ? 'Expandir menú'
               : 'Contraer menú'
@@ -60,11 +66,11 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="sidebar-section-label">
-        {!collapsed && 'ADMINISTRACIÓN'}
+      <div className="sidebar__section-title">
+        {!collapsed && 'Administración'}
       </div>
 
-      <nav className="sidebar-navigation">
+      <nav className="sidebar__nav">
         {allowedItems.map((item) => {
           const Icon = item.icon
 
@@ -73,12 +79,16 @@ export function Sidebar({
               key={item.path}
               to={item.path}
               end={item.path === '/'}
+              title={
+                collapsed
+                  ? item.label
+                  : undefined
+              }
               className={({ isActive }) =>
                 isActive
-                  ? 'sidebar-link sidebar-link-active'
-                  : 'sidebar-link'
+                  ? 'sidebar__link sidebar__link--active'
+                  : 'sidebar__link'
               }
-              title={collapsed ? item.label : undefined}
             >
               <Icon size={19} />
 
@@ -90,8 +100,8 @@ export function Sidebar({
         })}
       </nav>
 
-      <div className="sidebar-footer">
-        <div className="sidebar-security">
+      <div className="sidebar__footer">
+        <div className="sidebar__security">
           <ShieldCheck size={18} />
 
           {!collapsed && (

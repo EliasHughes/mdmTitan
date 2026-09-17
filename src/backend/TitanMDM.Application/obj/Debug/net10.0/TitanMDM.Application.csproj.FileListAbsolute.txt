@@ -13,3 +13,4 @@ C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Applicat
 C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\refint\TitanMDM.Application.dll
 C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.pdb
 C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\ref\TitanMDM.Application.dll
+C:\TitanMDM\src\backend\TitanMDM.Application\obj\Debug\net10.0\TitanMDM.Application.sourcelink.json

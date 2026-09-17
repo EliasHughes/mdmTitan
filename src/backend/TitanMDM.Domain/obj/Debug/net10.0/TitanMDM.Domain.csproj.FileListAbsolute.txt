@@ -9,3 +9,4 @@ C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.dll
 C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\refint\TitanMDM.Domain.dll
 C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.pdb
 C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\ref\TitanMDM.Domain.dll
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.sourcelink.json
