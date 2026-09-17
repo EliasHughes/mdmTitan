@@ -26,27 +26,50 @@ export interface DeviceListItem {
   platform: DevicePlatform
   status: DeviceStatus
   complianceStatus: ComplianceStatus
-
   serialNumber: string
-
   manufacturer: string | null
   model: string | null
-
   operatingSystem: string | null
   operatingSystemVersion: string | null
-
   assignedUser: string | null
   department: string | null
-
+  ipAddress: string | null
   batteryLevel: number | null
-
   isManaged: boolean
-
   enrolledAtUtc: string | null
   lastSeenAtUtc: string | null
 }
 
-export interface DeviceListResponse {
+export interface DeviceDetails {
+  id: string
+  organizationId: string
+  deviceName: string
+  platform: DevicePlatform
+  status: DeviceStatus
+  complianceStatus: ComplianceStatus
+  serialNumber: string
+  imei: string | null
+  manufacturer: string | null
+  model: string | null
+  operatingSystem: string | null
+  operatingSystemVersion: string | null
+  agentVersion: string | null
+  ipAddress: string | null
+  macAddress: string | null
+  assignedUser: string | null
+  department: string | null
+  batteryLevel: number | null
+  isManaged: boolean
+  enrolledAtUtc: string | null
+  lastSeenAtUtc: string | null
+  createdAtUtc: string
+  updatedAtUtc: string
+}
+
+export interface DeviceListResult {
   items: DeviceListItem[]
-  total: number
+  totalCount: number
+  page: number
+  pageSize: number
+  totalPages: number
 }
