@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TitanMDM.UnitTests")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+c17227322709a686b777c6d70a0d586a59e45471")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+75f1c721a794c1c0379b532a8a4a06043cef7b59")]
 [assembly: System.Reflection.AssemblyProductAttribute("TitanMDM.UnitTests")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TitanMDM.UnitTests")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
