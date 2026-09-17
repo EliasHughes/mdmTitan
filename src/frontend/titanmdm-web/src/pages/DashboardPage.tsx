@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useState,
 } from 'react'
@@ -45,36 +46,38 @@ export function DashboardPage() {
   const [error, setError] =
     useState<string | null>(null)
 
-  const loadDashboard =
-    async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
+  const loadDashboard = useCallback(
+  async () => {
+    try {
+      setIsLoading(true)
+      setError(null)
 
-        const data =
-          await dashboardApi.getSummary()
+      const data =
+        await dashboardApi.getSummary()
 
-        setSummary(data)
-      } catch (loadError) {
-        console.error(
-          'Dashboard loading error:',
-          loadError,
-        )
+      setSummary(data)
+    } catch (loadError) {
+      console.error(
+        'Dashboard loading error:',
+        loadError,
+      )
 
-        setError(
-          'No fue posible obtener los datos del dashboard.',
-        )
-      } finally {
-        setIsLoading(false)
-      }
+      setError(
+        'No fue posible obtener los datos del dashboard.',
+      )
+    } finally {
+      setIsLoading(false)
     }
+  },
+  [],
+)
 
   useEffect(() => {
-    document.title =
-      'Dashboard | TitanMDM'
+  document.title =
+    'Dashboard | TitanMDM'
 
-    void loadDashboard()
-  }, [])
+  void loadDashboard()
+}, [loadDashboard])
 
   return (
     <div className="dashboard-page">

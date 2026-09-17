@@ -1,58 +1,9 @@
 import apiClient from './apiClient'
 
-export interface DeviceListItem {
-  id: string
-  deviceName: string
-  platform: string
-  status: string
-  complianceStatus: string
-  serialNumber: string
-  manufacturer: string | null
-  model: string | null
-  operatingSystem: string | null
-  operatingSystemVersion: string | null
-  assignedUser: string | null
-  department: string | null
-  ipAddress: string | null
-  batteryLevel: number | null
-  isManaged: boolean
-  enrolledAtUtc: string | null
-  lastSeenAtUtc: string | null
-}
-
-export interface DeviceDetails {
-  id: string
-  organizationId: string
-  deviceName: string
-  platform: string
-  status: string
-  complianceStatus: string
-  serialNumber: string
-  imei: string | null
-  manufacturer: string | null
-  model: string | null
-  operatingSystem: string | null
-  operatingSystemVersion: string | null
-  agentVersion: string | null
-  ipAddress: string | null
-  macAddress: string | null
-  assignedUser: string | null
-  department: string | null
-  batteryLevel: number | null
-  isManaged: boolean
-  enrolledAtUtc: string | null
-  lastSeenAtUtc: string | null
-  createdAtUtc: string
-  updatedAtUtc: string
-}
-
-export interface DeviceListResult {
-  items: DeviceListItem[]
-  totalCount: number
-  page: number
-  pageSize: number
-  totalPages: number
-}
+import type {
+  DeviceDetails,
+  DeviceListResult,
+} from '../types/device'
 
 export interface DeviceQueryParameters {
   search?: string
@@ -72,14 +23,16 @@ export const devicesApi = {
         '/api/devices',
         {
           params: {
-            search: parameters.search || undefined,
+            search:
+              parameters.search || undefined,
             platform:
               parameters.platform || undefined,
             status:
               parameters.status || undefined,
             compliance:
               parameters.compliance || undefined,
-            page: parameters.page ?? 1,
+            page:
+              parameters.page ?? 1,
             pageSize:
               parameters.pageSize ?? 25,
           },

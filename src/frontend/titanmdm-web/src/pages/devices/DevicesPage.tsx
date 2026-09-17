@@ -18,7 +18,7 @@ import {
   useState,
 } from 'react'
 
-import { getDevices } from '../../api/devicesApi'
+import { devicesApi  } from '../../api/devicesApi'
 
 import type {
   DeviceListItem,
@@ -98,14 +98,14 @@ export function DevicesPage() {
       setIsLoading(true)
       setError(null)
 
-      const response = await getDevices({
-        search,
-        platform,
-        status,
-      })
+      const response = await devicesApi.getDevices({
+  search,
+  platform,
+  status,
+    })
 
-      setDevices(response.items)
-      setTotal(response.total)
+setDevices(response.items)
+setTotal(response.totalCount)
     } catch {
       setError(
         'No fue posible obtener el inventario de dispositivos.',
