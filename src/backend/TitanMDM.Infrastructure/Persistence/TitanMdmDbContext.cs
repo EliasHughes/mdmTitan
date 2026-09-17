@@ -37,6 +37,9 @@ public sealed class TitanMdmDbContext : DbContext
 
     public DbSet<Device> Devices =>
         Set<Device>();
+    
+    public DbSet<EnrollmentToken> EnrollmentTokens =>
+    Set<EnrollmentToken>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
