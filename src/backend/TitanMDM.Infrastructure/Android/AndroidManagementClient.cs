@@ -31,6 +31,8 @@ public sealed class AndroidManagementClient
 {
     private readonly HttpClient _httpClient;
     private readonly AndroidManagementOptions _options;
+
+    private readonly IGoogleAndroidAccessTokenProvider _accessTokenProvider;
     private readonly ILogger<AndroidManagementClient> _logger;
 
     private static readonly JsonSerializerOptions JsonOptions =
@@ -41,24 +43,29 @@ public sealed class AndroidManagementClient
         };
 
     public AndroidManagementClient(
-        HttpClient httpClient,
-        IOptions<AndroidManagementOptions> options,
-        ILogger<AndroidManagementClient> logger)
-    {
-        _httpClient =
-            httpClient ??
-            throw new ArgumentNullException(nameof(httpClient));
+    HttpClient httpClient,
+    IOptions<AndroidManagementOptions> options,
+    IGoogleAndroidAccessTokenProvider accessTokenProvider,
+    ILogger<AndroidManagementClient> logger)
+{
+    _httpClient =
+        httpClient ??
+        throw new ArgumentNullException(nameof(httpClient));
 
-        _options =
-            options?.Value ??
-            throw new ArgumentNullException(nameof(options));
+    _options =
+        options?.Value ??
+        throw new ArgumentNullException(nameof(options));
 
-        _logger =
-            logger ??
-            throw new ArgumentNullException(nameof(logger));
+    _accessTokenProvider =
+        accessTokenProvider ??
+        throw new ArgumentNullException(nameof(accessTokenProvider));
 
-        ConfigureHttpClient();
-    }
+    _logger =
+        logger ??
+        throw new ArgumentNullException(nameof(logger));
+
+    ConfigureHttpClient();
+}
 
     // ============================================================
     // ENTERPRISE SIGNUP
@@ -167,6 +174,39 @@ public sealed class AndroidManagementClient
             enrollmentToken,
             cancellationToken);
     }
+
+    public Task<JsonNode> ListEnrollmentTokensAsync(
+    string enterpriseName,
+    int pageSize = 100,
+    string? pageToken = null,
+    CancellationToken cancellationToken = default)
+{
+    ValidateEnterpriseName(
+        enterpriseName);
+
+    if (pageSize is < 1 or > 100)
+    {
+        throw new ArgumentOutOfRangeException(
+            nameof(pageSize),
+            "Page size must be between 1 and 100.");
+    }
+
+    var path =
+        $"{enterpriseName}/enrollmentTokens" +
+        $"?pageSize={pageSize}";
+
+    if (!string.IsNullOrWhiteSpace(pageToken))
+    {
+        path +=
+            $"&pageToken={Uri.EscapeDataString(pageToken)}";
+    }
+
+    return SendAsync(
+        HttpMethod.Get,
+        path,
+        null,
+        cancellationToken);
+}
 
     public Task<JsonNode> GetEnrollmentTokenAsync(
         string enterpriseName,
@@ -812,25 +852,13 @@ public sealed class AndroidManagementClient
     // AUTHENTICATION
     // ============================================================
 
-    private async Task<string> GetAccessTokenAsync(
-        CancellationToken cancellationToken)
-    {
-        /*
-         * A1.8 authentication boundary.
-         *
-         * Token acquisition is deliberately isolated here.
-         * TitanMDM's REST operations do not need to change when
-         * the production Google credential provider is introduced.
-         *
-         * We do NOT send ClientSecret to Android Management API.
-         * It is used only by the OAuth token provider.
-         */
-
-        await Task.CompletedTask;
-
-        throw new InvalidOperationException(
-            "Android Management OAuth token provider has not been registered yet.");
-    }
+    private Task<string> GetAccessTokenAsync(
+    CancellationToken cancellationToken)
+{
+    return _accessTokenProvider
+        .GetAccessTokenAsync(
+            cancellationToken);
+}
 
     // ============================================================
     // HELPERS
