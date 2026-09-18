@@ -1,0 +1,12 @@
+C:\TitanMDM\src\backend\TitanMDM.Domain\bin\Debug\net10.0\TitanMDM.Domain.deps.json
+C:\TitanMDM\src\backend\TitanMDM.Domain\bin\Debug\net10.0\TitanMDM.Domain.dll
+C:\TitanMDM\src\backend\TitanMDM.Domain\bin\Debug\net10.0\TitanMDM.Domain.pdb
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.GeneratedMSBuildEditorConfig.editorconfig
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.AssemblyInfoInputs.cache
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.AssemblyInfo.cs
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.csproj.CoreCompileInputs.cache
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.dll
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\refint\TitanMDM.Domain.dll
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.pdb
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\ref\TitanMDM.Domain.dll
+C:\TitanMDM\src\backend\TitanMDM.Domain\obj\Debug\net10.0\TitanMDM.Domain.sourcelink.json

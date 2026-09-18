@@ -1,0 +1,39 @@
+# .NET
+**/bin/
+**/obj/
+.vs/
+*.user
+*.suo
+
+# Frontend
+**/node_modules/
+**/dist/
+**/.vite/
+
+# Environment
+.env
+.env.*
+!.env.example
+
+# Credentials / certificates
+*.pfx
+*.p12
+*.pem
+*.key
+*service-account*.json
+*credentials*.json
+
+# Local configuration
+appsettings.Development.local.json
+
+# IDE
+.idea/
+.vscode/*.log
+
+# OS
+Thumbs.db
+.DS_Store
+
+# Logs
+*.log
+logs/
