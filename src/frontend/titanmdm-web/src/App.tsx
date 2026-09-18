@@ -26,6 +26,8 @@ import { RolesPage } from './pages/roles/RolesPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
 
+
+
 function App() {
   return (
     <Routes>

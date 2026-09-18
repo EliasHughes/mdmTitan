@@ -22,6 +22,8 @@ using TitanMDM.Infrastructure.Devices.Agent;
 using TitanMDM.Application.Commands;
 using TitanMDM.Infrastructure.Commands;
 using TitanMDM.Application.Commands.Agent;
+using TitanMDM.Application.Policies;
+using TitanMDM.Infrastructure.Policies;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
@@ -146,6 +148,10 @@ public static class InfrastructureServiceExtensions
     services.AddScoped<IDeviceAgentService, DeviceAgentService>();
 
     services.AddScoped<IDeviceQueryService, DeviceQueryService>();
+
+    services.AddScoped<
+    IPolicyService,
+    PolicyService>();
 
 services.AddScoped<TitanMdmSeeder>();
 

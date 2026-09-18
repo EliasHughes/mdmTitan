@@ -15,32 +15,25 @@ import {
   RotateCw,
   ShieldCheck,
   Terminal,
-  User,
   Wifi,
   XCircle,
 } from 'lucide-react'
-
 import {
   useCallback,
   useEffect,
   useState,
 } from 'react'
-
 import {
   useNavigate,
   useParams,
 } from 'react-router-dom'
 
-import { devicesApi } from '../../api/devicesApi'
-
 import {
   deviceCommandsApi,
   type DeviceCommand,
 } from '../../api/deviceCommandsApi'
-
-import type {
-  DeviceDetails,
-} from '../../types/device'
+import { devicesApi } from '../../api/devicesApi'
+import type { DeviceDetails } from '../../types/device'
 
 import './DeviceDetailPage.css'
 
@@ -59,19 +52,31 @@ function formatDate(
 
   const date = new Date(value)
 
-  return Number.isNaN(date.getTime())
-    ? 'N/D'
-    : date.toLocaleString()
+  if (Number.isNaN(date.getTime())) {
+    return 'N/D'
+  }
+
+  return date.toLocaleString()
 }
 
-function commandStatusClass(
+function getCommandStatusClass(
   status: string,
 ): string {
   return status.toLowerCase()
 }
 
+function getBatteryText(
+  batteryLevel: number | null,
+): string {
+  return batteryLevel === null
+    ? 'N/D'
+    : `${batteryLevel}%`
+}
+
 export function DeviceDetailPage() {
-  const { deviceId } = useParams()
+  const { deviceId } = useParams<{
+    deviceId: string
+  }>()
 
   const navigate = useNavigate()
 
@@ -85,7 +90,7 @@ export function DeviceDetailPage() {
     useState<TabName>('overview')
 
   const [loading, setLoading] =
-    useState(true)
+    useState<boolean>(true)
 
   const [sendingCommand, setSendingCommand] =
     useState<string | null>(null)
@@ -96,78 +101,78 @@ export function DeviceDetailPage() {
   const [message, setMessage] =
     useState<string | null>(null)
 
-  const loadDevice = useCallback(async () => {
-    if (!deviceId) {
-      return
-    }
+  const loadDevice = useCallback(
+    async (): Promise<void> => {
+      if (!deviceId) {
+        setLoading(false)
+        setError(
+          'No se recibió un identificador de dispositivo válido.',
+        )
+        return
+      }
 
-    try {
-      setLoading(true)
-      setError(null)
+      try {
+        setLoading(true)
+        setError(null)
 
-      const [
-        deviceResponse,
-        commandResponse,
-      ] = await Promise.all([
-        devicesApi.getDeviceById(deviceId),
-        deviceCommandsApi.getForDevice(
-          deviceId,
-        ),
-      ])
+        const [
+          deviceResponse,
+          commandResponse,
+        ] = await Promise.all([
+          devicesApi.getDeviceById(deviceId),
+          deviceCommandsApi.getForDevice(
+            deviceId,
+          ),
+        ])
 
-      setDevice(deviceResponse)
-      setCommands(commandResponse.items)
-    } catch (loadError) {
-      console.error(loadError)
+        setDevice(deviceResponse)
+        setCommands(commandResponse.items)
+      } catch (loadError) {
+        console.error(
+          'Error cargando dispositivo:',
+          loadError,
+        )
 
-      setError(
-        'No fue posible obtener la información del dispositivo.',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [deviceId])
+        setError(
+          'No fue posible obtener la información del dispositivo.',
+        )
+      } finally {
+        setLoading(false)
+      }
+    },
+    [deviceId],
+  )
 
-  useEffect(() => {
-    void loadDevice()
-  }, [loadDevice])
+  const refreshCommands = useCallback(
+    async (): Promise<void> => {
+      if (!deviceId) {
+        return
+      }
 
-  useEffect(() => {
-    document.title = device
-      ? `${device.deviceName} | TitanMDM`
-      : 'Dispositivo | TitanMDM'
-  }, [device])
+      try {
+        const response =
+          await deviceCommandsApi.getForDevice(
+            deviceId,
+          )
 
-  useEffect(() => {
-    if (!deviceId) {
-      return
-    }
-
-    const timer = window.setInterval(
-      async () => {
-        try {
-          const result =
-            await deviceCommandsApi.getForDevice(
-              deviceId,
-            )
-
-          setCommands(result.items)
-        } catch {
-          // La actualización manual seguirá disponible.
-        }
-      },
-      5000,
-    )
-
-    return () => {
-      window.clearInterval(timer)
-    }
-  }, [deviceId])
+        setCommands(response.items)
+      } catch (refreshError) {
+        console.error(
+          'Error actualizando comandos:',
+          refreshError,
+        )
+      }
+    },
+    [deviceId],
+  )
 
   const sendCommand = async (
     commandType: string,
-  ) => {
+  ): Promise<void> => {
     if (!deviceId) {
+      setError(
+        'No existe un identificador válido para enviar el comando.',
+      )
       return
     }
 
@@ -184,20 +189,24 @@ export function DeviceDetailPage() {
           expirationMinutes: 30,
         })
 
-      setCommands((current) => [
+      setCommands((currentCommands) => [
         command,
-        ...current.filter(
-          (item) => item.id !== command.id,
+        ...currentCommands.filter(
+          (currentCommand) =>
+            currentCommand.id !== command.id,
         ),
       ])
 
       setMessage(
-        `Comando ${commandType} enviado correctamente.`,
+        `Comando ${commandType} creado correctamente.`,
       )
 
       setActiveTab('commands')
     } catch (commandError) {
-      console.error(commandError)
+      console.error(
+        `Error enviando ${commandType}:`,
+        commandError,
+      )
 
       setError(
         `No fue posible enviar el comando ${commandType}.`,
@@ -207,7 +216,34 @@ export function DeviceDetailPage() {
     }
   }
 
-  if (loading && !device) {
+  useEffect(() => {
+    void loadDevice()
+  }, [loadDevice])
+
+  useEffect(() => {
+    document.title = device
+      ? `${device.deviceName} | TitanMDM`
+      : 'Dispositivo | TitanMDM'
+  }, [device])
+
+  useEffect(() => {
+    if (!deviceId) {
+      return undefined
+    }
+
+    const timerId = window.setInterval(
+      () => {
+        void refreshCommands()
+      },
+      5000,
+    )
+
+    return () => {
+      window.clearInterval(timerId)
+    }
+  }, [deviceId, refreshCommands])
+
+  if (loading && device === null) {
     return (
       <div className="device-detail-loading">
         <RefreshCw
@@ -215,12 +251,14 @@ export function DeviceDetailPage() {
           className="device-detail-spin"
         />
 
-        Cargando dispositivo...
+        <span>
+          Cargando dispositivo...
+        </span>
       </div>
     )
   }
 
-  if (!device) {
+  if (device === null) {
     return (
       <div className="device-detail-error">
         <XCircle size={28} />
@@ -236,9 +274,7 @@ export function DeviceDetailPage() {
 
         <button
           type="button"
-          onClick={() =>
-            navigate('/devices')
-          }
+          onClick={() => navigate('/devices')}
         >
           Volver a dispositivos
         </button>
@@ -251,9 +287,7 @@ export function DeviceDetailPage() {
       <button
         type="button"
         className="device-detail-back"
-        onClick={() =>
-          navigate('/devices')
-        }
+        onClick={() => navigate('/devices')}
       >
         <ArrowLeft size={16} />
         Dispositivos
@@ -272,7 +306,10 @@ export function DeviceDetailPage() {
               </h1>
 
               <span
-                className={`device-detail-status device-detail-status--${device.status.toLowerCase()}`}
+                className={
+                  `device-detail-status ` +
+                  `device-detail-status--${device.status.toLowerCase()}`
+                }
               >
                 <Wifi size={13} />
                 {device.status}
@@ -299,9 +336,10 @@ export function DeviceDetailPage() {
           <button
             type="button"
             className="device-action-secondary"
-            onClick={() =>
+            disabled={loading}
+            onClick={() => {
               void loadDevice()
-            }
+            }}
           >
             <RefreshCw size={16} />
             Actualizar
@@ -310,12 +348,10 @@ export function DeviceDetailPage() {
           <button
             type="button"
             className="device-action-primary"
-            disabled={
-              sendingCommand !== null
-            }
-            onClick={() =>
+            disabled={sendingCommand !== null}
+            onClick={() => {
               void sendCommand('PING')
-            }
+            }}
           >
             <Play size={16} />
 
@@ -327,14 +363,12 @@ export function DeviceDetailPage() {
           <button
             type="button"
             className="device-action-primary"
-            disabled={
-              sendingCommand !== null
-            }
-            onClick={() =>
+            disabled={sendingCommand !== null}
+            onClick={() => {
               void sendCommand(
                 'DEVICE_INFO',
               )
-            }
+            }}
           >
             <Database size={16} />
 
@@ -346,17 +380,17 @@ export function DeviceDetailPage() {
         </div>
       </header>
 
-      {error && (
+      {error !== null && (
         <div className="device-detail-notice device-detail-notice--error">
           <XCircle size={17} />
-          {error}
+          <span>{error}</span>
         </div>
       )}
 
-      {message && (
+      {message !== null && (
         <div className="device-detail-notice device-detail-notice--success">
           <CheckCircle2 size={17} />
-          {message}
+          <span>{message}</span>
         </div>
       )}
 
@@ -366,9 +400,7 @@ export function DeviceDetailPage() {
 
           <div>
             <span>Estado</span>
-            <strong>
-              {device.status}
-            </strong>
+            <strong>{device.status}</strong>
           </div>
         </article>
 
@@ -389,9 +421,9 @@ export function DeviceDetailPage() {
           <div>
             <span>Batería</span>
             <strong>
-              {device.batteryLevel !== null
-                ? `${device.batteryLevel}%`
-                : 'N/D'}
+              {getBatteryText(
+                device.batteryLevel,
+              )}
             </strong>
           </div>
         </article>
@@ -472,10 +504,7 @@ export function DeviceDetailPage() {
         >
           <Terminal size={16} />
           Comandos
-
-          <span>
-            {commands.length}
-          </span>
+          <span>{commands.length}</span>
         </button>
       </nav>
 
@@ -514,7 +543,9 @@ export function DeviceDetailPage() {
               </div>
 
               <div>
-                <span>Versión</span>
+                <span>
+                  Versión del SO
+                </span>
                 <strong>
                   {device.operatingSystemVersion ??
                     'N/D'}
@@ -522,7 +553,9 @@ export function DeviceDetailPage() {
               </div>
 
               <div>
-                <span>Agent</span>
+                <span>
+                  Versión del agente
+                </span>
                 <strong>
                   {device.agentVersion ??
                     'N/D'}
@@ -542,9 +575,7 @@ export function DeviceDetailPage() {
 
           <article className="device-detail-card">
             <header>
-              <h2>
-                Asignación
-              </h2>
+              <h2>Asignación</h2>
             </header>
 
             <div className="device-detail-fields">
@@ -631,9 +662,9 @@ export function DeviceDetailPage() {
               <div>
                 <span>Batería</span>
                 <strong>
-                  {device.batteryLevel !== null
-                    ? `${device.batteryLevel}%`
-                    : 'N/D'}
+                  {getBatteryText(
+                    device.batteryLevel,
+                  )}
                 </strong>
               </div>
             </div>
@@ -653,7 +684,9 @@ export function DeviceDetailPage() {
 
             <div className="device-detail-fields">
               <div>
-                <span>Dirección IP</span>
+                <span>
+                  Dirección IP
+                </span>
                 <strong>
                   {device.ipAddress ??
                     'N/D'}
@@ -661,7 +694,9 @@ export function DeviceDetailPage() {
               </div>
 
               <div>
-                <span>Dirección MAC</span>
+                <span>
+                  Dirección MAC
+                </span>
                 <strong>
                   {device.macAddress ??
                     'N/D'}
@@ -689,9 +724,9 @@ export function DeviceDetailPage() {
             <button
               type="button"
               className="device-action-secondary"
-              onClick={() =>
-                void loadDevice()
-              }
+              onClick={() => {
+                void refreshCommands()
+              }}
             >
               <RotateCw size={15} />
               Actualizar
@@ -729,17 +764,18 @@ export function DeviceDetailPage() {
                       <tr key={command.id}>
                         <td>
                           <strong>
-                            {
-                              command.commandType
-                            }
+                            {command.commandType}
                           </strong>
                         </td>
 
                         <td>
                           <span
-                            className={`command-status command-status--${commandStatusClass(
-                              command.status,
-                            )}`}
+                            className={
+                              `command-status ` +
+                              `command-status--${getCommandStatusClass(
+                                command.status,
+                              )}`
+                            }
                           >
                             {command.status}
                           </span>
