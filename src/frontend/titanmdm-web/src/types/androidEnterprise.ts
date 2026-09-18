@@ -17,7 +17,7 @@ export interface AndroidEnterpriseStatus {
 
 export interface AndroidSignupResponse {
   signupUrl: string
-  signupUrlName: string
+  expiresAtUtc: string
 }
 
 export interface AndroidEnrollment {

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("TitanMDM.Domain")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+a5ea174a36f2f55330c5056d85e25f14ddb1bcbd")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+8b90380c5da75968ab84bcc83a669679e37098cf")]
 [assembly: System.Reflection.AssemblyProductAttribute("TitanMDM.Domain")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TitanMDM.Domain")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

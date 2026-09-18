@@ -13,7 +13,7 @@ public sealed record AndroidEnterpriseStatusDto(
 
 public sealed record AndroidSignupResponse(
     string SignupUrl,
-    string SignupUrlName);
+    DateTime ExpiresAtUtc);
 
 public sealed record CreateAndroidEnrollmentRequest(
     string Mode,

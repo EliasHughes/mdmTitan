@@ -1,7 +1,9 @@
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 using TitanMDM.Application.AndroidEnterprise;
+using TitanMDM.Infrastructure.Android;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -12,11 +14,14 @@ public sealed class AndroidEnterpriseController
     : ControllerBase
 {
     private readonly IAndroidEnterpriseService _service;
+    private readonly AndroidManagementOptions _options;
 
     public AndroidEnterpriseController(
-        IAndroidEnterpriseService service)
+        IAndroidEnterpriseService service,
+        IOptions<AndroidManagementOptions> options)
     {
         _service = service;
+        _options = options.Value;
     }
 
     [HttpGet("status")]
@@ -29,10 +34,12 @@ public sealed class AndroidEnterpriseController
         if (organizationId is null)
             return Unauthorized();
 
-        return Ok(
+        var result =
             await _service.GetStatusAsync(
                 organizationId.Value,
-                cancellationToken));
+                cancellationToken);
+
+        return Ok(result);
     }
 
     [HttpPost("signup")]
@@ -42,15 +49,24 @@ public sealed class AndroidEnterpriseController
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
             return Unauthorized();
+        }
 
         try
         {
-            return Ok(
+            var result =
                 await _service.CreateSignupUrlAsync(
                     organizationId.Value,
-                    cancellationToken));
+                    userId.Value,
+                    cancellationToken);
+
+            return Ok(result);
         }
         catch (Exception exception)
         {
@@ -61,31 +77,39 @@ public sealed class AndroidEnterpriseController
         }
     }
 
-    [HttpGet("callback")]
     [AllowAnonymous]
+    [HttpGet("callback")]
     public async Task<IActionResult> Callback(
-        [FromQuery] string enterpriseToken,
-        [FromQuery] string signupUrlName,
-        [FromQuery] Guid organizationId,
+        [FromQuery] string? state,
+        [FromQuery] string? enterpriseToken,
         CancellationToken cancellationToken)
     {
+        if (string.IsNullOrWhiteSpace(state) ||
+            string.IsNullOrWhiteSpace(
+                enterpriseToken))
+        {
+            return Redirect(
+                BuildFrontendRedirect(
+                    _options.FrontendErrorUrl,
+                    "invalid_callback"));
+        }
+
         try
         {
             await _service.CompleteSignupAsync(
-                organizationId,
+                state,
                 enterpriseToken,
-                signupUrlName,
                 cancellationToken);
 
             return Redirect(
-                "/enrollment?androidEnterprise=connected");
+                _options.FrontendSuccessUrl);
         }
-        catch (Exception exception)
+        catch
         {
-            return BadRequest(new
-            {
-                message = exception.Message
-            });
+            return Redirect(
+                BuildFrontendRedirect(
+                    _options.FrontendErrorUrl,
+                    "signup_failed"));
         }
     }
 
@@ -158,13 +182,13 @@ public sealed class AndroidEnterpriseController
 
         try
         {
-            var result =
+            var revoked =
                 await _service.RevokeEnrollmentAsync(
                     organizationId.Value,
                     id,
                     cancellationToken);
 
-            return result
+            return revoked
                 ? NoContent()
                 : NotFound();
         }
@@ -202,5 +226,21 @@ public sealed class AndroidEnterpriseController
             out var id)
             ? id
             : null;
+    }
+
+    private static string BuildFrontendRedirect(
+        string url,
+        string error)
+    {
+        var separator =
+            url.Contains(
+                '?',
+                StringComparison.Ordinal)
+                ? "&"
+                : "?";
+
+        return
+            $"{url}{separator}error=" +
+            Uri.EscapeDataString(error);
     }
 }
