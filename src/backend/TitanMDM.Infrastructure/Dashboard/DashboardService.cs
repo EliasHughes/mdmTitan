@@ -133,6 +133,97 @@ public sealed class DashboardService
                     2);
         }
 
+        var commands = _dbContext.DeviceCommands
+    .AsNoTracking()
+    .Where(command =>
+        command.OrganizationId == organizationId);
+
+var totalCommands =
+    await commands.CountAsync(
+        cancellationToken);
+
+var pendingCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Pending,
+        cancellationToken);
+
+var queuedCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Queued,
+        cancellationToken);
+
+var dispatchingCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Dispatching,
+        cancellationToken);
+
+var sentCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Sent,
+        cancellationToken);
+
+var deliveredCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Delivered,
+        cancellationToken);
+
+var executingCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Executing,
+        cancellationToken);
+
+var successfulCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Success,
+        cancellationToken);
+
+var failedCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Failed,
+        cancellationToken);
+
+var timeoutCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Timeout,
+        cancellationToken);
+
+var cancelledCommands =
+    await commands.CountAsync(
+        command =>
+            command.Status ==
+            DeviceCommandStatus.Cancelled,
+        cancellationToken);
+
+var activeCommands =
+    pendingCommands +
+    queuedCommands +
+    dispatchingCommands +
+    sentCommands +
+    deliveredCommands +
+    executingCommands;
+
+var commandProblems =
+    failedCommands +
+    timeoutCommands;
+
         var databaseConnected =
             await _dbContext.Database.CanConnectAsync(
                 cancellationToken);
@@ -168,6 +259,23 @@ public sealed class DashboardService
                 CompliancePercentage =
                     compliancePercentage
             },
+
+            Commands = new CommandSummaryDto
+{
+    Total = totalCommands,
+    Pending = pendingCommands,
+    Queued = queuedCommands,
+    Dispatching = dispatchingCommands,
+    Sent = sentCommands,
+    Delivered = deliveredCommands,
+    Executing = executingCommands,
+    Success = successfulCommands,
+    Failed = failedCommands,
+    Timeout = timeoutCommands,
+    Cancelled = cancelledCommands,
+    Active = activeCommands,
+    Problems = commandProblems
+},
 
             System = new SystemStatusDto
             {
