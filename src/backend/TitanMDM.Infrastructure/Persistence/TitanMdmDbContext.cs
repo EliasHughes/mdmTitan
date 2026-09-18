@@ -50,6 +50,14 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<DevicePolicyAssignment>
     DevicePolicyAssignments =>
         Set<DevicePolicyAssignment>();
+
+    public DbSet<AndroidEnterpriseConfiguration>
+    AndroidEnterpriseConfigurations =>
+        Set<AndroidEnterpriseConfiguration>();
+
+    public DbSet<AndroidEnrollment>
+    AndroidEnrollments =>
+        Set<AndroidEnrollment>();
     
     public DbSet<DeviceCredential> DeviceCredentials =>
     Set<DeviceCredential>();
