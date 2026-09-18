@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TitanMDM.Infrastructure.Persistence;
 namespace TitanMDM.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TitanMdmDbContext))]
-    partial class TitanMdmDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260918172602_AddAndroidEnterpriseSignupSessions")]
+    partial class AddAndroidEnterpriseSignupSessions
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder

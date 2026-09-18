@@ -8,12 +8,12 @@ public interface IAndroidEnterpriseService
 
     Task<AndroidSignupResponse> CreateSignupUrlAsync(
         Guid organizationId,
+        Guid userId,
         CancellationToken cancellationToken = default);
 
     Task CompleteSignupAsync(
-        Guid organizationId,
+        string state,
         string enterpriseToken,
-        string signupUrlName,
         CancellationToken cancellationToken = default);
 
     Task<IReadOnlyCollection<AndroidEnrollmentDto>>

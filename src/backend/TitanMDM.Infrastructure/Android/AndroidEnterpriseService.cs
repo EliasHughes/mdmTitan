@@ -28,28 +28,28 @@ public sealed class AndroidEnterpriseService
         _options = options.Value;
     }
 
+    // ============================================================
+    // STATUS
+    // ============================================================
+
     public async Task<AndroidEnterpriseStatusDto>
         GetStatusAsync(
             Guid organizationId,
             CancellationToken cancellationToken = default)
     {
-        ValidateOrganization(
-            organizationId);
+        ValidateOrganization(organizationId);
 
         var configuration =
             await _dbContext
                 .AndroidEnterpriseConfigurations
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                        organizationId,
+                    x => x.OrganizationId == organizationId,
                     cancellationToken);
 
         var canAuthenticate =
             await _tokenProvider
-                .CanAuthenticateAsync(
-                    cancellationToken);
+                .CanAuthenticateAsync(cancellationToken);
 
         return new AndroidEnterpriseStatusDto(
             _options.IsConfigured,
@@ -59,20 +59,29 @@ public sealed class AndroidEnterpriseService
             configuration?.EnterpriseName,
             configuration?.EnterpriseDisplayName,
             configuration?.Status.ToString()
-                ?? AndroidEnterpriseStatus
-                    .NotConfigured
-                    .ToString(),
+                ?? AndroidEnterpriseStatus.NotConfigured.ToString(),
             configuration?.ConnectedAtUtc,
             configuration?.LastError);
     }
 
+    // ============================================================
+    // ANDROID ENTERPRISE SIGNUP
+    // ============================================================
+
     public async Task<AndroidSignupResponse>
         CreateSignupUrlAsync(
             Guid organizationId,
+            Guid userId,
             CancellationToken cancellationToken = default)
     {
-        ValidateOrganization(
-            organizationId);
+        ValidateOrganization(organizationId);
+
+        if (userId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "UserId is required.",
+                nameof(userId));
+        }
 
         _options.ValidateSignup();
 
@@ -90,6 +99,16 @@ public sealed class AndroidEnterpriseService
                 "La organización ya está conectada con Android Enterprise.");
         }
 
+        var session =
+            new AndroidEnterpriseSignupSession(
+                organizationId,
+                userId,
+                DateTime.UtcNow.AddMinutes(30));
+
+        _dbContext
+            .AndroidEnterpriseSignupSessions
+            .Add(session);
+
         configuration.MarkPending();
 
         await _dbContext.SaveChangesAsync(
@@ -97,29 +116,42 @@ public sealed class AndroidEnterpriseService
 
         try
         {
-            var response =
-                await _client.CreateSignupUrlAsync(
+            var callbackUrl =
+                AddQueryParameter(
                     _options.CallbackUrl,
-                    cancellationToken);
+                    "state",
+                    session.State);
 
-            var url =
+            var response =
+                await _client
+                    .CreateSignupUrlAsync(
+                        callbackUrl,
+                        cancellationToken);
+
+            var signupUrl =
                 response["url"]?
                     .GetValue<string>();
 
-            var name =
+            var signupUrlName =
                 response["name"]?
                     .GetValue<string>();
 
-            if (string.IsNullOrWhiteSpace(url) ||
-                string.IsNullOrWhiteSpace(name))
+            if (string.IsNullOrWhiteSpace(signupUrl) ||
+                string.IsNullOrWhiteSpace(signupUrlName))
             {
                 throw new InvalidOperationException(
                     "Google no devolvió un SignupUrl válido.");
             }
 
+            session.AttachSignupUrl(
+                signupUrlName);
+
+            await _dbContext.SaveChangesAsync(
+                cancellationToken);
+
             return new AndroidSignupResponse(
-                url,
-                name);
+                signupUrl,
+                session.ExpiresAtUtc);
         }
         catch (Exception exception)
         {
@@ -133,40 +165,73 @@ public sealed class AndroidEnterpriseService
         }
     }
 
+    // ============================================================
+    // ANDROID ENTERPRISE CALLBACK
+    // ============================================================
+
     public async Task CompleteSignupAsync(
-        Guid organizationId,
+        string state,
         string enterpriseToken,
-        string signupUrlName,
         CancellationToken cancellationToken = default)
     {
-        ValidateOrganization(
-            organizationId);
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            state);
 
         ArgumentException.ThrowIfNullOrWhiteSpace(
             enterpriseToken);
 
-        ArgumentException.ThrowIfNullOrWhiteSpace(
-            signupUrlName);
+        var session =
+            await _dbContext
+                .AndroidEnterpriseSignupSessions
+                .SingleOrDefaultAsync(
+                    x => x.State == state,
+                    cancellationToken);
+
+        if (session is null)
+        {
+            throw new InvalidOperationException(
+                "La sesión de vinculación Android Enterprise no existe.");
+        }
+
+        if (session.IsCompleted)
+        {
+            throw new InvalidOperationException(
+                "Esta sesión de vinculación Android Enterprise ya fue utilizada.");
+        }
+
+        if (session.IsExpired)
+        {
+            throw new InvalidOperationException(
+                "La sesión de vinculación Android Enterprise expiró.");
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                session.SignupUrlName))
+        {
+            throw new InvalidOperationException(
+                "La sesión de vinculación no contiene un SignupUrl válido.");
+        }
 
         var configuration =
             await GetOrCreateConfigurationAsync(
-                organizationId,
+                session.OrganizationId,
                 cancellationToken);
 
         try
         {
             var enterprise =
-                await _client.CreateEnterpriseAsync(
-                    enterpriseToken,
-                    signupUrlName,
-                    "TitanMDM Enterprise",
-                    cancellationToken);
+                await _client
+                    .CreateEnterpriseAsync(
+                        enterpriseToken,
+                        session.SignupUrlName,
+                        "TitanMDM Enterprise",
+                        cancellationToken);
 
             var enterpriseName =
                 enterprise["name"]?
                     .GetValue<string>();
 
-            var displayName =
+            var enterpriseDisplayName =
                 enterprise["enterpriseDisplayName"]?
                     .GetValue<string>();
 
@@ -174,12 +239,14 @@ public sealed class AndroidEnterpriseService
                     enterpriseName))
             {
                 throw new InvalidOperationException(
-                    "Google no devolvió el nombre de la empresa Android Enterprise.");
+                    "Google no devolvió el identificador de Android Enterprise.");
             }
 
             configuration.Activate(
                 enterpriseName,
-                displayName);
+                enterpriseDisplayName);
+
+            session.Complete();
 
             await _dbContext.SaveChangesAsync(
                 cancellationToken);
@@ -195,6 +262,10 @@ public sealed class AndroidEnterpriseService
             throw;
         }
     }
+
+    // ============================================================
+    // LIST ENROLLMENTS
+    // ============================================================
 
     public async Task<
         IReadOnlyCollection<AndroidEnrollmentDto>>
@@ -208,13 +279,13 @@ public sealed class AndroidEnterpriseService
         return await _dbContext
             .AndroidEnrollments
             .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId ==
-                organizationId)
+            .Where(
+                x => x.OrganizationId ==
+                     organizationId)
             .OrderByDescending(
                 x => x.CreatedAtUtc)
-            .Select(x =>
-                new AndroidEnrollmentDto(
+            .Select(
+                x => new AndroidEnrollmentDto(
                     x.Id,
                     x.Mode.ToString(),
                     x.GoogleEnrollmentTokenName,
@@ -223,11 +294,14 @@ public sealed class AndroidEnterpriseService
                     x.CreatedAtUtc,
                     x.RevokedAtUtc,
                     x.IsRevoked,
-                    x.ExpiresAtUtc <=
-                        DateTime.UtcNow))
+                    x.ExpiresAtUtc <= DateTime.UtcNow))
             .ToListAsync(
                 cancellationToken);
     }
+
+    // ============================================================
+    // CREATE ENROLLMENT
+    // ============================================================
 
     public async Task<CreatedAndroidEnrollmentDto>
         CreateEnrollmentAsync(
@@ -239,14 +313,21 @@ public sealed class AndroidEnterpriseService
         ValidateOrganization(
             organizationId);
 
+        ArgumentNullException.ThrowIfNull(
+            request);
+
         if (userId == Guid.Empty)
+        {
             throw new ArgumentException(
                 "UserId is required.",
                 nameof(userId));
+        }
 
         if (!_options.EnableEnrollment)
+        {
             throw new InvalidOperationException(
                 "Android enrollment is disabled.");
+        }
 
         if (!Enum.TryParse<AndroidEnrollmentMode>(
                 request.Mode,
@@ -254,13 +335,13 @@ public sealed class AndroidEnterpriseService
                 out var mode))
         {
             throw new ArgumentException(
-                "Modo Android inválido.");
+                "Modo Android inválido.",
+                nameof(request.Mode));
         }
 
         if (request.ExpirationMinutes <= 0 ||
             request.ExpirationMinutes >
-                _options
-                    .MaximumEnrollmentTokenLifetimeMinutes)
+            _options.MaximumEnrollmentTokenLifetimeMinutes)
         {
             throw new ArgumentOutOfRangeException(
                 nameof(request.ExpirationMinutes),
@@ -272,9 +353,8 @@ public sealed class AndroidEnterpriseService
                 .AndroidEnterpriseConfigurations
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
-                    x =>
-                        x.OrganizationId ==
-                        organizationId,
+                    x => x.OrganizationId ==
+                         organizationId,
                     cancellationToken);
 
         if (configuration is null ||
@@ -309,6 +389,10 @@ public sealed class AndroidEnterpriseService
                 body["allowPersonalUsage"] =
                     "PERSONAL_USAGE_ALLOWED";
                 break;
+
+            default:
+                throw new InvalidOperationException(
+                    "Modo Android no soportado.");
         }
 
         var googleToken =
@@ -322,7 +406,7 @@ public sealed class AndroidEnterpriseService
             googleToken["name"]?
                 .GetValue<string>();
 
-        var value =
+        var enrollmentToken =
             googleToken["value"]?
                 .GetValue<string>();
 
@@ -334,9 +418,12 @@ public sealed class AndroidEnterpriseService
             googleToken["expirationTimestamp"]?
                 .GetValue<string>();
 
-        if (string.IsNullOrWhiteSpace(googleName) ||
-            string.IsNullOrWhiteSpace(value) ||
-            string.IsNullOrWhiteSpace(qrCode))
+        if (string.IsNullOrWhiteSpace(
+                googleName) ||
+            string.IsNullOrWhiteSpace(
+                enrollmentToken) ||
+            string.IsNullOrWhiteSpace(
+                qrCode))
         {
             throw new InvalidOperationException(
                 "Google devolvió un EnrollmentToken incompleto.");
@@ -361,8 +448,9 @@ public sealed class AndroidEnterpriseService
                 userId,
                 request.PolicyId);
 
-        _dbContext.AndroidEnrollments.Add(
-            enrollment);
+        _dbContext
+            .AndroidEnrollments
+            .Add(enrollment);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
@@ -371,20 +459,32 @@ public sealed class AndroidEnterpriseService
             enrollment.Id,
             enrollment.Mode.ToString(),
             googleName,
-            value,
+            enrollmentToken,
             qrCode,
             enrollment.PolicyId,
             enrollment.ExpiresAtUtc,
             enrollment.CreatedAtUtc);
     }
 
-    public async Task<bool> RevokeEnrollmentAsync(
-        Guid organizationId,
-        Guid enrollmentId,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // REVOKE ENROLLMENT
+    // ============================================================
+
+    public async Task<bool>
+        RevokeEnrollmentAsync(
+            Guid organizationId,
+            Guid enrollmentId,
+            CancellationToken cancellationToken = default)
     {
         ValidateOrganization(
             organizationId);
+
+        if (enrollmentId == Guid.Empty)
+        {
+            throw new ArgumentException(
+                "EnrollmentId is required.",
+                nameof(enrollmentId));
+        }
 
         var enrollment =
             await _dbContext
@@ -393,7 +493,7 @@ public sealed class AndroidEnterpriseService
                     x =>
                         x.Id == enrollmentId &&
                         x.OrganizationId ==
-                            organizationId,
+                        organizationId,
                     cancellationToken);
 
         if (enrollment is null)
@@ -423,7 +523,10 @@ public sealed class AndroidEnterpriseService
         var tokenId =
             enrollment
                 .GoogleEnrollmentTokenName
-                .Split('/')
+                .Split(
+                    '/',
+                    StringSplitOptions
+                        .RemoveEmptyEntries)
                 .Last();
 
         await _client
@@ -439,6 +542,10 @@ public sealed class AndroidEnterpriseService
 
         return true;
     }
+
+    // ============================================================
+    // CONFIGURATION
+    // ============================================================
 
     private async Task<AndroidEnterpriseConfiguration>
         GetOrCreateConfigurationAsync(
@@ -472,12 +579,49 @@ public sealed class AndroidEnterpriseService
         return configuration;
     }
 
+    // ============================================================
+    // CALLBACK URL
+    // ============================================================
+
+    private static string AddQueryParameter(
+        string url,
+        string name,
+        string value)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            url);
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            name);
+
+        ArgumentException.ThrowIfNullOrWhiteSpace(
+            value);
+
+        var separator =
+            url.Contains(
+                '?',
+                StringComparison.Ordinal)
+                ? "&"
+                : "?";
+
+        return
+            $"{url}{separator}" +
+            $"{Uri.EscapeDataString(name)}=" +
+            $"{Uri.EscapeDataString(value)}";
+    }
+
+    // ============================================================
+    // VALIDATION
+    // ============================================================
+
     private static void ValidateOrganization(
         Guid organizationId)
     {
         if (organizationId == Guid.Empty)
+        {
             throw new ArgumentException(
                 "OrganizationId is required.",
                 nameof(organizationId));
+        }
     }
 }
