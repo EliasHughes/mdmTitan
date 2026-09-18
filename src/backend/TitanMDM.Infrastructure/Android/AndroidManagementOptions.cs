@@ -23,14 +23,14 @@ public sealed class AndroidManagementOptions
     /// OAuth 2.0 client ID used by TitanMDM.
     /// Never hard-code production credentials.
     /// </summary>
-    public string ClientId { get; set; } = string.Empty;
+    //public string ClientId { get; set; } = string.Empty;
 
     /// <summary>
     /// OAuth 2.0 client secret.
     /// Development: .NET User Secrets.
     /// Production: secure secret provider.
     /// </summary>
-    public string ClientSecret { get; set; } = string.Empty;
+    //public string ClientSecret { get; set; } = string.Empty;
 
     /// <summary>
     /// Public callback used by the Android Enterprise
@@ -148,11 +148,11 @@ public sealed class AndroidManagementOptions
     /// Indicates whether Android Enterprise integration
     /// has the minimum required configuration.
     /// </summary>
-    public bool IsConfigured =>
+    /*public bool IsConfigured =>
         !string.IsNullOrWhiteSpace(ProjectId) &&
         !string.IsNullOrWhiteSpace(ClientId) &&
         !string.IsNullOrWhiteSpace(ClientSecret);
-
+    */
     public void Validate()
     {
         if (string.IsNullOrWhiteSpace(ProjectId))
@@ -161,7 +161,7 @@ public sealed class AndroidManagementOptions
                 "AndroidManagement:ProjectId is required.");
         }
 
-        if (string.IsNullOrWhiteSpace(ClientId))
+     /*   if (string.IsNullOrWhiteSpace(ClientId))
         {
             throw new InvalidOperationException(
                 "AndroidManagement:ClientId is required.");
@@ -171,7 +171,7 @@ public sealed class AndroidManagementOptions
         {
             throw new InvalidOperationException(
                 "AndroidManagement:ClientSecret is required.");
-        }
+        }*/
 
         if (!Uri.TryCreate(
                 BaseUrl,
