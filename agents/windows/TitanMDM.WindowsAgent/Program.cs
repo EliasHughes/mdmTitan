@@ -8,6 +8,20 @@ using TitanMDM.WindowsAgent.Storage;
 var builder =
     Host.CreateApplicationBuilder(args);
 
+builder.Services.AddWindowsService(
+    options =>
+    {
+        options.ServiceName =
+            "TitanMDM Windows Agent";
+    });
+
+builder.Logging.AddEventLog(
+    settings =>
+    {
+        settings.SourceName =
+            "TitanMDM Windows Agent";
+    });
+
 builder.Services.Configure<AgentOptions>(
     builder.Configuration.GetSection(
         AgentOptions.SectionName));
@@ -61,6 +75,9 @@ builder.Services.AddHttpClient<
         });
 
 builder.Services.AddHostedService<Worker>();
+
+builder.Services.AddHostedService<
+    HeartbeatBackgroundService>();
 
 var host =
     builder.Build();
