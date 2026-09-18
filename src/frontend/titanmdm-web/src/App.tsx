@@ -25,6 +25,7 @@ import { UsersPage } from './pages/users/UsersPage'
 import { RolesPage } from './pages/roles/RolesPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
+import { PolicyEditorPage } from './pages/policies/PolicyEditorPage'
 
 
 
@@ -77,6 +78,16 @@ function App() {
         <Route
           path="policies"
           element={<PoliciesPage />}
+        />
+
+        <Route
+          path="policies/new"
+          element={<PolicyEditorPage />}
+        />
+
+        <Route
+          path="policies/:policyId"
+          element={<PolicyEditorPage />}
         />
 
         <Route

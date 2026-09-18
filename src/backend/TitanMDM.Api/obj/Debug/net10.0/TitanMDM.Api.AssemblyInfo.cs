@@ -10,10 +10,11 @@
 using System;
 using System.Reflection;
 
+[assembly: Microsoft.Extensions.Configuration.UserSecrets.UserSecretsIdAttribute("910b319c-2abd-4a84-bc6c-3b61f883b9bd")]
 [assembly: System.Reflection.AssemblyCompanyAttribute("TitanMDM.Api")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+26910ed311dad86767a8839a9eb0d3d2df103406")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+49caff96dc626321cd567496cc012e1c5cc4d5e6")]
 [assembly: System.Reflection.AssemblyProductAttribute("TitanMDM.Api")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TitanMDM.Api")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]
