@@ -19,6 +19,7 @@ import {
 } from 'react'
 
 import { devicesApi  } from '../../api/devicesApi'
+import { useNavigate } from 'react-router-dom'
 
 import type {
   DeviceListItem,
@@ -76,6 +77,8 @@ export function DevicesPage() {
   const [devices, setDevices] = useState<
     DeviceListItem[]
   >([])
+  
+  const navigate = useNavigate()
 
   const [total, setTotal] = useState(0)
 
@@ -376,8 +379,14 @@ setTotal(response.totalCount)
                 </tr>
               ) : (
                 devices.map((device) => (
-                  <tr key={device.id}>
-                    <td>
+                  <tr
+                      key={device.id}
+                      className="device-row-clickable"
+                      onClick={() =>
+                        navigate(`/devices/${device.id}`)
+                      }
+                      >
+                       <td>
                       <div className="device-identity">
                         <div className="device-platform-icon">
                           {getPlatformIcon(

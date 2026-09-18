@@ -24,6 +24,7 @@ import { AuditPage } from './pages/audit/AuditPage'
 import { UsersPage } from './pages/users/UsersPage'
 import { RolesPage } from './pages/roles/RolesPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
+import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
 
 function App() {
   return (
@@ -52,6 +53,11 @@ function App() {
         <Route
           index
           element={<DashboardPage />}
+        />
+
+          <Route
+          path="devices/:deviceId"
+          element={<DeviceDetailPage />}
         />
 
         {/* Device Management */}
