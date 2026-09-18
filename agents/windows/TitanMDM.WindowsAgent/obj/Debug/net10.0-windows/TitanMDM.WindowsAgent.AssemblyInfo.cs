@@ -15,7 +15,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyDescriptionAttribute("Windows device management agent for TitanMDM Enterprise.")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+1042ec8ab8983e7e1959135d6874883ba1431762")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+26910ed311dad86767a8839a9eb0d3d2df103406")]
 [assembly: System.Reflection.AssemblyProductAttribute("TitanMDM Windows Agent")]
 [assembly: System.Reflection.AssemblyTitleAttribute("TitanMDM.WindowsAgent")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

@@ -20,9 +20,32 @@ public sealed class TitanMdmApiClient
         _logger = logger;
     }
 
-    public async Task<HeartbeatResponse> SendHeartbeatAsync(
+   public async Task<HeartbeatResponse> SendHeartbeatAsync(
     CancellationToken cancellationToken = default)
 {
+    var identity =
+        await _identityStore.LoadAsync(
+            cancellationToken);
+
+    if (identity is null)
+    {
+        throw new InvalidOperationException(
+            "El agente todavía no posee una identidad TitanMDM.");
+    }
+
+    if (identity.DeviceId == Guid.Empty)
+    {
+        throw new InvalidOperationException(
+            "La identidad TitanMDM contiene un DeviceId inválido.");
+    }
+
+    if (string.IsNullOrWhiteSpace(
+            identity.DeviceSecret))
+    {
+        throw new InvalidOperationException(
+            "La identidad TitanMDM no contiene DeviceSecret.");
+    }
+
     using var request =
         await CreateAuthenticatedRequestAsync(
             HttpMethod.Post,
@@ -30,7 +53,33 @@ public sealed class TitanMdmApiClient
             cancellationToken);
 
     request.Content =
-        JsonContent.Create(new { });
+        JsonContent.Create(
+            new
+            {
+                deviceId =
+                    identity.DeviceId,
+
+                deviceSecret =
+                    identity.DeviceSecret,
+
+                ipAddress =
+                    (string?)null,
+
+                batteryLevel =
+                    (int?)null,
+
+                agentVersion =
+                    typeof(TitanMdmApiClient)
+                        .Assembly
+                        .GetName()
+                        .Version?
+                        .ToString(),
+
+                operatingSystemVersion =
+                    Environment.OSVersion
+                        .Version
+                        .ToString()
+            });
 
     using var response =
         await _httpClient.SendAsync(
@@ -45,7 +94,8 @@ public sealed class TitanMdmApiClient
     var heartbeat =
         await response.Content
             .ReadFromJsonAsync<HeartbeatResponse>(
-                cancellationToken: cancellationToken);
+                cancellationToken:
+                    cancellationToken);
 
     if (heartbeat is null)
     {
@@ -53,7 +103,7 @@ public sealed class TitanMdmApiClient
             "TitanMDM devolvió una respuesta de heartbeat vacía.");
     }
 
-return heartbeat;
+    return heartbeat;
 }
 
 public async Task<IReadOnlyCollection<AgentCommand>>

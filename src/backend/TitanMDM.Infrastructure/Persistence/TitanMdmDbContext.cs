@@ -40,6 +40,16 @@ public sealed class TitanMdmDbContext : DbContext
 
     public DbSet<DeviceCommand> DeviceCommands =>
     Set<DeviceCommand>();
+
+    public DbSet<Policy> Policies =>
+    Set<Policy>();
+
+    public DbSet<PolicyVersion> PolicyVersions =>
+    Set<PolicyVersion>();
+
+    public DbSet<DevicePolicyAssignment>
+    DevicePolicyAssignments =>
+        Set<DevicePolicyAssignment>();
     
     public DbSet<DeviceCredential> DeviceCredentials =>
     Set<DeviceCredential>();

@@ -447,3 +447,12 @@
 .device-row-clickable:hover {
   background: #f7f9ff !important;
 }
+
+.device-row-clickable {
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.device-row-clickable:hover {
+  background: #f7f9ff !important;
+}

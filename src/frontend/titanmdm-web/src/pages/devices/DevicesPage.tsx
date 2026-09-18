@@ -380,13 +380,13 @@ setTotal(response.totalCount)
               ) : (
                 devices.map((device) => (
                   <tr
-                      key={device.id}
-                      className="device-row-clickable"
-                      onClick={() =>
-                        navigate(`/devices/${device.id}`)
-                      }
+                        key={device.id}
+                        className="device-row-clickable"
+                        onClick={() =>
+                          navigate(`/devices/${device.id}`)
+                        }
                       >
-                       <td>
+                        <td>
                       <div className="device-identity">
                         <div className="device-platform-icon">
                           {getPlatformIcon(
