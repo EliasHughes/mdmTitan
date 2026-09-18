@@ -20,10 +20,46 @@ public sealed class TitanMdmApiClient
         _logger = logger;
     }
 
-    public async Task<IReadOnlyCollection<AgentCommand>>
-        GetCommandsAsync(
-            CancellationToken cancellationToken = default)
+    public async Task<HeartbeatResponse> SendHeartbeatAsync(
+    CancellationToken cancellationToken = default)
+{
+    using var request =
+        await CreateAuthenticatedRequestAsync(
+            HttpMethod.Post,
+            "/api/device/heartbeat",
+            cancellationToken);
+
+    request.Content =
+        JsonContent.Create(new { });
+
+    using var response =
+        await _httpClient.SendAsync(
+            request,
+            cancellationToken);
+
+    await EnsureSuccessfulAsync(
+        response,
+        "enviar heartbeat",
+        cancellationToken);
+
+    var heartbeat =
+        await response.Content
+            .ReadFromJsonAsync<HeartbeatResponse>(
+                cancellationToken: cancellationToken);
+
+    if (heartbeat is null)
     {
+        throw new InvalidOperationException(
+            "TitanMDM devolvió una respuesta de heartbeat vacía.");
+    }
+
+return heartbeat;
+}
+
+public async Task<IReadOnlyCollection<AgentCommand>>
+    GetCommandsAsync(
+        CancellationToken cancellationToken = default)
+{
         using var request =
             await CreateAuthenticatedRequestAsync(
                 HttpMethod.Get,
@@ -46,7 +82,7 @@ public sealed class TitanMdmApiClient
                     cancellationToken: cancellationToken);
 
         return commands ??
-               Array.Empty<AgentCommand>();
+       new List<AgentCommand>();
     }
 
     public async Task MarkDeliveredAsync(

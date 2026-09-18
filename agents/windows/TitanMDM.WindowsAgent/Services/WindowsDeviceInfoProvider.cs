@@ -1,7 +1,9 @@
 using System.Runtime.InteropServices;
+using System.Runtime.Versioning;
 
 namespace TitanMDM.WindowsAgent.Services;
 
+[SupportedOSPlatform("windows")]
 public sealed class WindowsDeviceInfoProvider
 {
     public WindowsDeviceInformation GetDeviceInformation()

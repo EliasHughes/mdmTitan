@@ -1,6 +1,6 @@
 {
   "version": 2,
-  "dgSpecHash": "OVb8PRzOajc=",
+  "dgSpecHash": "D2QJe7P2V3k=",
   "success": true,
   "projectFilePath": "C:\\TitanMDM\\agents\\windows\\TitanMDM.WindowsAgent\\TitanMDM.WindowsAgent.csproj",
   "expectedPackageFiles": [
@@ -21,6 +21,8 @@
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.filesystemglobbing\\10.0.10\\microsoft.extensions.filesystemglobbing.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.hosting\\10.0.10\\microsoft.extensions.hosting.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.hosting.abstractions\\10.0.10\\microsoft.extensions.hosting.abstractions.10.0.10.nupkg.sha512",
+    "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.hosting.windowsservices\\10.0.10\\microsoft.extensions.hosting.windowsservices.10.0.10.nupkg.sha512",
+    "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.http\\10.0.10\\microsoft.extensions.http.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.logging\\10.0.10\\microsoft.extensions.logging.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.logging.abstractions\\10.0.10\\microsoft.extensions.logging.abstractions.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.logging.configuration\\10.0.10\\microsoft.extensions.logging.configuration.10.0.10.nupkg.sha512",
@@ -31,7 +33,9 @@
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.options\\10.0.10\\microsoft.extensions.options.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.options.configurationextensions\\10.0.10\\microsoft.extensions.options.configurationextensions.10.0.10.nupkg.sha512",
     "C:\\Users\\ADMTI\\.nuget\\packages\\microsoft.extensions.primitives\\10.0.10\\microsoft.extensions.primitives.10.0.10.nupkg.sha512",
-    "C:\\Users\\ADMTI\\.nuget\\packages\\system.diagnostics.eventlog\\10.0.10\\system.diagnostics.eventlog.10.0.10.nupkg.sha512"
+    "C:\\Users\\ADMTI\\.nuget\\packages\\system.diagnostics.eventlog\\10.0.10\\system.diagnostics.eventlog.10.0.10.nupkg.sha512",
+    "C:\\Users\\ADMTI\\.nuget\\packages\\system.security.cryptography.protecteddata\\10.0.0\\system.security.cryptography.protecteddata.10.0.0.nupkg.sha512",
+    "C:\\Users\\ADMTI\\.nuget\\packages\\system.serviceprocess.servicecontroller\\10.0.10\\system.serviceprocess.servicecontroller.10.0.10.nupkg.sha512"
   ],
   "logs": []
 }
