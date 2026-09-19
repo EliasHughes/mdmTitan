@@ -54,6 +54,24 @@ public sealed class AndroidEnterpriseConfiguration
 
     public string? LastError { get; private set; }
 
+    public DateTime? LastDeviceSyncAtUtc
+{
+    get;
+    private set;
+}
+
+public int LastDeviceSyncCount
+{
+    get;
+    private set;
+}
+
+public int LastDeviceSyncErrors
+{
+    get;
+    private set;
+}
+
     public void MarkPending()
     {
         Status =
@@ -101,4 +119,19 @@ public sealed class AndroidEnterpriseConfiguration
 
         UpdatedAtUtc = DateTime.UtcNow;
     }
+
+    public void RecordDeviceSynchronization(
+    int deviceCount,
+    int errorCount)
+{
+    LastDeviceSyncAtUtc = DateTime.UtcNow;
+
+    LastDeviceSyncCount =
+        Math.Max(deviceCount, 0);
+
+    LastDeviceSyncErrors =
+        Math.Max(errorCount, 0);
+
+    UpdatedAtUtc = DateTime.UtcNow;
+}
 }

@@ -16,4 +16,10 @@ public interface IDeviceQueryService
         Guid organizationId,
         Guid deviceId,
         CancellationToken cancellationToken = default);
+
+    Task<AndroidDeviceDetailsDto?>
+        GetAndroidDeviceDetailsAsync(
+            Guid organizationId,
+            Guid deviceId,
+            CancellationToken cancellationToken = default);
 }
