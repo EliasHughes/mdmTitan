@@ -10,6 +10,13 @@ export type PolicyStatus =
   | 'Disabled'
   | 'Archived'
 
+export type AndroidPolicyPublicationStatus =
+  | 'Pending'
+  | 'Publishing'
+  | 'Published'
+  | 'Failed'
+  | 'Deleted'
+
 export interface Policy {
   id: string
   organizationId: string
@@ -60,6 +67,67 @@ export interface UpdatePolicyRequest {
   configurationJson: string
 }
 
+// ============================================================
+// ANDROID ENTERPRISE POLICY PUBLICATION
+// ============================================================
+
+export interface AndroidPolicyPublication {
+  id: string
+  policyId: string
+  policyVersionId: string
+  policyVersion: number
+
+  googlePolicyId: string
+  googlePolicyName: string | null
+
+  status: AndroidPolicyPublicationStatus
+
+  compiledPolicyJson: string | null
+  googleResponseJson: string | null
+
+  errorCode: string | null
+  errorMessage: string | null
+
+  createdAtUtc: string
+  updatedAtUtc: string
+  publishedAtUtc: string | null
+  lastAttemptAtUtc: string | null
+  deletedAtUtc: string | null
+}
+
+export interface AndroidPolicyPublishResult {
+  policyId: string
+  policyVersionId: string
+  policyVersion: number
+
+  publicationId: string
+
+  googlePolicyId: string
+  googlePolicyName: string
+
+  status: string
+
+  warnings: string[]
+
+  publishedAtUtc: string
+}
+
+export interface AndroidPolicyRemoteVerificationResult {
+  policyId: string
+  policyVersion: number
+
+  googlePolicyId: string
+  googlePolicyName: string
+
+  existsInGoogle: boolean
+
+  googlePolicyJson: string
+}
+
+// ============================================================
+// POLICIES API
+// ============================================================
+
 export const policiesApi = {
   async getAll(
     platform?: string,
@@ -72,6 +140,7 @@ export const policiesApi = {
           params: {
             platform:
               platform || undefined,
+
             status:
               status || undefined,
           },
@@ -150,7 +219,9 @@ export const policiesApi = {
         PolicyAssignment[]
       >(
         `/policies/${policyId}/assign`,
-        { deviceIds },
+        {
+          deviceIds,
+        },
       )
 
     return response.data
@@ -164,6 +235,72 @@ export const policiesApi = {
         PolicyAssignment[]
       >(
         `/policies/${policyId}/assignments`,
+      )
+
+    return response.data
+  },
+
+  // ==========================================================
+  // ANDROID ENTERPRISE
+  // ==========================================================
+
+  async publishAndroid(
+    policyId: string,
+  ): Promise<AndroidPolicyPublishResult> {
+    const response =
+      await apiClient.post<
+        AndroidPolicyPublishResult
+      >(
+        `/policies/${policyId}/android/publish`,
+      )
+
+    return response.data
+  },
+
+  async getAndroidPublication(
+    policyId: string,
+  ): Promise<AndroidPolicyPublication | null> {
+    try {
+      const response =
+        await apiClient.get<
+          AndroidPolicyPublication
+        >(
+          `/policies/${policyId}/android/publication`,
+        )
+
+      return response.data
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'response' in error
+      ) {
+        const status =
+          (
+            error as {
+              response?: {
+                status?: number
+              }
+            }
+          ).response?.status
+
+        if (status === 404) {
+          return null
+        }
+      }
+
+      throw error
+    }
+  },
+
+  async verifyAndroidPublication(
+    policyId: string,
+  ): Promise<AndroidPolicyRemoteVerificationResult> {
+    const response =
+      await apiClient.get<
+        AndroidPolicyRemoteVerificationResult
+      >(
+        `/policies/${policyId}/android/verify`,
       )
 
     return response.data

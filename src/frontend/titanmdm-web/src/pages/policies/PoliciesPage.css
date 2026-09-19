@@ -243,60 +243,192 @@
 }
 
 .policy-actions-cell {
-  position: relative;
-  width: 45px;
+  width: 54px;
+  text-align: right;
 }
 
 .policy-menu-button {
-  width: 31px;
-  height: 31px;
-  display: grid;
+  width: 34px;
+  height: 34px;
+  display: inline-grid;
   place-items: center;
-  border: 0;
-  border-radius: 7px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  outline: none;
   color: #64748b;
   background: transparent;
+  cursor: pointer;
+  transition:
+    color .15s ease,
+    background .15s ease,
+    border-color .15s ease,
+    box-shadow .15s ease;
 }
 
-.policy-menu-button:hover {
-  background: #f1f5f9;
+.policy-menu-button:hover,
+.policy-menu-button[aria-expanded="true"] {
+  border-color: #dce4ee;
+  color: #3158ca;
+  background: #f5f7ff;
+}
+
+.policy-menu-button:focus-visible {
+  border-color: #4169e1;
+  box-shadow:
+    0 0 0 3px
+    rgb(65 105 225 / 14%);
+}
+
+.policy-menu-button:disabled {
+  cursor: not-allowed;
+  opacity: .45;
 }
 
 .policy-menu {
-  position: absolute;
-  top: 45px;
-  right: 14px;
-  z-index: 20;
-  width: 160px;
-  padding: 6px;
+  width: 220px;
+  position: fixed;
+  z-index: 2000;
+  overflow: hidden;
+  padding: 0;
   border: 1px solid #dce4ee;
-  border-radius: 9px;
+  border-radius: 12px;
   background: #fff;
   box-shadow:
-    0 12px 30px rgb(15 23 42 / 12%);
+    0 18px 45px
+      rgb(15 23 42 / 16%),
+    0 4px 12px
+      rgb(15 23 42 / 8%);
+  transform-origin: top right;
+  animation:
+    policy-menu-enter
+    .14s ease-out;
 }
 
-.policy-menu button {
+.policy-menu__header {
+  padding: 11px 13px 10px;
+  border-bottom: 1px solid #edf1f6;
+  background: #fafbfd;
+}
+
+.policy-menu__header span {
+  display: block;
+  color: #172033;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.policy-menu__header small {
+  display: block;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 500;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.policy-menu__content {
+  padding: 6px;
+}
+
+.policy-menu__content > button {
   width: 100%;
-  min-height: 34px;
+  min-height: 48px;
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 9px;
+  gap: 10px;
+  padding: 7px 8px;
   border: 0;
-  border-radius: 6px;
+  border-radius: 8px;
+  outline: none;
   color: #475569;
   background: transparent;
-  font-size: 10px;
+  cursor: pointer;
   text-align: left;
+  transition:
+    color .15s ease,
+    background .15s ease;
 }
 
-.policy-menu button:hover {
-  background: #f6f8fb;
+.policy-menu__content > button:hover,
+.policy-menu__content > button:focus-visible {
+  color: #3158ca;
+  background: #f5f7ff;
 }
 
-.policy-menu button.danger {
+.policy-menu__icon {
+  width: 30px;
+  height: 30px;
+  flex: 0 0 auto;
+  display: grid;
+  place-items: center;
+  border-radius: 8px;
+  color: #4169e1;
+  background: #edf2ff;
+}
+
+.policy-menu__icon--success {
+  color: #168250;
+  background: #edf9f2;
+}
+
+.policy-menu__icon--danger {
   color: #b83d3d;
+  background: #fff0f0;
+}
+
+.policy-menu__label {
+  min-width: 0;
+  flex: 1;
+}
+
+.policy-menu__label strong {
+  display: block;
+  color: inherit;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.policy-menu__label small {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 8px;
+  font-weight: 500;
+}
+
+.policy-menu__separator {
+  height: 1px;
+  margin: 5px 7px;
+  background: #edf1f6;
+}
+
+.policy-menu__content > button.danger {
+  color: #b83d3d;
+}
+
+.policy-menu__content > button.danger:hover,
+.policy-menu__content > button.danger:focus-visible {
+  color: #a62f2f;
+  background: #fff5f5;
+}
+
+@keyframes policy-menu-enter {
+  from {
+    opacity: 0;
+    transform:
+      translateY(-4px)
+      scale(.98);
+  }
+
+  to {
+    opacity: 1;
+    transform:
+      translateY(0)
+      scale(1);
+  }
 }
 
 .policy-table-empty {

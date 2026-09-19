@@ -18,6 +18,7 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react'
 import { useNavigate } from 'react-router-dom'
@@ -100,6 +101,62 @@ export function PoliciesPage() {
   const [openMenuId, setOpenMenuId] =
     useState<string | null>(null)
 
+  const menuRef =
+  useRef<HTMLDivElement | null>(null)
+
+const [menuPosition, setMenuPosition] =
+  useState({
+    top: 0,
+    right: 0,
+  })
+
+const openPolicyMenu = (
+  policyId: string,
+  button: HTMLButtonElement,
+) => {
+  if (openMenuId === policyId) {
+    setOpenMenuId(null)
+    return
+  }
+
+  const rect =
+    button.getBoundingClientRect()
+
+  const menuHeight = 190
+  const gap = 8
+
+  const availableBelow =
+    window.innerHeight -
+    rect.bottom
+
+  const shouldOpenUpward =
+    availableBelow <
+    menuHeight + 20
+
+  const top =
+    shouldOpenUpward
+      ? Math.max(
+          12,
+          rect.top -
+            menuHeight -
+            gap,
+        )
+      : rect.bottom + gap
+
+  const right =
+    Math.max(
+      12,
+      window.innerWidth -
+        rect.right,
+    )
+
+  setMenuPosition({
+    top,
+    right,
+  })
+
+  setOpenMenuId(policyId)
+}
   const loadPolicies =
     useCallback(async () => {
       try {
@@ -132,6 +189,96 @@ export function PoliciesPage() {
     document.title =
       'Políticas | TitanMDM'
   }, [])
+
+  useEffect(() => {
+  if (!openMenuId) {
+    return
+  }
+
+  const handleMouseDown = (
+    event: MouseEvent,
+  ) => {
+    const target =
+      event.target as Node
+
+    if (
+      menuRef.current &&
+      !menuRef.current.contains(
+        target,
+      )
+    ) {
+      const element =
+        target instanceof Element
+          ? target
+          : null
+
+      if (
+        !element?.closest(
+          '.policy-menu-button',
+        )
+      ) {
+        setOpenMenuId(null)
+      }
+    }
+  }
+
+  const handleKeyDown = (
+    event: KeyboardEvent,
+  ) => {
+    if (event.key === 'Escape') {
+      setOpenMenuId(null)
+    }
+  }
+
+  const closeOnViewportChange =
+    () => {
+      setOpenMenuId(null)
+    }
+
+  document.addEventListener(
+    'mousedown',
+    handleMouseDown,
+  )
+
+  document.addEventListener(
+    'keydown',
+    handleKeyDown,
+  )
+
+  window.addEventListener(
+    'resize',
+    closeOnViewportChange,
+  )
+
+  window.addEventListener(
+    'scroll',
+    closeOnViewportChange,
+    true,
+  )
+
+  return () => {
+    document.removeEventListener(
+      'mousedown',
+      handleMouseDown,
+    )
+
+    document.removeEventListener(
+      'keydown',
+      handleKeyDown,
+    )
+
+    window.removeEventListener(
+      'resize',
+      closeOnViewportChange,
+    )
+
+    window.removeEventListener(
+      'scroll',
+      closeOnViewportChange,
+      true,
+    )
+  }
+}, [openMenuId])
 
   const filteredPolicies =
     useMemo(() => {
@@ -517,103 +664,180 @@ export function PoliciesPage() {
                       </td>
 
                       <td className="policy-actions-cell">
-                        <button
-                          type="button"
-                          className="policy-menu-button"
-                          disabled={
-                            actionPolicyId ===
-                            policy.id
-                          }
-                          onClick={() =>
-                            setOpenMenuId(
-                              openMenuId ===
-                                policy.id
-                                ? null
-                                : policy.id,
-                            )
-                          }
-                        >
-                          <MoreVertical
-                            size={17}
-                          />
-                        </button>
+  <button
+    type="button"
+    className="policy-menu-button"
+    aria-label={
+      `Acciones para ${policy.name}`
+    }
+    aria-haspopup="menu"
+    aria-expanded={
+      openMenuId === policy.id
+    }
+    disabled={
+      actionPolicyId ===
+      policy.id
+    }
+    onClick={(event) =>
+      openPolicyMenu(
+        policy.id,
+        event.currentTarget,
+      )
+    }
+  >
+    <MoreVertical size={17} />
+  </button>
 
-                        {openMenuId ===
-                          policy.id && (
-                          <div className="policy-menu">
-                            <button
-                              type="button"
-                              onClick={() =>
-                                navigate(
-                                  `/policies/${policy.id}`,
-                                )
-                              }
-                            >
-                              <Edit3
-                                size={14}
-                              />
-                              Editar
-                            </button>
+  {openMenuId ===
+    policy.id && (
+    <div
+      ref={menuRef}
+      role="menu"
+      className="policy-menu"
+      style={{
+        top: menuPosition.top,
+        right: menuPosition.right,
+      }}
+    >
+      <div className="policy-menu__header">
+        <span>Acciones</span>
 
-                            {policy.status !==
-                              'Active' &&
-                              policy.status !==
-                                'Archived' && (
-                                <button
-                                  type="button"
-                                  onClick={() => {
-                                    void executeStateAction(
-                                      policy,
-                                      'activate',
-                                    )
-                                  }}
-                                >
-                                  <Power
-                                    size={14}
-                                  />
-                                  Activar
-                                </button>
-                              )}
+        <small>
+          {policy.name}
+        </small>
+      </div>
 
-                            {policy.status ===
-                              'Active' && (
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  void executeStateAction(
-                                    policy,
-                                    'disable',
-                                  )
-                                }}
-                              >
-                                <PowerOff
-                                  size={14}
-                                />
-                                Deshabilitar
-                              </button>
-                            )}
+      <div className="policy-menu__content">
+        <button
+          type="button"
+          role="menuitem"
+          onClick={() => {
+            setOpenMenuId(null)
 
-                            {policy.status !==
-                              'Archived' && (
-                              <button
-                                type="button"
-                                className="danger"
-                                onClick={() => {
-                                  void executeStateAction(
-                                    policy,
-                                    'archive',
-                                  )
-                                }}
-                              >
-                                <Archive
-                                  size={14}
-                                />
-                                Archivar
-                              </button>
-                            )}
-                          </div>
-                        )}
-                      </td>
+            navigate(
+              `/policies/${policy.id}`,
+            )
+          }}
+        >
+          <span className="policy-menu__icon">
+            <Edit3 size={15} />
+          </span>
+
+          <span className="policy-menu__label">
+            <strong>
+              Editar
+            </strong>
+
+            <small>
+              Modificar configuración
+            </small>
+          </span>
+        </button>
+
+        {policy.status !==
+          'Active' &&
+          policy.status !==
+            'Archived' && (
+            <button
+              type="button"
+              role="menuitem"
+              onClick={() => {
+                void executeStateAction(
+                  policy,
+                  'activate',
+                )
+              }}
+            >
+              <span
+                className={
+                  'policy-menu__icon ' +
+                  'policy-menu__icon--success'
+                }
+              >
+                <Power size={15} />
+              </span>
+
+              <span className="policy-menu__label">
+                <strong>
+                  Activar
+                </strong>
+
+                <small>
+                  Habilitar política
+                </small>
+              </span>
+            </button>
+          )}
+
+        {policy.status ===
+          'Active' && (
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              void executeStateAction(
+                policy,
+                'disable',
+              )
+            }}
+          >
+            <span className="policy-menu__icon">
+              <PowerOff size={15} />
+            </span>
+
+            <span className="policy-menu__label">
+              <strong>
+                Deshabilitar
+              </strong>
+
+              <small>
+                Detener aplicación
+              </small>
+            </span>
+          </button>
+        )}
+
+        {policy.status !==
+          'Archived' && (
+          <>
+            <div className="policy-menu__separator" />
+
+            <button
+              type="button"
+              role="menuitem"
+              className="danger"
+              onClick={() => {
+                void executeStateAction(
+                  policy,
+                  'archive',
+                )
+              }}
+            >
+              <span
+                className={
+                  'policy-menu__icon ' +
+                  'policy-menu__icon--danger'
+                }
+              >
+                <Archive size={15} />
+              </span>
+
+              <span className="policy-menu__label">
+                <strong>
+                  Archivar
+                </strong>
+
+                <small>
+                  Retirar esta política
+                </small>
+              </span>
+            </button>
+          </>
+        )}
+      </div>
+    </div>
+  )}
+</td>
                     </tr>
                   ),
                 )

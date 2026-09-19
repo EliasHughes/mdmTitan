@@ -1,0 +1,3734 @@
+[1mdiff --git a/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.css b/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.css[m
+[1mindex 4aa9311..cf4bff3 100644[m
+[1m--- a/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.css[m
+[1m+++ b/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.css[m
+[36m@@ -349,4 +349,290 @@[m
+   .policy-setting-body {[m
+     grid-template-columns: 1fr;[m
+   }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m/* ============================================================[m
+[32m+[m[32m   ANDROID ENTERPRISE POLICY PUBLICATION[m
+[32m+[m[32m============================================================ */[m
+[32m+[m
+[32m+[m[32m.android-publication-card {[m
+[32m+[m[32m  margin-bottom: 15px;[m
+[32m+[m[32m  overflow: hidden;[m
+[32m+[m[32m  border: 1px solid #d8e2f0;[m
+[32m+[m[32m  border-radius: 12px;[m
+[32m+[m[32m  background: #fff;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-header {[m
+[32m+[m[32m  min-height: 76px;[m
+[32m+[m[32m  display: flex;[m
+[32m+[m[32m  align-items: center;[m
+[32m+[m[32m  justify-content: space-between;[m
+[32m+[m[32m  gap: 20px;[m
+[32m+[m[32m  padding: 16px 18px;[m
+[32m+[m[32m  border-bottom: 1px solid #edf1f6;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-title {[m
+[32m+[m[32m  display: flex;[m
+[32m+[m[32m  align-items: center;[m
+[32m+[m[32m  gap: 12px;[m
+[32m+[m[32m  color: #4169e1;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-title h2 {[m
+[32m+[m[32m  margin: 0;[m
+[32m+[m[32m  color: #172033;[m
+[32m+[m[32m  font-size: 14px;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-title p {[m
+[32m+[m[32m  margin: 4px 0 0;[m
+[32m+[m[32m  color: #94a3b8;[m
+[32m+[m[32m  font-size: 10px;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-status {[m
+[32m+[m[32m  display: inline-flex;[m
+[32m+[m[32m  align-items: center;[m
+[32m+[m[32m  gap: 6px;[m
+[32m+[m[32m  min-height: 27px;[m
+[32m+[m[32m  padding: 0 10px;[m
+[32m+[m[32m  border: 1px solid #dce4ee;[m
+[32m+[m[32m  border-radius: 999px;[m
+[32m+[m[32m  color: #64748b;[m
+[32m+[m[32m  background: #f8fafc;[m
+[32m+[m[32m  font-size: 9px;[m
+[32m+[m[32m  font-weight: 800;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-status--published {[m
+[32m+[m[32m  color: #168250;[m
+[32m+[m[32m  border-color: #ccebd9;[m
+[32m+[m[32m  background: #edf9f2;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-status--publishing {[m
+[32m+[m[32m  color: #3158ca;[m
+[32m+[m[32m  border-color: #cbd8ff;[m
+[32m+[m[32m  background: #edf2ff;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-status--failed {[m
+[32m+[m[32m  color: #b53e3e;[m
+[32m+[m[32m  border-color: #f2cccc;[m
+[32m+[m[32m  background: #fff2f2;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-grid {[m
+[32m+[m[32m  display: grid;[m
+[32m+[m[32m  grid-template-columns:[m
+[32m+[m[32m    repeat(3, minmax(0, 1fr));[m
+[32m+[m[32m  gap: 1px;[m
+[32m+[m[32m  background: #edf1f6;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-field {[m
+[32m+[m[32m  min-width: 0;[m
+[32m+[m[32m  padding: 14px 16px;[m
+[32m+[m[32m  background: #fff;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-field span {[m
+[32m+[m[32m  display: block;[m
+[32m+[m[32m  margin-bottom: 5px;[m
+[32m+[m[32m  color: #94a3b8;[m
+[32m+[m[32m  font-size: 9px;[m
+[32m+[m[32m  font-weight: 700;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-field strong {[m
+[32m+[m[32m  display: block;[m
+[32m+[m[32m  overflow: hidden;[m
+[32m+[m[32m  color: #334155;[m
+[32m+[m[32m  font-size: 10px;[m
+[32m+[m[32m  font-weight: 800;[m
+[32m+[m[32m  text-overflow: ellipsis;[m
+[32m+[m[32m  white-space: nowrap;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-mono {[m
+[32m+[m[32m  font-family:[m
+[32m+[m[32m    "Cascadia Code",[m
+[32m+[m[32m    Consolas,[m
+[32m+[m[32m    monospace;[m
+[32m+[m[32m  font-size: 9px !important;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-actions {[m
+[32m+[m[32m  display: flex;[m
+[32m+[m[32m  flex-wrap: wrap;[m
+[32m+[m[32m  align-items: center;[m
+[32m+[m[32m  gap: 8px;[m
+[32m+[m[32m  padding: 14px 16px;[m
+[32m+[m[32m  border-top: 1px solid #edf1f6;[m
+[32m+[m[32m  background: #fafbfd;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-actions button {[m
+[32m+[m[32m  min-height: 37px;[m
+[32m+[m[32m  display: inline-flex;[m
+[32m+[m[32m  align-items: center;[m
+[32m+[m[32m  justify-content: center;[m
+[32m+[m[32m  gap: 7px;[m
+[32m+[m[32m  padding: 0 13px;[m
+[32m+[m[32m  border-radius: 8px;[m
+[32m+[m[32m  font-size: 10px;[m
+[32m+[m[32m  font-weight: 800;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-actions button:disabled {[m
+[32m+[m[32m  cursor: not-allowed;[m
+[32m+[m[32m  opacity: .5;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publish-button {[m
+[32m+[m[32m  border: 1px solid #4169e1;[m
+[32m+[m[32m  color: #fff;[m
+[32m+[m[32m  background: #4169e1;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-verify-button {[m
+[32m+[m[32m  border: 1px solid #b9c9f8;[m
+[32m+[m[32m  color: #3158ca;[m
+[32m+[m[32m  background: #edf2ff;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-refresh-button {[m
+[32m+[m[32m  border: 1px solid #dce4ee;[m
+[32m+[m[32m  color: #526075;[m
+[32m+[m[32m  background: #fff;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-error {[m
+[32m+[m[32m  display: flex;[m
+[32m+[m[32m  align-items: flex-start;[m
+[32m+[m[32m  gap: 9px;[m
+[32m+[m[32m  margin: 14px 16px 0;[m
+[32m+[m[32m  padding: 11px 12px;[m
+[32m+[m[32m  border: 1px solid #f2cccc;[m
+[32m+[m[32m  border-radius: 8px;[m
+[32m+[m[32m  color: #b53e3e;[m
+[32m+[m[32m  background: #fff2f2;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-error div {[m
+[32m+[m[32m  min-width: 0;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-error strong {[m
+[32m+[m[32m  display: block;[m
+[32m+[m[32m  margin-bottom: 3px;[m
+[32m+[m[32m  font-size: 10px;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-publication-error span {[m
+[32m+[m[32m  display: block;[m
+[32m+[m[32m  font-size: 9px;[m
+[32m+[m[32m  line-height: 1.5;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-verification-result {[m
+[32m+[m[32m  display: flex;[m
+[32m+[m[32m  align-items: center;[m
+[32m+[m[32m  gap: 10px;[m
+[32m+[m[32m  margin: 0 16px 16px;[m
+[32m+[m[32m  padding: 12px;[m
+[32m+[m[32m  border: 1px solid #ccebd9;[m
+[32m+[m[32m  border-radius: 9px;[m
+[32m+[m[32m  color: #168250;[m
+[32m+[m[32m  background: #edf9f2;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-verification-result > div {[m
+[32m+[m[32m  min-width: 0;[m
+[32m+[m[32m  flex: 1;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-verification-result strong,[m
+[32m+[m[32m.android-verification-result span {[m
+[32m+[m[32m  display: block;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-verification-result strong {[m
+[32m+[m[32m  margin-bottom: 3px;[m
+[32m+[m[32m  font-size: 10px;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.android-verification-result span {[m
+[32m+[m[32m  overflow: hidden;[m
+[32m+[m[32m  color: #3b7f61;[m
+[32m+[m[32m  font-size: 9px;[m
+[32m+[m[32m  text-overflow: ellipsis;[m
+[32m+[m[32m  white-space: nowrap;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m/* ============================================================[m
+[32m+[m[32m   EXTENDED POLICY FIELDS[m
+[32m+[m[32m============================================================ */[m
+[32m+[m
+[32m+[m[32m.policy-setting-body select,[m
+[32m+[m[32m.policy-setting-body input[type="text"] {[m
+[32m+[m[32m  width: 100%;[m
+[32m+[m[32m  min-height: 39px;[m
+[32m+[m[32m  box-sizing: border-box;[m
+[32m+[m[32m  padding: 0 11px;[m
+[32m+[m[32m  border: 1px solid #dce4ee;[m
+[32m+[m[32m  border-radius: 8px;[m
+[32m+[m[32m  outline: none;[m
+[32m+[m[32m  color: #334155;[m
+[32m+[m[32m  background: #fff;[m
+[32m+[m[32m  font: inherit;[m
+[32m+[m[32m  font-weight: 500;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.policy-setting-body input:disabled,[m
+[32m+[m[32m.policy-setting-body select:disabled {[m
+[32m+[m[32m  cursor: not-allowed;[m
+[32m+[m[32m  opacity: .55;[m
+[32m+[m[32m  background: #f3f6f9;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m.policy-spin {[m
+[32m+[m[32m  animation:[m
+[32m+[m[32m    policy-spin-animation[m
+[32m+[m[32m    .8s linear infinite;[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m@keyframes policy-spin-animation {[m
+[32m+[m[32m  to {[m
+[32m+[m[32m    transform: rotate(360deg);[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m@media (max-width: 1050px) {[m
+[32m+[m[32m  .android-publication-grid {[m
+[32m+[m[32m    grid-template-columns:[m
+[32m+[m[32m      repeat(2, minmax(0, 1fr));[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m@media (max-width: 650px) {[m
+[32m+[m[32m  .android-publication-header {[m
+[32m+[m[32m    align-items: flex-start;[m
+[32m+[m[32m    flex-direction: column;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  .android-publication-grid {[m
+[32m+[m[32m    grid-template-columns: 1fr;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  .android-publication-actions {[m
+[32m+[m[32m    align-items: stretch;[m
+[32m+[m[32m    flex-direction: column;[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  .android-publication-actions button {[m
+[32m+[m[32m    width: 100%;[m
+[32m+[m[32m  }[m
+ }[m
+\ No newline at end of file[m
+[1mdiff --git a/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.tsx b/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.tsx[m
+[1mindex 94b8adb..fb97f1f 100644[m
+[1m--- a/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.tsx[m
+[1m+++ b/src/frontend/titanmdm-web/src/pages/policies/PolicyEditorPage.tsx[m
+[36m@@ -2,8 +2,15 @@[m [mimport {[m
+   ArrowLeft,[m
+   CheckCircle2,[m
+   ChevronRight,[m
+[32m+[m[32m  Cloud,[m
+[32m+[m[32m  CloudCog,[m
+[32m+[m[32m  ExternalLink,[m
+[32m+[m[32m  KeyRound,[m
+   Laptop,[m
+[32m+[m[32m  Loader2,[m
+   LockKeyhole,[m
+[32m+[m[32m  Network,[m
+[32m+[m[32m  RefreshCw,[m
+   Save,[m
+   Shield,[m
+   ShieldCheck,[m
+[36m@@ -17,6 +24,7 @@[m [mimport {[m
+   useEffect,[m
+   useMemo,[m
+   useState,[m
+[32m+[m[32m  type ReactNode,[m
+ } from 'react'[m
+ import {[m
+   useNavigate,[m
+[36m@@ -25,11 +33,17 @@[m [mimport {[m
+ [m
+ import {[m
+   policiesApi,[m
+[32m+[m[32m  type AndroidPolicyPublication,[m
+[32m+[m[32m  type AndroidPolicyRemoteVerificationResult,[m
+   type PolicyPlatform,[m
+ } from '../../api/policiesApi'[m
+ [m
+ import './PolicyEditorPage.css'[m
+ [m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// CONFIGURATION TYPES[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ interface WindowsPolicyConfiguration {[m
+   password: {[m
+     enabled: boolean[m
+[36m@@ -40,24 +54,29 @@[m [minterface WindowsPolicyConfiguration {[m
+     requireSpecialCharacter: boolean[m
+     maximumAgeDays: number[m
+   }[m
+[32m+[m
+   screenLock: {[m
+     enabled: boolean[m
+     timeoutMinutes: number[m
+   }[m
+[32m+[m
+   defender: {[m
+     enabled: boolean[m
+     realTimeProtection: boolean[m
+     cloudProtection: boolean[m
+   }[m
+[32m+[m
+   firewall: {[m
+     enabled: boolean[m
+     domainProfile: boolean[m
+     privateProfile: boolean[m
+     publicProfile: boolean[m
+   }[m
+[32m+[m
+   usb: {[m
+     blockRemovableStorage: boolean[m
+   }[m
+[32m+[m
+   windowsUpdate: {[m
+     enabled: boolean[m
+     automaticUpdates: boolean[m
+[36m@@ -69,22 +88,89 @@[m [minterface AndroidPolicyConfiguration {[m
+   password: {[m
+     enabled: boolean[m
+     minimumLength: number[m
+[32m+[m[32m    complexity:[m
+[32m+[m[32m      | 'NONE'[m
+[32m+[m[32m      | 'LOW'[m
+[32m+[m[32m      | 'MEDIUM'[m
+[32m+[m[32m      | 'HIGH'[m
+[32m+[m[32m    maxFailedAttempts: number[m
+[32m+[m[32m    screenLockTimeout: number[m
+     requireNumeric: boolean[m
+     requireComplex: boolean[m
+   }[m
+[32m+[m
+   restrictions: {[m
+     blockCamera: boolean[m
+     blockScreenCapture: boolean[m
+     blockUsbFileTransfer: boolean[m
+     blockBluetooth: boolean[m
+     blockUnknownSources: boolean[m
+[32m+[m[32m    blockDebugging: boolean[m
+[32m+[m[32m    blockFactoryReset: boolean[m
+[32m+[m[32m    blockSafeBoot: boolean[m
+[32m+[m[32m    blockAddUser: boolean[m
+[32m+[m[32m    blockRemoveUser: boolean[m
+[32m+[m[32m    blockModifyAccounts: boolean[m
+[32m+[m[32m    blockOutgoingBeam: boolean[m
+[32m+[m[32m    blockPrinting: boolean[m
+[32m+[m[32m    blockMicrophone: boolean[m
+   }[m
+[32m+[m
+   applications: {[m
+     allowAppInstallation: boolean[m
+     allowAppUninstallation: boolean[m
+[32m+[m[32m    installMode:[m
+[32m+[m[32m      | 'AVAILABLE'[m
+[32m+[m[32m      | 'FORCE_INSTALLED'[m
+[32m+[m[32m      | 'BLOCKED'[m
+[32m+[m[32m    playStoreMode:[m
+[32m+[m[32m      | 'WHITELIST'[m
+[32m+[m[32m      | 'BLACKLIST'[m
+[32m+[m[32m      | 'UNSPECIFIED'[m
+[32m+[m[32m    permittedInputMethods: string[m
+   }[m
+[32m+[m
+[32m+[m[32m  network: {[m
+[32m+[m[32m    wifiConfigDisabled: boolean[m
+[32m+[m[32m    bluetoothConfigDisabled: boolean[m
+[32m+[m[32m    tetheringDisabled: boolean[m
+[32m+[m[32m    vpnConfigDisabled: boolean[m
+[32m+[m[32m    privateDnsMode:[m
+[32m+[m[32m      | 'UNSPECIFIED'[m
+[32m+[m[32m      | 'OPPORTUNISTIC'[m
+[32m+[m[32m      | 'OFF'[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  location: {[m
+[32m+[m[32m    mode:[m
+[32m+[m[32m      | 'UNSPECIFIED'[m
+[32m+[m[32m      | 'ENFORCED'[m
+[32m+[m[32m      | 'USER_CHOICE'[m
+[32m+[m[32m      | 'DISABLED'[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  systemUpdate: {[m
+[32m+[m[32m    type:[m
+[32m+[m[32m      | 'AUTOMATIC'[m
+[32m+[m[32m      | 'WINDOWED'[m
+[32m+[m[32m      | 'POSTPONE'[m
+[32m+[m[32m    startMinutes: number[m
+[32m+[m[32m    endMinutes: number[m
+[32m+[m[32m  }[m
+[32m+[m
+   kiosk: {[m
+     enabled: boolean[m
+[32m+[m[32m    applicationId: string[m
+[32m+[m[32m    statusBar: boolean[m
+[32m+[m[32m    systemNavigation: boolean[m
+[32m+[m[32m    keyguard: boolean[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  compliance: {[m
+[32m+[m[32m    minimumApiLevel: number[m
+[32m+[m[32m    minimumSecurityPatch: string[m
+[32m+[m[32m    requireEncryption: boolean[m
+[32m+[m[32m    requireDeviceIntegrity: boolean[m
+   }[m
+ }[m
+ [m
+[36m@@ -94,9 +180,13 @@[m [minterface PolicyConfiguration {[m
+   android: AndroidPolicyConfiguration[m
+ }[m
+ [m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// DEFAULT CONFIGURATION[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ const defaultConfiguration =[m
+   (): PolicyConfiguration => ({[m
+[31m-    schemaVersion: 1,[m
+[32m+[m[32m    schemaVersion: 2,[m
+ [m
+     windows: {[m
+       password: {[m
+[36m@@ -142,6 +232,9 @@[m [mconst defaultConfiguration =[m
+       password: {[m
+         enabled: false,[m
+         minimumLength: 6,[m
+[32m+[m[32m        complexity: 'MEDIUM',[m
+[32m+[m[32m        maxFailedAttempts: 10,[m
+[32m+[m[32m        screenLockTimeout: 5,[m
+         requireNumeric: true,[m
+         requireComplex: false,[m
+       },[m
+[36m@@ -152,31 +245,80 @@[m [mconst defaultConfiguration =[m
+         blockUsbFileTransfer: false,[m
+         blockBluetooth: false,[m
+         blockUnknownSources: true,[m
+[32m+[m[32m        blockDebugging: true,[m
+[32m+[m[32m        blockFactoryReset: false,[m
+[32m+[m[32m        blockSafeBoot: false,[m
+[32m+[m[32m        blockAddUser: false,[m
+[32m+[m[32m        blockRemoveUser: false,[m
+[32m+[m[32m        blockModifyAccounts: false,[m
+[32m+[m[32m        blockOutgoingBeam: false,[m
+[32m+[m[32m        blockPrinting: false,[m
+[32m+[m[32m        blockMicrophone: false,[m
+       },[m
+ [m
+       applications: {[m
+         allowAppInstallation: true,[m
+         allowAppUninstallation: true,[m
+[32m+[m[32m        installMode: 'AVAILABLE',[m
+[32m+[m[32m        playStoreMode: 'UNSPECIFIED',[m
+[32m+[m[32m        permittedInputMethods: '',[m
+[32m+[m[32m      },[m
+[32m+[m
+[32m+[m[32m      network: {[m
+[32m+[m[32m        wifiConfigDisabled: false,[m
+[32m+[m[32m        bluetoothConfigDisabled: false,[m
+[32m+[m[32m        tetheringDisabled: false,[m
+[32m+[m[32m        vpnConfigDisabled: false,[m
+[32m+[m[32m        privateDnsMode: 'UNSPECIFIED',[m
+[32m+[m[32m      },[m
+[32m+[m
+[32m+[m[32m      location: {[m
+[32m+[m[32m        mode: 'UNSPECIFIED',[m
+[32m+[m[32m      },[m
+[32m+[m
+[32m+[m[32m      systemUpdate: {[m
+[32m+[m[32m        type: 'AUTOMATIC',[m
+[32m+[m[32m        startMinutes: 120,[m
+[32m+[m[32m        endMinutes: 300,[m
+       },[m
+ [m
+       kiosk: {[m
+         enabled: false,[m
+[32m+[m[32m        applicationId: '',[m
+[32m+[m[32m        statusBar: false,[m
+[32m+[m[32m        systemNavigation: false,[m
+[32m+[m[32m        keyguard: false,[m
+[32m+[m[32m      },[m
+[32m+[m
+[32m+[m[32m      compliance: {[m
+[32m+[m[32m        minimumApiLevel: 0,[m
+[32m+[m[32m        minimumSecurityPatch: '',[m
+[32m+[m[32m        requireEncryption: true,[m
+[32m+[m[32m        requireDeviceIntegrity: true,[m
+       },[m
+     },[m
+   })[m
+ [m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// CONFIGURATION PARSER[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ function parseConfiguration([m
+   value: string,[m
+ ): PolicyConfiguration {[m
+[31m-  const defaults = defaultConfiguration()[m
+[32m+[m[32m  const defaults =[m
+[32m+[m[32m    defaultConfiguration()[m
+ [m
+   try {[m
+     const parsed =[m
+[31m-      JSON.parse(value) as Partial<PolicyConfiguration>[m
+[32m+[m[32m      JSON.parse([m
+[32m+[m[32m        value,[m
+[32m+[m[32m      ) as Partial<PolicyConfiguration>[m
+ [m
+     return {[m
+       schemaVersion:[m
+[31m-        parsed.schemaVersion ?? 1,[m
+[32m+[m[32m        parsed.schemaVersion ??[m
+[32m+[m[32m        defaults.schemaVersion,[m
+ [m
+       windows: {[m
+         password: {[m
+[36m@@ -226,10 +368,30 @@[m [mfunction parseConfiguration([m
+           ...parsed.android?.applications,[m
+         },[m
+ [m
+[32m+[m[32m        network: {[m
+[32m+[m[32m          ...defaults.android.network,[m
+[32m+[m[32m          ...parsed.android?.network,[m
+[32m+[m[32m        },[m
+[32m+[m
+[32m+[m[32m        location: {[m
+[32m+[m[32m          ...defaults.android.location,[m
+[32m+[m[32m          ...parsed.android?.location,[m
+[32m+[m[32m        },[m
+[32m+[m
+[32m+[m[32m        systemUpdate: {[m
+[32m+[m[32m          ...defaults.android.systemUpdate,[m
+[32m+[m[32m          ...parsed.android?.systemUpdate,[m
+[32m+[m[32m        },[m
+[32m+[m
+         kiosk: {[m
+           ...defaults.android.kiosk,[m
+           ...parsed.android?.kiosk,[m
+         },[m
+[32m+[m
+[32m+[m[32m        compliance: {[m
+[32m+[m[32m          ...defaults.android.compliance,[m
+[32m+[m[32m          ...parsed.android?.compliance,[m
+[32m+[m[32m        },[m
+       },[m
+     }[m
+   } catch {[m
+[36m@@ -237,6 +399,10 @@[m [mfunction parseConfiguration([m
+   }[m
+ }[m
+ [m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// HELPERS[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ function getErrorMessage([m
+   error: unknown,[m
+ ): string {[m
+[36m@@ -261,9 +427,78 @@[m [mfunction getErrorMessage([m
+     }[m
+   }[m
+ [m
+[32m+[m[32m  if ([m
+[32m+[m[32m    error instanceof Error &&[m
+[32m+[m[32m    error.message[m
+[32m+[m[32m  ) {[m
+[32m+[m[32m    return error.message[m
+[32m+[m[32m  }[m
+[32m+[m
+   return 'No fue posible completar la operación.'[m
+ }[m
+ [m
+[32m+[m[32mfunction formatDate([m
+[32m+[m[32m  value: string | null | undefined,[m
+[32m+[m[32m): string {[m
+[32m+[m[32m  if (!value) {[m
+[32m+[m[32m    return 'N/D'[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  const date = new Date(value)[m
+[32m+[m
+[32m+[m[32m  if (Number.isNaN(date.getTime())) {[m
+[32m+[m[32m    return value[m
+[32m+[m[32m  }[m
+[32m+[m
+[32m+[m[32m  return date.toLocaleString()[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction publicationStatusLabel([m
+[32m+[m[32m  status: string | null | undefined,[m
+[32m+[m[32m): string {[m
+[32m+[m[32m  switch (status) {[m
+[32m+[m[32m    case 'Published':[m
+[32m+[m[32m      return 'Publicada'[m
+[32m+[m
+[32m+[m[32m    case 'Publishing':[m
+[32m+[m[32m      return 'Publicando'[m
+[32m+[m
+[32m+[m[32m    case 'Pending':[m
+[32m+[m[32m      return 'Pendiente'[m
+[32m+[m
+[32m+[m[32m    case 'Failed':[m
+[32m+[m[32m      return 'Fallida'[m
+[32m+[m
+[32m+[m[32m    case 'Deleted':[m
+[32m+[m[32m      return 'Eliminada'[m
+[32m+[m
+[32m+[m[32m    default:[m
+[32m+[m[32m      return 'No publicada'[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction publicationStatusClass([m
+[32m+[m[32m  status: string | null | undefined,[m
+[32m+[m[32m): string {[m
+[32m+[m[32m  switch (status) {[m
+[32m+[m[32m    case 'Published':[m
+[32m+[m[32m      return 'android-publication-status android-publication-status--published'[m
+[32m+[m
+[32m+[m[32m    case 'Publishing':[m
+[32m+[m[32m      return 'android-publication-status android-publication-status--publishing'[m
+[32m+[m
+[32m+[m[32m    case 'Failed':[m
+[32m+[m[32m      return 'android-publication-status android-publication-status--failed'[m
+[32m+[m
+[32m+[m[32m    default:[m
+[32m+[m[32m      return 'android-publication-status'[m
+[32m+[m[32m  }[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// TOGGLE[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ interface ToggleProps {[m
+   checked: boolean[m
+   onChange: (value: boolean) => void[m
+[36m@@ -294,11 +529,17 @@[m [mfunction Toggle({[m
+   )[m
+ }[m
+ [m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// MAIN PAGE[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ export function PolicyEditorPage() {[m
+   const navigate = useNavigate()[m
+ [m
+   const { policyId } =[m
+[31m-    useParams<{ policyId: string }>()[m
+[32m+[m[32m    useParams<{[m
+[32m+[m[32m      policyId: string[m
+[32m+[m[32m    }>()[m
+ [m
+   const editing =[m
+     Boolean(policyId)[m
+[36m@@ -310,9 +551,14 @@[m [mexport function PolicyEditorPage() {[m
+     useState('')[m
+ [m
+   const [platform, setPlatform] =[m
+[31m-    useState<PolicyPlatform>('Windows')[m
+[32m+[m[32m    useState<PolicyPlatform>([m
+[32m+[m[32m      'Windows',[m
+[32m+[m[32m    )[m
+ [m
+[31m-  const [configuration, setConfiguration] =[m
+[32m+[m[32m  const [[m
+[32m+[m[32m    configuration,[m
+[32m+[m[32m    setConfiguration,[m
+[32m+[m[32m  ] =[m
+     useState<PolicyConfiguration>([m
+       defaultConfiguration,[m
+     )[m
+[36m@@ -329,6 +575,44 @@[m [mexport function PolicyEditorPage() {[m
+   const [message, setMessage] =[m
+     useState<string | null>(null)[m
+ [m
+[32m+[m[32m  const [[m
+[32m+[m[32m    publication,[m
+[32m+[m[32m    setPublication,[m
+[32m+[m[32m  ] =[m
+[32m+[m[32m    useState<AndroidPolicyPublication | null>([m
+[32m+[m[32m      null,[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m  const [[m
+[32m+[m[32m    loadingPublication,[m
+[32m+[m[32m    setLoadingPublication,[m
+[32m+[m[32m  ] =[m
+[32m+[m[32m    useState(false)[m
+[32m+[m
+[32m+[m[32m  const [[m
+[32m+[m[32m    publishing,[m
+[32m+[m[32m    setPublishing,[m
+[32m+[m[32m  ] =[m
+[32m+[m[32m    useState(false)[m
+[32m+[m
+[32m+[m[32m  const [[m
+[32m+[m[32m    verifying,[m
+[32m+[m[32m    setVerifying,[m
+[32m+[m[32m  ] =[m
+[32m+[m[32m    useState(false)[m
+[32m+[m
+[32m+[m[32m  const [[m
+[32m+[m[32m    verification,[m
+[32m+[m[32m    setVerification,[m
+[32m+[m[32m  ] =[m
+[32m+[m[32m    useState<AndroidPolicyRemoteVerificationResult | null>([m
+[32m+[m[32m      null,[m
+[32m+[m[32m    )[m
+[32m+[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // LOAD POLICY[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   const loadPolicy =[m
+     useCallback(async () => {[m
+       if (!policyId) {[m
+[36m@@ -344,13 +628,17 @@[m [mexport function PolicyEditorPage() {[m
+             policyId,[m
+           )[m
+ [m
+[31m-        setName(policy.name)[m
+[32m+[m[32m        setName([m
+[32m+[m[32m          policy.name,[m
+[32m+[m[32m        )[m
+ [m
+         setDescription([m
+           policy.description ?? '',[m
+         )[m
+ [m
+[31m-        setPlatform(policy.platform)[m
+[32m+[m[32m        setPlatform([m
+[32m+[m[32m          policy.platform,[m
+[32m+[m[32m        )[m
+ [m
+         setConfiguration([m
+           parseConfiguration([m
+[36m@@ -358,26 +646,90 @@[m [mexport function PolicyEditorPage() {[m
+           ),[m
+         )[m
+       } catch (loadError) {[m
+[31m-        console.error(loadError)[m
+[32m+[m[32m        console.error([m
+[32m+[m[32m          loadError,[m
+[32m+[m[32m        )[m
+ [m
+         setError([m
+[31m-          getErrorMessage(loadError),[m
+[32m+[m[32m          getErrorMessage([m
+[32m+[m[32m            loadError,[m
+[32m+[m[32m          ),[m
+         )[m
+       } finally {[m
+         setLoading(false)[m
+       }[m
+     }, [policyId])[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // LOAD ANDROID PUBLICATION[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+[32m+[m[32m  const loadAndroidPublication =[m
+[32m+[m[32m    useCallback(async () => {[m
+[32m+[m[32m      if (!policyId) {[m
+[32m+[m[32m        setPublication(null)[m
+[32m+[m[32m        return[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        setLoadingPublication([m
+[32m+[m[32m          true,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        const result =[m
+[32m+[m[32m          await policiesApi[m
+[32m+[m[32m            .getAndroidPublication([m
+[32m+[m[32m              policyId,[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m        setPublication([m
+[32m+[m[32m          result,[m
+[32m+[m[32m        )[m
+[32m+[m[32m      } catch (publicationError) {[m
+[32m+[m[32m        console.error([m
+[32m+[m[32m          publicationError,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        setError([m
+[32m+[m[32m          getErrorMessage([m
+[32m+[m[32m            publicationError,[m
+[32m+[m[32m          ),[m
+[32m+[m[32m        )[m
+[32m+[m[32m      } finally {[m
+[32m+[m[32m        setLoadingPublication([m
+[32m+[m[32m          false,[m
+[32m+[m[32m        )[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }, [policyId])[m
+[32m+[m
+   useEffect(() => {[m
+     void loadPolicy()[m
+   }, [loadPolicy])[m
+ [m
+   useEffect(() => {[m
+[31m-    document.title = editing[m
+[31m-      ? 'Editar política | TitanMDM'[m
+[31m-      : 'Nueva política | TitanMDM'[m
+[32m+[m[32m    if ([m
+[32m+[m[32m      editing &&[m
+[32m+[m[32m      platform === 'Android'[m
+[32m+[m[32m    ) {[m
+[32m+[m[32m      void loadAndroidPublication()[m
+[32m+[m[32m    }[m
+[32m+[m[32m  }, [[m
+[32m+[m[32m    editing,[m
+[32m+[m[32m    platform,[m
+[32m+[m[32m    loadAndroidPublication,[m
+[32m+[m[32m  ])[m
+[32m+[m
+[32m+[m[32m  useEffect(() => {[m
+[32m+[m[32m    document.title =[m
+[32m+[m[32m      editing[m
+[32m+[m[32m        ? 'Editar política | TitanMDM'[m
+[32m+[m[32m        : 'Nueva política | TitanMDM'[m
+   }, [editing])[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // JSON[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   const configurationJson =[m
+     useMemo([m
+       () =>[m
+[36m@@ -389,6 +741,10 @@[m [mexport function PolicyEditorPage() {[m
+       [configuration],[m
+     )[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // WINDOWS UPDATE[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   const updateWindows =[m
+     <[m
+       K extends keyof WindowsPolicyConfiguration,[m
+[36m@@ -417,6 +773,10 @@[m [mexport function PolicyEditorPage() {[m
+       )[m
+     }[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // ANDROID UPDATE[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   const updateAndroid =[m
+     <[m
+       K extends keyof AndroidPolicyConfiguration,[m
+[36m@@ -445,6 +805,10 @@[m [mexport function PolicyEditorPage() {[m
+       )[m
+     }[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // SAVE[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   const savePolicy =[m
+     async () => {[m
+       if (!name.trim()) {[m
+[36m@@ -458,13 +822,18 @@[m [mexport function PolicyEditorPage() {[m
+         setSaving(true)[m
+         setError(null)[m
+         setMessage(null)[m
+[32m+[m[32m        setVerification(null)[m
+ [m
+[31m-        if (editing && policyId) {[m
+[32m+[m[32m        if ([m
+[32m+[m[32m          editing &&[m
+[32m+[m[32m          policyId[m
+[32m+[m[32m        ) {[m
+           const result =[m
+             await policiesApi.update([m
+               policyId,[m
+               {[m
+[31m-                name: name.trim(),[m
+[32m+[m[32m                name:[m
+[32m+[m[32m                  name.trim(),[m
+ [m
+                 description:[m
+                   description.trim() ||[m
+[36m@@ -474,25 +843,37 @@[m [mexport function PolicyEditorPage() {[m
+               },[m
+             )[m
+ [m
+[32m+[m[32m          setPublication(null)[m
+[32m+[m
+           setMessage([m
+             `Política guardada. Nueva versión: v${result.currentVersion}.`,[m
+           )[m
+ [m
+[32m+[m[32m          if ([m
+[32m+[m[32m            platform ===[m
+[32m+[m[32m            'Android'[m
+[32m+[m[32m          ) {[m
+[32m+[m[32m            await loadAndroidPublication()[m
+[32m+[m[32m          }[m
+[32m+[m
+           return[m
+         }[m
+ [m
+         const result =[m
+[31m-          await policiesApi.create({[m
+[31m-            name: name.trim(),[m
+[32m+[m[32m          await policiesApi.create([m
+[32m+[m[32m            {[m
+[32m+[m[32m              name:[m
+[32m+[m[32m                name.trim(),[m
+ [m
+[31m-            description:[m
+[31m-              description.trim() ||[m
+[31m-              null,[m
+[32m+[m[32m              description:[m
+[32m+[m[32m                description.trim() ||[m
+[32m+[m[32m                null,[m
+ [m
+[31m-            platform,[m
+[32m+[m[32m              platform,[m
+ [m
+[31m-            configurationJson,[m
+[31m-          })[m
+[32m+[m[32m              configurationJson,[m
+[32m+[m[32m            },[m
+[32m+[m[32m          )[m
+ [m
+         navigate([m
+           `/policies/${result.id}`,[m
+[36m@@ -501,16 +882,118 @@[m [mexport function PolicyEditorPage() {[m
+           },[m
+         )[m
+       } catch (saveError) {[m
+[31m-        console.error(saveError)[m
+[32m+[m[32m        console.error([m
+[32m+[m[32m          saveError,[m
+[32m+[m[32m        )[m
+ [m
+         setError([m
+[31m-          getErrorMessage(saveError),[m
+[32m+[m[32m          getErrorMessage([m
+[32m+[m[32m            saveError,[m
+[32m+[m[32m          ),[m
+         )[m
+       } finally {[m
+         setSaving(false)[m
+       }[m
+     }[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // PUBLISH ANDROID[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+[32m+[m[32m  const publishAndroid =[m
+[32m+[m[32m    async () => {[m
+[32m+[m[32m      if (!policyId) {[m
+[32m+[m[32m        setError([m
+[32m+[m[32m          'Primero debes guardar la política antes de publicarla.',[m
+[32m+[m[32m        )[m
+[32m+[m[32m        return[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        setPublishing(true)[m
+[32m+[m[32m        setError(null)[m
+[32m+[m[32m        setMessage(null)[m
+[32m+[m[32m        setVerification(null)[m
+[32m+[m
+[32m+[m[32m        const result =[m
+[32m+[m[32m          await policiesApi[m
+[32m+[m[32m            .publishAndroid([m
+[32m+[m[32m              policyId,[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m        setMessage([m
+[32m+[m[32m          `Política Android v${result.policyVersion} publicada correctamente en Google Android Management.`,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        await loadAndroidPublication()[m
+[32m+[m[32m      } catch (publishError) {[m
+[32m+[m[32m        console.error([m
+[32m+[m[32m          publishError,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        setError([m
+[32m+[m[32m          getErrorMessage([m
+[32m+[m[32m            publishError,[m
+[32m+[m[32m          ),[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        await loadAndroidPublication()[m
+[32m+[m[32m      } finally {[m
+[32m+[m[32m        setPublishing(false)[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // VERIFY GOOGLE[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+[32m+[m[32m  const verifyAndroid =[m
+[32m+[m[32m    async () => {[m
+[32m+[m[32m      if (!policyId) {[m
+[32m+[m[32m        return[m
+[32m+[m[32m      }[m
+[32m+[m
+[32m+[m[32m      try {[m
+[32m+[m[32m        setVerifying(true)[m
+[32m+[m[32m        setError(null)[m
+[32m+[m[32m        setMessage(null)[m
+[32m+[m
+[32m+[m[32m        const result =[m
+[32m+[m[32m          await policiesApi[m
+[32m+[m[32m            .verifyAndroidPublication([m
+[32m+[m[32m              policyId,[m
+[32m+[m[32m            )[m
+[32m+[m
+[32m+[m[32m        setVerification([m
+[32m+[m[32m          result,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        setMessage([m
+[32m+[m[32m          result.existsInGoogle[m
+[32m+[m[32m            ? 'La política fue verificada directamente en Google Android Management.'[m
+[32m+[m[32m            : 'Google no reportó la política.',[m
+[32m+[m[32m        )[m
+[32m+[m[32m      } catch (verifyError) {[m
+[32m+[m[32m        console.error([m
+[32m+[m[32m          verifyError,[m
+[32m+[m[32m        )[m
+[32m+[m
+[32m+[m[32m        setVerification(null)[m
+[32m+[m
+[32m+[m[32m        setError([m
+[32m+[m[32m          getErrorMessage([m
+[32m+[m[32m            verifyError,[m
+[32m+[m[32m          ),[m
+[32m+[m[32m        )[m
+[32m+[m[32m      } finally {[m
+[32m+[m[32m        setVerifying(false)[m
+[32m+[m[32m      }[m
+[32m+[m[32m    }[m
+[32m+[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // LOADING[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   if (loading) {[m
+     return ([m
+       <div className="policy-editor-loading">[m
+[36m@@ -519,6 +1002,10 @@[m [mexport function PolicyEditorPage() {[m
+     )[m
+   }[m
+ [m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m[32m  // RENDER[m
+[32m+[m[32m  // ==========================================================[m
+[32m+[m
+   return ([m
+     <div className="policy-editor-page">[m
+       <button[m
+[36m@@ -550,12 +1037,22 @@[m [mexport function PolicyEditorPage() {[m
+         <button[m
+           type="button"[m
+           className="policy-editor-save"[m
+[31m-          disabled={saving}[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            saving ||[m
+[32m+[m[32m            publishing[m
+[32m+[m[32m          }[m
+           onClick={() => {[m
+             void savePolicy()[m
+           }}[m
+         >[m
+[31m-          <Save size={16} />[m
+[32m+[m[32m          {saving ? ([m
+[32m+[m[32m            <Loader2[m
+[32m+[m[32m              size={16}[m
+[32m+[m[32m              className="policy-spin"[m
+[32m+[m[32m            />[m
+[32m+[m[32m          ) : ([m
+[32m+[m[32m            <Save size={16} />[m
+[32m+[m[32m          )}[m
+ [m
+           {saving[m
+             ? 'Guardando...'[m
+[36m@@ -577,6 +1074,10 @@[m [mexport function PolicyEditorPage() {[m
+         </div>[m
+       )}[m
+ [m
+[32m+[m[32m      {/* ======================================================[m
+[32m+[m[32m          GENERAL[m
+[32m+[m[32m      ====================================================== */}[m
+[32m+[m
+       <section className="policy-editor-card">[m
+         <div className="policy-editor-card__header">[m
+           <ShieldCheck size={18} />[m
+[36m@@ -602,7 +1103,7 @@[m [mexport function PolicyEditorPage() {[m
+             <input[m
+               value={name}[m
+               maxLength={200}[m
+[31m-              placeholder="Ej. Seguridad Windows corporativa"[m
+[32m+[m[32m              placeholder="Ej. Seguridad Android corporativa"[m
+               onChange={(event) =>[m
+                 setName([m
+                   event.target.value,[m
+[36m@@ -652,6 +1153,10 @@[m [mexport function PolicyEditorPage() {[m
+         </div>[m
+       </section>[m
+ [m
+[32m+[m[32m      {/* ======================================================[m
+[32m+[m[32m          PLATFORM[m
+[32m+[m[32m      ====================================================== */}[m
+[32m+[m
+       <div className="policy-editor-platform">[m
+         <button[m
+           type="button"[m
+[36m@@ -686,697 +1191,1793 @@[m [mexport function PolicyEditorPage() {[m
+         </button>[m
+       </div>[m
+ [m
+[32m+[m[32m      {/* ======================================================[m
+[32m+[m[32m          WINDOWS[m
+[32m+[m[32m      ====================================================== */}[m
+[32m+[m
+       {platform === 'Windows' ? ([m
+[31m-        <div className="policy-settings-grid">[m
+[31m-          <section className="policy-setting-card">[m
+[31m-            <div className="policy-setting-heading">[m
+[31m-              <div>[m
+[31m-                <LockKeyhole size={18} />[m
+[31m-[m
+[31m-                <span>[m
+[31m-                  <strong>[m
+[31m-                    Contraseña[m
+[31m-                  </strong>[m
+[31m-[m
+[31m-                  <small>[m
+[31m-                    Requisitos de[m
+[31m-                    contraseña local.[m
+[31m-                  </small>[m
+[31m-                </span>[m
+[32m+[m[32m        <WindowsPolicyEditor[m
+[32m+[m[32m          configuration={[m
+[32m+[m[32m            configuration.windows[m
+[32m+[m[32m          }[m
+[32m+[m[32m          updateWindows={[m
+[32m+[m[32m            updateWindows[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m[32m      ) : ([m
+[32m+[m[32m        <>[m
+[32m+[m[32m          {/* ==================================================[m
+[32m+[m[32m              ANDROID ENTERPRISE PUBLICATION[m
+[32m+[m[32m          ================================================== */}[m
+[32m+[m
+[32m+[m[32m          {editing && ([m
+[32m+[m[32m            <section className="android-publication-card">[m
+[32m+[m[32m              <div className="android-publication-header">[m
+[32m+[m[32m                <div className="android-publication-title">[m
+[32m+[m[32m                  <CloudCog size={22} />[m
+[32m+[m
+[32m+[m[32m                  <div>[m
+[32m+[m[32m                    <h2>[m
+[32m+[m[32m                      Android Enterprise[m
+[32m+[m[32m                    </h2>[m
+[32m+[m
+[32m+[m[32m                    <p>[m
+[32m+[m[32m                      Publicación y[m
+[32m+[m[32m                      sincronización con[m
+[32m+[m[32m                      Google Android[m
+[32m+[m[32m                      Management API.[m
+[32m+[m[32m                    </p>[m
+[32m+[m[32m                  </div>[m
+[32m+[m[32m                </div>[m
+[32m+[m
+[32m+[m[32m                {loadingPublication ? ([m
+[32m+[m[32m                  <span className="android-publication-status">[m
+[32m+[m[32m                    <Loader2[m
+[32m+[m[32m                      size={14}[m
+[32m+[m[32m                      className="policy-spin"[m
+[32m+[m[32m                    />[m
+[32m+[m[32m                    Consultando...[m
+[32m+[m[32m                  </span>[m
+[32m+[m[32m                ) : ([m
+[32m+[m[32m                  <span[m
+[32m+[m[32m                    className={[m
+[32m+[m[32m                      publicationStatusClass([m
+[32m+[m[32m                        publication?.status,[m
+[32m+[m[32m                      )[m
+[32m+[m[32m                    }[m
+[32m+[m[32m                  >[m
+[32m+[m[32m                    {publicationStatusLabel([m
+[32m+[m[32m                      publication?.status,[m
+[32m+[m[32m                    )}[m
+[32m+[m[32m                  </span>[m
+[32m+[m[32m                )}[m
+               </div>[m
+ [m
+[31m-              <Toggle[m
+[31m-                checked={[m
+[31m-                  configuration.windows[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateWindows([m
+[31m-                    'password',[m
+[31m-                    { enabled: value },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-            </div>[m
+[31m-[m
+[31m-            <div className="policy-setting-body">[m
+[31m-              <label>[m
+[31m-                Longitud mínima[m
+[31m-[m
+[31m-                <input[m
+[31m-                  type="number"[m
+[31m-                  min={4}[m
+[31m-                  max={64}[m
+[31m-                  disabled={[m
+[31m-                    !configuration.windows[m
+[31m-                      .password.enabled[m
+[32m+[m[32m              <div className="android-publication-grid">[m
+[32m+[m[32m                <PublicationField[m
+[32m+[m[32m                  label="Versión TitanMDM"[m
+[32m+[m[32m                  value={[m
+[32m+[m[32m                    publication[m
+[32m+[m[32m                      ? `v${publication.policyVersion}`[m
+[32m+[m[32m                      : 'Sin publicar'[m
+                   }[m
+[32m+[m[32m                />[m
+[32m+[m
+[32m+[m[32m                <PublicationField[m
+[32m+[m[32m                  label="Google Policy ID"[m
+                   value={[m
+[31m-                    configuration.windows[m
+[31m-                      .password.minimumLength[m
+[32m+[m[32m                    publication?.googlePolicyId ??[m
+[32m+[m[32m                    'Pendiente'[m
+                   }[m
+[31m-                  onChange={(event) =>[m
+[31m-                    updateWindows([m
+[31m-                      'password',[m
+[31m-                      {[m
+[31m-                        minimumLength:[m
+[31m-                          Number([m
+[31m-                            event.target[m
+[31m-                              .value,[m
+[31m-                          ),[m
+[31m-                      },[m
+[31m-                    )[m
+[32m+[m[32m                  mono[m
+[32m+[m[32m                />[m
+[32m+[m
+[32m+[m[32m                <PublicationField[m
+[32m+[m[32m                  label="Google Policy Name"[m
+[32m+[m[32m                  value={[m
+[32m+[m[32m                    publication?.googlePolicyName ??[m
+[32m+[m[32m                    'Pendiente'[m
+                   }[m
+[32m+[m[32m                  mono[m
+[32m+[m[32m                />[m
+[32m+[m
+[32m+[m[32m                <PublicationField[m
+[32m+[m[32m                  label="Publicada"[m
+[32m+[m[32m                  value={formatDate([m
+[32m+[m[32m                    publication?.publishedAtUtc,[m
+[32m+[m[32m                  )}[m
+[32m+[m[32m                />[m
+[32m+[m
+[32m+[m[32m                <PublicationField[m
+[32m+[m[32m                  label="Último intento"[m
+[32m+[m[32m                  value={formatDate([m
+[32m+[m[32m                    publication?.lastAttemptAtUtc,[m
+[32m+[m[32m                  )}[m
+[32m+[m[32m                />[m
+[32m+[m
+[32m+[m[32m                <PublicationField[m
+[32m+[m[32m                  label="Estado"[m
+[32m+[m[32m                  value={publicationStatusLabel([m
+[32m+[m[32m                    publication?.status,[m
+[32m+[m[32m                  )}[m
+                 />[m
+[31m-              </label>[m
+[32m+[m[32m              </div>[m
+[32m+[m
+[32m+[m[32m              {publication?.errorMessage && ([m
+[32m+[m[32m                <div className="android-publication-error">[m
+[32m+[m[32m                  <XCircle size={16} />[m
+ [m
+[31m-              <label>[m
+[31m-                Vigencia máxima (días)[m
+[32m+[m[32m                  <div>[m
+[32m+[m[32m                    <strong>[m
+[32m+[m[32m                      {publication.errorCode ??[m
+[32m+[m[32m                        'Error de publicación'}[m
+[32m+[m[32m                    </strong>[m
+ [m
+[31m-                <input[m
+[31m-                  type="number"[m
+[31m-                  min={0}[m
+[31m-                  max={365}[m
+[32m+[m[32m                    <span>[m
+[32m+[m[32m                      {[m
+[32m+[m[32m                        publication.errorMessage[m
+[32m+[m[32m                      }[m
+[32m+[m[32m                    </span>[m
+[32m+[m[32m                  </div>[m
+[32m+[m[32m                </div>[m
+[32m+[m[32m              )}[m
+[32m+[m
+[32m+[m[32m              <div className="android-publication-actions">[m
+[32m+[m[32m                <button[m
+[32m+[m[32m                  type="button"[m
+[32m+[m[32m                  className="android-publish-button"[m
+                   disabled={[m
+[31m-                    !configuration.windows[m
+[31m-                      .password.enabled[m
+[32m+[m[32m                    publishing ||[m
+[32m+[m[32m                    saving[m
+                   }[m
+[31m-                  value={[m
+[31m-                    configuration.windows[m
+[31m-                      .password.maximumAgeDays[m
+[32m+[m[32m                  onClick={() => {[m
+[32m+[m[32m                    void publishAndroid()[m
+[32m+[m[32m                  }}[m
+[32m+[m[32m                >[m
+[32m+[m[32m                  {publishing ? ([m
+[32m+[m[32m                    <Loader2[m
+[32m+[m[32m                      size={16}[m
+[32m+[m[32m                      className="policy-spin"[m
+[32m+[m[32m                    />[m
+[32m+[m[32m                  ) : ([m
+[32m+[m[32m                    <Cloud size={16} />[m
+[32m+[m[32m                  )}[m
+[32m+[m
+[32m+[m[32m                  {publishing[m
+[32m+[m[32m                    ? 'Publicando...'[m
+[32m+[m[32m                    : publication[m
+[32m+[m[32m                      ? 'Republicar versión'[m
+[32m+[m[32m                      : 'Publicar en Android Enterprise'}[m
+[32m+[m[32m                </button>[m
+[32m+[m
+[32m+[m[32m                <button[m
+[32m+[m[32m                  type="button"[m
+[32m+[m[32m                  className="android-verify-button"[m
+[32m+[m[32m                  disabled={[m
+[32m+[m[32m                    verifying ||[m
+[32m+[m[32m                    publishing ||[m
+[32m+[m[32m                    publication?.status !==[m
+[32m+[m[32m                      'Published'[m
+                   }[m
+[31m-                  onChange={(event) =>[m
+[31m-                    updateWindows([m
+[31m-                      'password',[m
+[31m-                      {[m
+[31m-                        maximumAgeDays:[m
+[31m-                          Number([m
+[31m-                            event.target[m
+[31m-                              .value,[m
+[31m-                          ),[m
+[31m-                      },[m
+[31m-                    )[m
+[32m+[m[32m                  onClick={() => {[m
+[32m+[m[32m                    void verifyAndroid()[m
+[32m+[m[32m                  }}[m
+[32m+[m[32m                >[m
+[32m+[m[32m                  {verifying ? ([m
+[32m+[m[32m                    <Loader2[m
+[32m+[m[32m                      size={16}[m
+[32m+[m[32m                      className="policy-spin"[m
+[32m+[m[32m                    />[m
+[32m+[m[32m                  ) : ([m
+[32m+[m[32m                    <RefreshCw size={16} />[m
+[32m+[m[32m                  )}[m
+[32m+[m
+[32m+[m[32m                  {verifying[m
+[32m+[m[32m                    ? 'Verificando...'[m
+[32m+[m[32m                    : 'Verificar en Google'}[m
+[32m+[m[32m                </button>[m
+[32m+[m
+[32m+[m[32m                <button[m
+[32m+[m[32m                  type="button"[m
+[32m+[m[32m                  className="android-refresh-button"[m
+[32m+[m[32m                  disabled={[m
+[32m+[m[32m                    loadingPublication ||[m
+[32m+[m[32m                    publishing[m
+                   }[m
+[31m-                />[m
+[31m-              </label>[m
+[31m-[m
+[31m-              <CheckOption[m
+[31m-                label="Mayúsculas"[m
+[31m-                checked={[m
+[31m-                  configuration.windows[m
+[31m-                    .password[m
+[31m-                    .requireUppercase[m
+[31m-                }[m
+[31m-                disabled={[m
+[31m-                  !configuration.windows[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateWindows([m
+[31m-                    'password',[m
+[31m-                    {[m
+[31m-                      requireUppercase:[m
+[31m-                        value,[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-[m
+[31m-              <CheckOption[m
+[31m-                label="Minúsculas"[m
+[31m-                checked={[m
+[31m-                  configuration.windows[m
+[31m-                    .password[m
+[31m-                    .requireLowercase[m
+[31m-                }[m
+[31m-                disabled={[m
+[31m-                  !configuration.windows[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateWindows([m
+[31m-                    'password',[m
+[31m-                    {[m
+[31m-                      requireLowercase:[m
+[31m-                        value,[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-[m
+[31m-              <CheckOption[m
+[31m-                label="Números"[m
+[31m-                checked={[m
+[31m-                  configuration.windows[m
+[31m-                    .password.requireNumber[m
+[31m-                }[m
+[31m-                disabled={[m
+[31m-                  !configuration.windows[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateWindows([m
+[31m-                    'password',[m
+[31m-                    {[m
+[31m-                      requireNumber:[m
+[31m-                        value,[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-[m
+[31m-              <CheckOption[m
+[31m-                label="Caracteres especiales"[m
+[31m-                checked={[m
+[31m-                  configuration.windows[m
+[31m-                    .password[m
+[31m-                    .requireSpecialCharacter[m
+[31m-                }[m
+[31m-                disabled={[m
+[31m-                  !configuration.windows[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateWindows([m
+[31m-                    'password',[m
+[31m-                    {[m
+[31m-                      requireSpecialCharacter:[m
+[31m-                        value,[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-            </div>[m
+[31m-          </section>[m
+[31m-[m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Shield size={18} />}[m
+[31m-            title="Microsoft Defender"[m
+[31m-            description="Protección antimalware y supervisión en tiempo real."[m
+[31m-            checked={[m
+[31m-              configuration.windows[m
+[31m-                .defender.enabled[m
+[32m+[m[32m                  onClick={() => {[m
+[32m+[m[32m                    void loadAndroidPublication()[m
+[32m+[m[32m                  }}[m
+[32m+[m[32m                >[m
+[32m+[m[32m                  <RefreshCw size={15} />[m
+[32m+[m[32m                  Actualizar estado[m
+[32m+[m[32m                </button>[m
+[32m+[m[32m              </div>[m
+[32m+[m
+[32m+[m[32m              {verification && ([m
+[32m+[m[32m                <div className="android-verification-result">[m
+[32m+[m[32m                  <CheckCircle2 size={18} />[m
+[32m+[m
+[32m+[m[32m                  <div>[m
+[32m+[m[32m                    <strong>[m
+[32m+[m[32m                      Política verificada[m
+[32m+[m[32m                      directamente en Google[m
+[32m+[m[32m                    </strong>[m
+[32m+[m
+[32m+[m[32m                    <span>[m
+[32m+[m[32m                      {[m
+[32m+[m[32m                        verification.googlePolicyName[m
+[32m+[m[32m                      }[m
+[32m+[m[32m                    </span>[m
+[32m+[m
+[32m+[m[32m                    <span>[m
+[32m+[m[32m                      Google Policy ID:{' '}[m
+[32m+[m[32m                      {[m
+[32m+[m[32m                        verification.googlePolicyId[m
+[32m+[m[32m                      }[m
+[32m+[m[32m                    </span>[m
+[32m+[m[32m                  </div>[m
+[32m+[m
+[32m+[m[32m                  <ExternalLink size={16} />[m
+[32m+[m[32m                </div>[m
+[32m+[m[32m              )}[m
+[32m+[m[32m            </section>[m
+[32m+[m[32m          )}[m
+[32m+[m
+[32m+[m[32m          {/* ==================================================[m
+[32m+[m[32m              ANDROID SETTINGS[m
+[32m+[m[32m          ================================================== */}[m
+[32m+[m
+[32m+[m[32m          <AndroidPolicyEditor[m
+[32m+[m[32m            configuration={[m
+[32m+[m[32m              configuration.android[m
+             }[m
+[31m-            onChange={(value) =>[m
+[31m-              updateWindows([m
+[31m-                'defender',[m
+[31m-                { enabled: value },[m
+[31m-              )[m
+[32m+[m[32m            updateAndroid={[m
+[32m+[m[32m              updateAndroid[m
+             }[m
+[31m-          >[m
+[31m-            <CheckOption[m
+[31m-              label="Protección en tiempo real"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .defender[m
+[31m-                  .realTimeProtection[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .defender.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'defender',[m
+[31m-                  {[m
+[31m-                    realTimeProtection:[m
+[31m-                      value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </>[m
+[32m+[m[32m      )}[m
+[32m+[m[32m       </div>[m
+[32m+[m[32m  )[m
+[32m+[m[32m}[m
+ [m
+[31m-            <CheckOption[m
+[31m-              label="Protección en la nube"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .defender[m
+[31m-                  .cloudProtection[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .defender.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'defender',[m
+[31m-                  {[m
+[31m-                    cloudProtection:[m
+[31m-                      value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[31m-          </SimpleToggleCard>[m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// WINDOWS EDITOR[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+[32m+[m[32minterface WindowsPolicyEditorProps {[m
+[32m+[m[32m  configuration:[m
+[32m+[m[32m    WindowsPolicyConfiguration[m
+[32m+[m
+[32m+[m[32m  updateWindows:[m
+[32m+[m[32m    <[m
+[32m+[m[32m      K extends keyof WindowsPolicyConfiguration,[m
+[32m+[m[32m    >([m
+[32m+[m[32m      section: K,[m
+[32m+[m[32m      values: Partial<[m
+[32m+[m[32m        WindowsPolicyConfiguration[K][m
+[32m+[m[32m      >,[m
+[32m+[m[32m    ) => void[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction WindowsPolicyEditor({[m
+[32m+[m[32m  configuration,[m
+[32m+[m[32m  updateWindows,[m
+[32m+[m[32m}: WindowsPolicyEditorProps) {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="policy-settings-grid">[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <LockKeyhole size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Contraseña[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Requisitos de contraseña[m
+[32m+[m[32m                local.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Wifi size={18} />}[m
+[31m-            title="Firewall"[m
+[31m-            description="Control de los perfiles de Windows Firewall."[m
+[32m+[m[32m          <Toggle[m
+             checked={[m
+[31m-              configuration.windows[m
+[31m-                .firewall.enabled[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .enabled[m
+             }[m
+             onChange={(value) =>[m
+               updateWindows([m
+[31m-                'firewall',[m
+[31m-                { enabled: value },[m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  enabled: value,[m
+[32m+[m[32m                },[m
+               )[m
+             }[m
+[31m-          >[m
+[31m-            <CheckOption[m
+[31m-              label="Perfil de dominio"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .firewall.domainProfile[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .firewall.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'firewall',[m
+[31m-                  {[m
+[31m-                    domainProfile: value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Longitud mínima"[m
+[32m+[m[32m            min={4}[m
+[32m+[m[32m            max={64}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .minimumLength[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateWindows([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  minimumLength: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Vigencia máxima (días)"[m
+[32m+[m[32m            min={0}[m
+[32m+[m[32m            max={365}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .maximumAgeDays[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateWindows([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  maximumAgeDays: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Mayúsculas"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .requireUppercase[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateWindows([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireUppercase:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Minúsculas"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .requireLowercase[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateWindows([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireLowercase:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Números"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .requireNumber[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateWindows([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireNumber:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Caracteres especiales"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .requireSpecialCharacter[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateWindows([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireSpecialCharacter:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      <SimpleToggleCard[m
+[32m+[m[32m        icon={[m
+[32m+[m[32m          <Shield size={18} />[m
+[32m+[m[32m        }[m
+[32m+[m[32m        title="Microsoft Defender"[m
+[32m+[m[32m        description="Protección antimalware y supervisión en tiempo real."[m
+[32m+[m[32m        checked={[m
+[32m+[m[32m          configuration.defender.enabled[m
+[32m+[m[32m        }[m
+[32m+[m[32m        onChange={(value) =>[m
+[32m+[m[32m          updateWindows([m
+[32m+[m[32m            'defender',[m
+[32m+[m[32m            {[m
+[32m+[m[32m              enabled: value,[m
+[32m+[m[32m            },[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      >[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Protección en tiempo real"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.defender[m
+[32m+[m[32m              .realTimeProtection[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.defender[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'defender',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                realTimeProtection:[m
+[32m+[m[32m                  value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Protección en la nube"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.defender[m
+[32m+[m[32m              .cloudProtection[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.defender[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'defender',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                cloudProtection:[m
+[32m+[m[32m                  value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m[32m      </SimpleToggleCard>[m
+[32m+[m
+[32m+[m[32m      <SimpleToggleCard[m
+[32m+[m[32m        icon={<Wifi size={18} />}[m
+[32m+[m[32m        title="Firewall"[m
+[32m+[m[32m        description="Control de los perfiles de Windows Firewall."[m
+[32m+[m[32m        checked={[m
+[32m+[m[32m          configuration.firewall.enabled[m
+[32m+[m[32m        }[m
+[32m+[m[32m        onChange={(value) =>[m
+[32m+[m[32m          updateWindows([m
+[32m+[m[32m            'firewall',[m
+[32m+[m[32m            {[m
+[32m+[m[32m              enabled: value,[m
+[32m+[m[32m            },[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      >[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Perfil de dominio"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.firewall[m
+[32m+[m[32m              .domainProfile[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.firewall[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'firewall',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                domainProfile: value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Perfil privado"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.firewall[m
+[32m+[m[32m              .privateProfile[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.firewall[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'firewall',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                privateProfile: value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Perfil público"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.firewall[m
+[32m+[m[32m              .publicProfile[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.firewall[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'firewall',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                publicProfile: value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m[32m      </SimpleToggleCard>[m
+[32m+[m
+[32m+[m[32m      <SimpleToggleCard[m
+[32m+[m[32m        icon={<Usb size={18} />}[m
+[32m+[m[32m        title="Almacenamiento USB"[m
+[32m+[m[32m        description="Restringe almacenamiento extraíble."[m
+[32m+[m[32m        checked={[m
+[32m+[m[32m          configuration.usb[m
+[32m+[m[32m            .blockRemovableStorage[m
+[32m+[m[32m        }[m
+[32m+[m[32m        onChange={(value) =>[m
+[32m+[m[32m          updateWindows([m
+[32m+[m[32m            'usb',[m
+[32m+[m[32m            {[m
+[32m+[m[32m              blockRemovableStorage:[m
+[32m+[m[32m                value,[m
+[32m+[m[32m            },[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      />[m
+[32m+[m
+[32m+[m[32m      <SimpleToggleCard[m
+[32m+[m[32m        icon={[m
+[32m+[m[32m          <LockKeyhole size={18} />[m
+[32m+[m[32m        }[m
+[32m+[m[32m        title="Bloqueo de pantalla"[m
+[32m+[m[32m        description="Bloqueo automático por inactividad."[m
+[32m+[m[32m        checked={[m
+[32m+[m[32m          configuration.screenLock[m
+[32m+[m[32m            .enabled[m
+[32m+[m[32m        }[m
+[32m+[m[32m        onChange={(value) =>[m
+[32m+[m[32m          updateWindows([m
+[32m+[m[32m            'screenLock',[m
+[32m+[m[32m            {[m
+[32m+[m[32m              enabled: value,[m
+[32m+[m[32m            },[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      >[m
+[32m+[m[32m        <NumberField[m
+[32m+[m[32m          label="Tiempo de espera (minutos)"[m
+[32m+[m[32m          min={1}[m
+[32m+[m[32m          max={120}[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.screenLock[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          value={[m
+[32m+[m[32m            configuration.screenLock[m
+[32m+[m[32m              .timeoutMinutes[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'screenLock',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                timeoutMinutes:[m
+[32m+[m[32m                  value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m[32m      </SimpleToggleCard>[m
+[32m+[m
+[32m+[m[32m      <SimpleToggleCard[m
+[32m+[m[32m        icon={[m
+[32m+[m[32m          <ChevronRight size={18} />[m
+[32m+[m[32m        }[m
+[32m+[m[32m        title="Windows Update"[m
+[32m+[m[32m        description="Administración de actualizaciones."[m
+[32m+[m[32m        checked={[m
+[32m+[m[32m          configuration.windowsUpdate[m
+[32m+[m[32m            .enabled[m
+[32m+[m[32m        }[m
+[32m+[m[32m        onChange={(value) =>[m
+[32m+[m[32m          updateWindows([m
+[32m+[m[32m            'windowsUpdate',[m
+[32m+[m[32m            {[m
+[32m+[m[32m              enabled: value,[m
+[32m+[m[32m            },[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      >[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Actualizaciones automáticas"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.windowsUpdate[m
+[32m+[m[32m              .automaticUpdates[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.windowsUpdate[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'windowsUpdate',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                automaticUpdates:[m
+[32m+[m[32m                  value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m
+[32m+[m[32m        <CheckOption[m
+[32m+[m[32m          label="Reinicio fuera de horas activas"[m
+[32m+[m[32m          checked={[m
+[32m+[m[32m            configuration.windowsUpdate[m
+[32m+[m[32m              .restartOutsideActiveHours[m
+[32m+[m[32m          }[m
+[32m+[m[32m          disabled={[m
+[32m+[m[32m            !configuration.windowsUpdate[m
+[32m+[m[32m              .enabled[m
+[32m+[m[32m          }[m
+[32m+[m[32m          onChange={(value) =>[m
+[32m+[m[32m            updateWindows([m
+[32m+[m[32m              'windowsUpdate',[m
+[32m+[m[32m              {[m
+[32m+[m[32m                restartOutsideActiveHours:[m
+[32m+[m[32m                  value,[m
+[32m+[m[32m              },[m
+[32m+[m[32m            )[m
+[32m+[m[32m          }[m
+[32m+[m[32m        />[m
+[32m+[m[32m      </SimpleToggleCard>[m
+[32m+[m[32m    </div>[m
+[32m+[m[32m  )[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// ANDROID EDITOR[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+[32m+[m[32minterface AndroidPolicyEditorProps {[m
+[32m+[m[32m  configuration:[m
+[32m+[m[32m    AndroidPolicyConfiguration[m
+[32m+[m
+[32m+[m[32m  updateAndroid:[m
+[32m+[m[32m    <[m
+[32m+[m[32m      K extends keyof AndroidPolicyConfiguration,[m
+[32m+[m[32m    >([m
+[32m+[m[32m      section: K,[m
+[32m+[m[32m      values: Partial<[m
+[32m+[m[32m        AndroidPolicyConfiguration[K][m
+[32m+[m[32m      >,[m
+[32m+[m[32m    ) => void[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction AndroidPolicyEditor({[m
+[32m+[m[32m  configuration,[m
+[32m+[m[32m  updateAndroid,[m
+[32m+[m[32m}: AndroidPolicyEditorProps) {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="policy-settings-grid">[m
+[32m+[m[32m      {/* PASSWORD */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <KeyRound size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Contraseña Android[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Seguridad de acceso al[m
+[32m+[m[32m                dispositivo.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <Toggle[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  enabled: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Longitud mínima"[m
+[32m+[m[32m            min={4}[m
+[32m+[m[32m            max={32}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .minimumLength[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  minimumLength: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <SelectField[m
+[32m+[m[32m            label="Complejidad"[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .complexity[m
+[32m+[m[32m            }[m
+[32m+[m[32m            options={[[m
+[32m+[m[32m              ['NONE', 'Sin requisito'],[m
+[32m+[m[32m              ['LOW', 'Baja'],[m
+[32m+[m[32m              ['MEDIUM', 'Media'],[m
+[32m+[m[32m              ['HIGH', 'Alta'],[m
+[32m+[m[32m            ]}[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  complexity:[m
+[32m+[m[32m                    value as AndroidPolicyConfiguration['password']['complexity'],[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Intentos fallidos máximos"[m
+[32m+[m[32m            min={0}[m
+[32m+[m[32m            max={20}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .maxFailedAttempts[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  maxFailedAttempts:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Bloqueo de pantalla (min)"[m
+[32m+[m[32m            min={1}[m
+[32m+[m[32m            max={120}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .screenLockTimeout[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  screenLockTimeout:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Requerir PIN numérico"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .requireNumeric[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireNumeric: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Contraseña compleja"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.password[m
+[32m+[m[32m                .requireComplex[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.password[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'password',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireComplex: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      {/* CORE RESTRICTIONS */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <Shield size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Restricciones principales[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Hardware y funciones[m
+[32m+[m[32m                sensibles.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear cámara"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockCamera[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockCamera: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear capturas"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockScreenCapture[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockScreenCapture:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear transferencia USB"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockUsbFileTransfer[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockUsbFileTransfer:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear Bluetooth"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockBluetooth[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockBluetooth: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+ [m
+[31m-            <CheckOption[m
+[31m-              label="Perfil privado"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .firewall.privateProfile[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .firewall.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'firewall',[m
+[31m-                  {[m
+[31m-                    privateProfile: value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear fuentes desconocidas"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockUnknownSources[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockUnknownSources:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear depuración"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockDebugging[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockDebugging: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      {/* ADVANCED RESTRICTIONS */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <ShieldCheck size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Restricciones avanzadas[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Administración y protección[m
+[32m+[m[32m                del sistema.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear restablecimiento"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockFactoryReset[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockFactoryReset:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear modo seguro"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockSafeBoot[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockSafeBoot: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear agregar usuario"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockAddUser[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockAddUser: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear eliminar usuario"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockRemoveUser[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockRemoveUser:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear modificación de cuentas"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockModifyAccounts[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockModifyAccounts:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear Android Beam"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockOutgoingBeam[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockOutgoingBeam:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear impresión"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockPrinting[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockPrinting: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear micrófono"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.restrictions[m
+[32m+[m[32m                .blockMicrophone[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'restrictions',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  blockMicrophone: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      {/* NETWORK */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <Network size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Red y conectividad[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Configuración administrada[m
+[32m+[m[32m                de conexiones.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear configuración Wi-Fi"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.network[m
+[32m+[m[32m                .wifiConfigDisabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'network',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  wifiConfigDisabled:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear configuración Bluetooth"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.network[m
+[32m+[m[32m                .bluetoothConfigDisabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'network',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  bluetoothConfigDisabled:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear tethering"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.network[m
+[32m+[m[32m                .tetheringDisabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'network',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  tetheringDisabled:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear configuración VPN"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.network[m
+[32m+[m[32m                .vpnConfigDisabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'network',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  vpnConfigDisabled:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <SelectField[m
+[32m+[m[32m            label="Private DNS"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.network[m
+[32m+[m[32m                .privateDnsMode[m
+[32m+[m[32m            }[m
+[32m+[m[32m            options={[[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'UNSPECIFIED',[m
+[32m+[m[32m                'Sin especificar',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'OPPORTUNISTIC',[m
+[32m+[m[32m                'Oportunista',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              ['OFF', 'Desactivado'],[m
+[32m+[m[32m            ]}[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'network',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  privateDnsMode:[m
+[32m+[m[32m                    value as AndroidPolicyConfiguration['network']['privateDnsMode'],[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <SelectField[m
+[32m+[m[32m            label="Ubicación"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.location.mode[m
+[32m+[m[32m            }[m
+[32m+[m[32m            options={[[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'UNSPECIFIED',[m
+[32m+[m[32m                'Sin especificar',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'ENFORCED',[m
+[32m+[m[32m                'Forzada',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'USER_CHOICE',[m
+[32m+[m[32m                'Elección del usuario',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'DISABLED',[m
+[32m+[m[32m                'Desactivada',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m            ]}[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'location',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  mode:[m
+[32m+[m[32m                    value as AndroidPolicyConfiguration['location']['mode'],[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      {/* APPLICATIONS */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <Smartphone size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Aplicaciones[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Instalación y catálogo[m
+[32m+[m[32m                administrado.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Permitir instalación"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.applications[m
+[32m+[m[32m                .allowAppInstallation[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'applications',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  allowAppInstallation:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Permitir desinstalación"[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.applications[m
+[32m+[m[32m                .allowAppUninstallation[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'applications',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  allowAppUninstallation:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <SelectField[m
+[32m+[m[32m            label="Modo de instalación"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.applications[m
+[32m+[m[32m                .installMode[m
+[32m+[m[32m            }[m
+[32m+[m[32m            options={[[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'AVAILABLE',[m
+[32m+[m[32m                'Disponible',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'FORCE_INSTALLED',[m
+[32m+[m[32m                'Instalación forzada',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'BLOCKED',[m
+[32m+[m[32m                'Bloqueada',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m            ]}[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'applications',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  installMode:[m
+[32m+[m[32m                    value as AndroidPolicyConfiguration['applications']['installMode'],[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+ [m
+[31m-            <CheckOption[m
+[31m-              label="Perfil público"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .firewall.publicProfile[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .firewall.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'firewall',[m
+[31m-                  {[m
+[31m-                    publicProfile: value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[31m-          </SimpleToggleCard>[m
+[32m+[m[32m          <SelectField[m
+[32m+[m[32m            label="Modo Google Play"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.applications[m
+[32m+[m[32m                .playStoreMode[m
+[32m+[m[32m            }[m
+[32m+[m[32m            options={[[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'UNSPECIFIED',[m
+[32m+[m[32m                'Sin especificar',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'WHITELIST',[m
+[32m+[m[32m                'Lista permitida',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'BLACKLIST',[m
+[32m+[m[32m                'Lista bloqueada',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m            ]}[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'applications',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  playStoreMode:[m
+[32m+[m[32m                    value as AndroidPolicyConfiguration['applications']['playStoreMode'],[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Usb size={18} />}[m
+[31m-            title="Almacenamiento USB"[m
+[31m-            description="Restringe almacenamiento extraíble."[m
+[31m-            checked={[m
+[31m-              configuration.windows.usb[m
+[31m-                .blockRemovableStorage[m
+[32m+[m[32m          <TextField[m
+[32m+[m[32m            label="Métodos de entrada permitidos"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.applications[m
+[32m+[m[32m                .permittedInputMethods[m
+             }[m
+[32m+[m[32m            placeholder="Ej. com.google.android.inputmethod.latin"[m
+             onChange={(value) =>[m
+[31m-              updateWindows([m
+[31m-                'usb',[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'applications',[m
+                 {[m
+[31m-                  blockRemovableStorage:[m
+[32m+[m[32m                  permittedInputMethods:[m
+                     value,[m
+                 },[m
+               )[m
+             }[m
+           />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      {/* SYSTEM UPDATE */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <RefreshCw size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Actualizaciones Android[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Política de actualización[m
+[32m+[m[32m                del sistema operativo.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <SelectField[m
+[32m+[m[32m            label="Tipo"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.systemUpdate[m
+[32m+[m[32m                .type[m
+[32m+[m[32m            }[m
+[32m+[m[32m            options={[[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'AUTOMATIC',[m
+[32m+[m[32m                'Automática',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'WINDOWED',[m
+[32m+[m[32m                'Ventana programada',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m              [[m
+[32m+[m[32m                'POSTPONE',[m
+[32m+[m[32m                'Posponer',[m
+[32m+[m[32m              ],[m
+[32m+[m[32m            ]}[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'systemUpdate',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  type:[m
+[32m+[m[32m                    value as AndroidPolicyConfiguration['systemUpdate']['type'],[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={[m
+[31m-              <LockKeyhole size={18} />[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Inicio ventana (minutos)"[m
+[32m+[m[32m            min={0}[m
+[32m+[m[32m            max={1439}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              configuration.systemUpdate[m
+[32m+[m[32m                .type !== 'WINDOWED'[m
+             }[m
+[31m-            title="Bloqueo de pantalla"[m
+[31m-            description="Bloqueo automático por inactividad."[m
+[31m-            checked={[m
+[31m-              configuration.windows[m
+[31m-                .screenLock.enabled[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.systemUpdate[m
+[32m+[m[32m                .startMinutes[m
+             }[m
+             onChange={(value) =>[m
+[31m-              updateWindows([m
+[31m-                'screenLock',[m
+[31m-                { enabled: value },[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'systemUpdate',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  startMinutes: value,[m
+[32m+[m[32m                },[m
+               )[m
+             }[m
+[31m-          >[m
+[31m-            <label>[m
+[31m-              Tiempo de espera (minutos)[m
+[31m-[m
+[31m-              <input[m
+[31m-                type="number"[m
+[31m-                min={1}[m
+[31m-                max={120}[m
+[31m-                disabled={[m
+[31m-                  !configuration.windows[m
+[31m-                    .screenLock.enabled[m
+[31m-                }[m
+[31m-                value={[m
+[31m-                  configuration.windows[m
+[31m-                    .screenLock[m
+[31m-                    .timeoutMinutes[m
+[31m-                }[m
+[31m-                onChange={(event) =>[m
+[31m-                  updateWindows([m
+[31m-                    'screenLock',[m
+[31m-                    {[m
+[31m-                      timeoutMinutes:[m
+[31m-                        Number([m
+[31m-                          event.target[m
+[31m-                            .value,[m
+[31m-                        ),[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-            </label>[m
+[31m-          </SimpleToggleCard>[m
+[31m-[m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={[m
+[31m-              <ChevronRight size={18} />[m
+[31m-            }[m
+[31m-            title="Windows Update"[m
+[31m-            description="Administración de actualizaciones."[m
+[31m-            checked={[m
+[31m-              configuration.windows[m
+[31m-                .windowsUpdate.enabled[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="Fin ventana (minutos)"[m
+[32m+[m[32m            min={0}[m
+[32m+[m[32m            max={1439}[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              configuration.systemUpdate[m
+[32m+[m[32m                .type !== 'WINDOWED'[m
+[32m+[m[32m            }[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.systemUpdate[m
+[32m+[m[32m                .endMinutes[m
+             }[m
+             onChange={(value) =>[m
+[31m-              updateWindows([m
+[31m-                'windowsUpdate',[m
+[31m-                { enabled: value },[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'systemUpdate',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  endMinutes: value,[m
+[32m+[m[32m                },[m
+               )[m
+             }[m
+[31m-          >[m
+[31m-            <CheckOption[m
+[31m-              label="Actualizaciones automáticas"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .windowsUpdate[m
+[31m-                  .automaticUpdates[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .windowsUpdate.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'windowsUpdate',[m
+[31m-                  {[m
+[31m-                    automaticUpdates:[m
+[31m-                      value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+ [m
+[31m-            <CheckOption[m
+[31m-              label="Reinicio fuera de horas activas"[m
+[31m-              checked={[m
+[31m-                configuration.windows[m
+[31m-                  .windowsUpdate[m
+[31m-                  .restartOutsideActiveHours[m
+[31m-              }[m
+[31m-              disabled={[m
+[31m-                !configuration.windows[m
+[31m-                  .windowsUpdate.enabled[m
+[31m-              }[m
+[31m-              onChange={(value) =>[m
+[31m-                updateWindows([m
+[31m-                  'windowsUpdate',[m
+[31m-                  {[m
+[31m-                    restartOutsideActiveHours:[m
+[31m-                      value,[m
+[31m-                  },[m
+[31m-                )[m
+[31m-              }[m
+[31m-            />[m
+[31m-          </SimpleToggleCard>[m
+[32m+[m[32m      {/* KIOSK */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <Smartphone size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Kiosk / Dedicated[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Configuración para[m
+[32m+[m[32m                dispositivos dedicados.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m
+[32m+[m[32m          <Toggle[m
+[32m+[m[32m            checked={[m
+[32m+[m[32m              configuration.kiosk.enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'kiosk',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  enabled: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+         </div>[m
+[31m-      ) : ([m
+[31m-        <div className="policy-settings-grid">[m
+[31m-          <section className="policy-setting-card">[m
+[31m-            <div className="policy-setting-heading">[m
+[31m-              <div>[m
+[31m-                <LockKeyhole size={18} />[m
+[31m-[m
+[31m-                <span>[m
+[31m-                  <strong>[m
+[31m-                    Contraseña Android[m
+[31m-                  </strong>[m
+[31m-[m
+[31m-                  <small>[m
+[31m-                    Requisitos de acceso[m
+[31m-                    al dispositivo.[m
+[31m-                  </small>[m
+[31m-                </span>[m
+[31m-              </div>[m
+ [m
+[31m-              <Toggle[m
+[31m-                checked={[m
+[31m-                  configuration.android[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateAndroid([m
+[31m-                    'password',[m
+[31m-                    { enabled: value },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-            </div>[m
+[31m-[m
+[31m-            <div className="policy-setting-body">[m
+[31m-              <label>[m
+[31m-                Longitud mínima[m
+[31m-[m
+[31m-                <input[m
+[31m-                  type="number"[m
+[31m-                  min={4}[m
+[31m-                  max={32}[m
+[31m-                  disabled={[m
+[31m-                    !configuration.android[m
+[31m-                      .password.enabled[m
+[31m-                  }[m
+[31m-                  value={[m
+[31m-                    configuration.android[m
+[31m-                      .password.minimumLength[m
+[31m-                  }[m
+[31m-                  onChange={(event) =>[m
+[31m-                    updateAndroid([m
+[31m-                      'password',[m
+[31m-                      {[m
+[31m-                        minimumLength:[m
+[31m-                          Number([m
+[31m-                            event.target[m
+[31m-                              .value,[m
+[31m-                          ),[m
+[31m-                      },[m
+[31m-                    )[m
+[31m-                  }[m
+[31m-                />[m
+[31m-              </label>[m
+[31m-[m
+[31m-              <CheckOption[m
+[31m-                label="Requerir PIN numérico"[m
+[31m-                checked={[m
+[31m-                  configuration.android[m
+[31m-                    .password.requireNumeric[m
+[31m-                }[m
+[31m-                disabled={[m
+[31m-                  !configuration.android[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateAndroid([m
+[31m-                    'password',[m
+[31m-                    {[m
+[31m-                      requireNumeric:[m
+[31m-                        value,[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-[m
+[31m-              <CheckOption[m
+[31m-                label="Requerir contraseña compleja"[m
+[31m-                checked={[m
+[31m-                  configuration.android[m
+[31m-                    .password.requireComplex[m
+[31m-                }[m
+[31m-                disabled={[m
+[31m-                  !configuration.android[m
+[31m-                    .password.enabled[m
+[31m-                }[m
+[31m-                onChange={(value) =>[m
+[31m-                  updateAndroid([m
+[31m-                    'password',[m
+[31m-                    {[m
+[31m-                      requireComplex:[m
+[31m-                        value,[m
+[31m-                    },[m
+[31m-                  )[m
+[31m-                }[m
+[31m-              />[m
+[31m-            </div>[m
+[31m-          </section>[m
+[31m-[m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Smartphone size={18} />}[m
+[31m-            title="Cámara"[m
+[31m-            description="Impide utilizar la cámara del dispositivo."[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <TextField[m
+[32m+[m[32m            label="Application ID"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.kiosk[m
+[32m+[m[32m                .applicationId[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.kiosk[m
+[32m+[m[32m                .enabled[m
+[32m+[m[32m            }[m
+[32m+[m[32m            placeholder="com.empresa.aplicacion"[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'kiosk',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  applicationId: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear barra de estado"[m
+             checked={[m
+[31m-              configuration.android[m
+[31m-                .restrictions.blockCamera[m
+[32m+[m[32m              configuration.kiosk[m
+[32m+[m[32m                .statusBar[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.kiosk[m
+[32m+[m[32m                .enabled[m
+             }[m
+             onChange={(value) =>[m
+               updateAndroid([m
+[31m-                'restrictions',[m
+[31m-                { blockCamera: value },[m
+[32m+[m[32m                'kiosk',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  statusBar: value,[m
+[32m+[m[32m                },[m
+               )[m
+             }[m
+           />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Shield size={18} />}[m
+[31m-            title="Capturas de pantalla"[m
+[31m-            description="Bloquea screenshots y captura de pantalla."[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear navegación del sistema"[m
+             checked={[m
+[31m-              configuration.android[m
+[31m-                .restrictions[m
+[31m-                .blockScreenCapture[m
+[32m+[m[32m              configuration.kiosk[m
+[32m+[m[32m                .systemNavigation[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.kiosk[m
+[32m+[m[32m                .enabled[m
+             }[m
+             onChange={(value) =>[m
+               updateAndroid([m
+[31m-                'restrictions',[m
+[32m+[m[32m                'kiosk',[m
+                 {[m
+[31m-                  blockScreenCapture:[m
+[32m+[m[32m                  systemNavigation:[m
+                     value,[m
+                 },[m
+               )[m
+             }[m
+           />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Usb size={18} />}[m
+[31m-            title="Transferencia USB"[m
+[31m-            description="Bloquea transferencia de archivos mediante USB."[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Bloquear Keyguard"[m
+             checked={[m
+[31m-              configuration.android[m
+[31m-                .restrictions[m
+[31m-                .blockUsbFileTransfer[m
+[32m+[m[32m              configuration.kiosk[m
+[32m+[m[32m                .keyguard[m
+[32m+[m[32m            }[m
+[32m+[m[32m            disabled={[m
+[32m+[m[32m              !configuration.kiosk[m
+[32m+[m[32m                .enabled[m
+             }[m
+             onChange={(value) =>[m
+               updateAndroid([m
+[31m-                'restrictions',[m
+[32m+[m[32m                'kiosk',[m
+                 {[m
+[31m-                  blockUsbFileTransfer:[m
+[32m+[m[32m                  keyguard: value,[m
+[32m+[m[32m                },[m
+[32m+[m[32m              )[m
+[32m+[m[32m            }[m
+[32m+[m[32m          />[m
+[32m+[m[32m        </div>[m
+[32m+[m[32m      </section>[m
+[32m+[m
+[32m+[m[32m      {/* COMPLIANCE */}[m
+[32m+[m
+[32m+[m[32m      <section className="policy-setting-card">[m
+[32m+[m[32m        <div className="policy-setting-heading">[m
+[32m+[m[32m          <div>[m
+[32m+[m[32m            <ShieldCheck size={18} />[m
+[32m+[m
+[32m+[m[32m            <span>[m
+[32m+[m[32m              <strong>[m
+[32m+[m[32m                Cumplimiento[m
+[32m+[m[32m              </strong>[m
+[32m+[m
+[32m+[m[32m              <small>[m
+[32m+[m[32m                Requisitos mínimos de[m
+[32m+[m[32m                seguridad Android.[m
+[32m+[m[32m              </small>[m
+[32m+[m[32m            </span>[m
+[32m+[m[32m          </div>[m
+[32m+[m[32m        </div>[m
+[32m+[m
+[32m+[m[32m        <div className="policy-setting-body">[m
+[32m+[m[32m          <NumberField[m
+[32m+[m[32m            label="API Level mínimo"[m
+[32m+[m[32m            min={0}[m
+[32m+[m[32m            max={100}[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.compliance[m
+[32m+[m[32m                .minimumApiLevel[m
+[32m+[m[32m            }[m
+[32m+[m[32m            onChange={(value) =>[m
+[32m+[m[32m              updateAndroid([m
+[32m+[m[32m                'compliance',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  minimumApiLevel:[m
+                     value,[m
+                 },[m
+               )[m
+             }[m
+           />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Wifi size={18} />}[m
+[31m-            title="Bluetooth"[m
+[31m-            description="Restringe el uso de Bluetooth."[m
+[31m-            checked={[m
+[31m-              configuration.android[m
+[31m-                .restrictions[m
+[31m-                .blockBluetooth[m
+[32m+[m[32m          <TextField[m
+[32m+[m[32m            label="Parche mínimo"[m
+[32m+[m[32m            value={[m
+[32m+[m[32m              configuration.compliance[m
+[32m+[m[32m                .minimumSecurityPatch[m
+             }[m
+[32m+[m[32m            placeholder="YYYY-MM-DD"[m
+             onChange={(value) =>[m
+               updateAndroid([m
+[31m-                'restrictions',[m
+[32m+[m[32m                'compliance',[m
+                 {[m
+[31m-                  blockBluetooth:[m
+[32m+[m[32m                  minimumSecurityPatch:[m
+                     value,[m
+                 },[m
+               )[m
+             }[m
+           />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<ShieldCheck size={18} />}[m
+[31m-            title="Fuentes desconocidas"[m
+[31m-            description="Bloquea instalaciones fuera de las fuentes administradas."[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Requerir cifrado"[m
+             checked={[m
+[31m-              configuration.android[m
+[31m-                .restrictions[m
+[31m-                .blockUnknownSources[m
+[32m+[m[32m              configuration.compliance[m
+[32m+[m[32m                .requireEncryption[m
+             }[m
+             onChange={(value) =>[m
+               updateAndroid([m
+[31m-                'restrictions',[m
+[32m+[m[32m                'compliance',[m
+                 {[m
+[31m-                  blockUnknownSources:[m
+[32m+[m[32m                  requireEncryption:[m
+                     value,[m
+                 },[m
+               )[m
+             }[m
+           />[m
+ [m
+[31m-          <SimpleToggleCard[m
+[31m-            icon={<Smartphone size={18} />}[m
+[31m-            title="Modo Kiosk"[m
+[31m-            description="Prepara el dispositivo para modo dedicado."[m
+[32m+[m[32m          <CheckOption[m
+[32m+[m[32m            label="Requerir integridad del dispositivo"[m
+             checked={[m
+[31m-              configuration.android.kiosk[m
+[31m-                .enabled[m
+[32m+[m[32m              configuration.compliance[m
+[32m+[m[32m                .requireDeviceIntegrity[m
+             }[m
+             onChange={(value) =>[m
+               updateAndroid([m
+[31m-                'kiosk',[m
+[31m-                { enabled: value },[m
+[32m+[m[32m                'compliance',[m
+[32m+[m[32m                {[m
+[32m+[m[32m                  requireDeviceIntegrity:[m
+[32m+[m[32m                    value,[m
+[32m+[m[32m                },[m
+               )[m
+             }[m
+           />[m
+         </div>[m
+[31m-      )}[m
+[31m-[m
+[31m-      <section className="policy-json-preview">[m
+[31m-        <div>[m
+[31m-          <strong>[m
+[31m-            Configuración generada[m
+[31m-          </strong>[m
+[31m-[m
+[31m-          <span>[m
+[31m-            Vista técnica del payload[m
+[31m-            versionado.[m
+[31m-          </span>[m
+[31m-        </div>[m
+[31m-[m
+[31m-        <pre>[m
+[31m-          {configurationJson}[m
+[31m-        </pre>[m
+       </section>[m
+     </div>[m
+   )[m
+ }[m
+ [m
+[32m+[m[32m// ============================================================[m
+[32m+[m[32m// REUSABLE COMPONENTS[m
+[32m+[m[32m// ============================================================[m
+[32m+[m
+ interface CheckOptionProps {[m
+   label: string[m
+   checked: boolean[m
+[36m@@ -1409,12 +3010,12 @@[m [mfunction CheckOption({[m
+ }[m
+ [m
+ interface SimpleToggleCardProps {[m
+[31m-  icon: React.ReactNode[m
+[32m+[m[32m  icon: ReactNode[m
+   title: string[m
+   description: string[m
+   checked: boolean[m
+   onChange: (value: boolean) => void[m
+[31m-  children?: React.ReactNode[m
+[32m+[m[32m  children?: ReactNode[m
+ }[m
+ [m
+ function SimpleToggleCard({[m
+[36m@@ -1432,8 +3033,13 @@[m [mfunction SimpleToggleCard({[m
+           {icon}[m
+ [m
+           <span>[m
+[31m-            <strong>{title}</strong>[m
+[31m-            <small>{description}</small>[m
+[32m+[m[32m            <strong>[m
+[32m+[m[32m              {title}[m
+[32m+[m[32m            </strong>[m
+[32m+[m
+[32m+[m[32m            <small>[m
+[32m+[m[32m              {description}[m
+[32m+[m[32m            </small>[m
+           </span>[m
+         </div>[m
+ [m
+[36m@@ -1450,4 +3056,150 @@[m [mfunction SimpleToggleCard({[m
+       )}[m
+     </section>[m
+   )[m
+[31m-}[m
+\ No newline at end of file[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32minterface NumberFieldProps {[m
+[32m+[m[32m  label: string[m
+[32m+[m[32m  value: number[m
+[32m+[m[32m  min?: number[m
+[32m+[m[32m  max?: number[m
+[32m+[m[32m  disabled?: boolean[m
+[32m+[m[32m  onChange: (value: number) => void[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction NumberField({[m
+[32m+[m[32m  label,[m
+[32m+[m[32m  value,[m
+[32m+[m[32m  min,[m
+[32m+[m[32m  max,[m
+[32m+[m[32m  disabled = false,[m
+[32m+[m[32m  onChange,[m
+[32m+[m[32m}: NumberFieldProps) {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <label>[m
+[32m+[m[32m      {label}[m
+[32m+[m
+[32m+[m[32m      <input[m
+[32m+[m[32m        type="number"[m
+[32m+[m[32m        value={value}[m
+[32m+[m[32m        min={min}[m
+[32m+[m[32m        max={max}[m
+[32m+[m[32m        disabled={disabled}[m
+[32m+[m[32m        onChange={(event) =>[m
+[32m+[m[32m          onChange([m
+[32m+[m[32m            Number([m
+[32m+[m[32m              event.target.value,[m
+[32m+[m[32m            ),[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      />[m
+[32m+[m[32m    </label>[m
+[32m+[m[32m  )[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32minterface TextFieldProps {[m
+[32m+[m[32m  label: string[m
+[32m+[m[32m  value: string[m
+[32m+[m[32m  placeholder?: string[m
+[32m+[m[32m  disabled?: boolean[m
+[32m+[m[32m  onChange: (value: string) => void[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction TextField({[m
+[32m+[m[32m  label,[m
+[32m+[m[32m  value,[m
+[32m+[m[32m  placeholder,[m
+[32m+[m[32m  disabled = false,[m
+[32m+[m[32m  onChange,[m
+[32m+[m[32m}: TextFieldProps) {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <label>[m
+[32m+[m[32m      {label}[m
+[32m+[m
+[32m+[m[32m      <input[m
+[32m+[m[32m        type="text"[m
+[32m+[m[32m        value={value}[m
+[32m+[m[32m        placeholder={placeholder}[m
+[32m+[m[32m        disabled={disabled}[m
+[32m+[m[32m        onChange={(event) =>[m
+[32m+[m[32m          onChange([m
+[32m+[m[32m            event.target.value,[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      />[m
+[32m+[m[32m    </label>[m
+[32m+[m[32m  )[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32minterface SelectFieldProps {[m
+[32m+[m[32m  label: string[m
+[32m+[m[32m  value: string[m
+[32m+[m[32m  disabled?: boolean[m
+[32m+[m[32m  options: Array<[m
+[32m+[m[32m    [string, string][m
+[32m+[m[32m  >[m
+[32m+[m[32m  onChange: (value: string) => void[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction SelectField({[m
+[32m+[m[32m  label,[m
+[32m+[m[32m  value,[m
+[32m+[m[32m  disabled = false,[m
+[32m+[m[32m  options,[m
+[32m+[m[32m  onChange,[m
+[32m+[m[32m}: SelectFieldProps) {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <label>[m
+[32m+[m[32m      {label}[m
+[32m+[m
+[32m+[m[32m      <select[m
+[32m+[m[32m        value={value}[m
+[32m+[m[32m        disabled={disabled}[m
+[32m+[m[32m        onChange={(event) =>[m
+[32m+[m[32m          onChange([m
+[32m+[m[32m            event.target.value,[m
+[32m+[m[32m          )[m
+[32m+[m[32m        }[m
+[32m+[m[32m      >[m
+[32m+[m[32m        {options.map([m
+[32m+[m[32m          ([optionValue, label]) => ([m
+[32m+[m[32m            <option[m
+[32m+[m[32m              key={optionValue}[m
+[32m+[m[32m              value={optionValue}[m
+[32m+[m[32m            >[m
+[32m+[m[32m              {label}[m
+[32m+[m[32m            </option>[m
+[32m+[m[32m          ),[m
+[32m+[m[32m        )}[m
+[32m+[m[32m      </select>[m
+[32m+[m[32m    </label>[m
+[32m+[m[32m  )[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32minterface PublicationFieldProps {[m
+[32m+[m[32m  label: string[m
+[32m+[m[32m  value: string[m
+[32m+[m[32m  mono?: boolean[m
+[32m+[m[32m}[m
+[32m+[m
+[32m+[m[32mfunction PublicationField({[m
+[32m+[m[32m  label,[m
+[32m+[m[32m  value,[m
+[32m+[m[32m  mono = false,[m
+[32m+[m[32m}: PublicationFieldProps) {[m
+[32m+[m[32m  return ([m
+[32m+[m[32m    <div className="android-publication-field">[m
+[32m+[m[32m      <span>{label}</span>[m
+[32m+[m
+[32m+[m[32m      <strong[m
+[32m+[m[32m        className={[m
+[32m+[m[32m          mono[m
+[32m+[m[32m            ? 'android-publication-mono'[m
+[32m+[m[32m            : undefined[m
+[32m+[m[32m        }[m
+[32m+[m[32m      >[m
+[32m+[m[32m        {value}[m
+[32m+[m[32m      </strong>[m
+[32m+[m[32m    </div>[m
+[32m+[m[32m  )[m
+[32m+[m[32m}[m

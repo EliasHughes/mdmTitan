@@ -14,6 +14,10 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<Organization> Organizations =>
         Set<Organization>();
 
+    public DbSet<AndroidPolicyPublication>
+    AndroidPolicyPublications =>
+    Set<AndroidPolicyPublication>();
+
     public DbSet<Department> Departments =>
         Set<Department>();
 
