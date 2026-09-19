@@ -171,6 +171,10 @@ public static class InfrastructureServiceExtensions
     IAndroidEnterpriseService,
     AndroidEnterpriseService>();
 
+    services.AddScoped<
+    IAndroidDeviceSyncService,
+    AndroidDeviceSyncService>();
+
 services.AddScoped<TitanMdmSeeder>();
 
 

@@ -38,37 +38,44 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<Device> Devices =>
         Set<Device>();
 
-    public DbSet<DeviceCommand> DeviceCommands =>
-    Set<DeviceCommand>();
-
-    public DbSet<Policy> Policies =>
-    Set<Policy>();
-
-    public DbSet<PolicyVersion> PolicyVersions =>
-    Set<PolicyVersion>();
-
-    public DbSet<DevicePolicyAssignment>
-    DevicePolicyAssignments =>
-        Set<DevicePolicyAssignment>();
-
-    public DbSet<AndroidEnterpriseConfiguration>
-    AndroidEnterpriseConfigurations =>
-        Set<AndroidEnterpriseConfiguration>();
-
-    public DbSet<AndroidEnrollment>
-    AndroidEnrollments =>
-        Set<AndroidEnrollment>();
-
-    public DbSet<AndroidEnterpriseSignupSession>
-    AndroidEnterpriseSignupSessions =>
-        Set<AndroidEnterpriseSignupSession>();
-    
     public DbSet<DeviceCredential> DeviceCredentials =>
-    Set<DeviceCredential>();
+        Set<DeviceCredential>();
+
+    public DbSet<DeviceCommand> DeviceCommands =>
+        Set<DeviceCommand>();
 
     public DbSet<EnrollmentToken> EnrollmentTokens =>
-    Set<EnrollmentToken>();
+        Set<EnrollmentToken>();
 
+    public DbSet<Policy> Policies =>
+        Set<Policy>();
+
+    public DbSet<PolicyVersion> PolicyVersions =>
+        Set<PolicyVersion>();
+
+    public DbSet<DevicePolicyAssignment>
+        DevicePolicyAssignments =>
+            Set<DevicePolicyAssignment>();
+
+    public DbSet<AndroidEnterpriseConfiguration>
+        AndroidEnterpriseConfigurations =>
+            Set<AndroidEnterpriseConfiguration>();
+
+    public DbSet<AndroidEnterpriseSignupSession>
+        AndroidEnterpriseSignupSessions =>
+            Set<AndroidEnterpriseSignupSession>();
+
+    public DbSet<AndroidEnrollment>
+        AndroidEnrollments =>
+            Set<AndroidEnrollment>();
+
+    /*
+     * Extensión Android Enterprise 1:1
+     * del inventario general Devices.
+     */
+    public DbSet<AndroidDevice>
+        AndroidDevices =>
+            Set<AndroidDevice>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)

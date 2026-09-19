@@ -1,6 +1,8 @@
 import apiClient from './apiClient'
 
 import type {
+  AndroidDeviceInventorySummary,
+  AndroidDeviceSyncResult,
   AndroidEnterpriseStatus,
   AndroidEnrollment,
   AndroidSignupResponse,
@@ -57,5 +59,25 @@ export const androidEnterpriseApi = {
     await apiClient.delete(
       `/android-enterprise/enrollments/${id}`,
     )
+  },
+
+  async getDeviceSummary():
+    Promise<AndroidDeviceInventorySummary> {
+    const response =
+      await apiClient.get<AndroidDeviceInventorySummary>(
+        '/android-enterprise/devices/summary',
+      )
+
+    return response.data
+  },
+
+  async synchronizeDevices():
+    Promise<AndroidDeviceSyncResult> {
+    const response =
+      await apiClient.post<AndroidDeviceSyncResult>(
+        '/android-enterprise/devices/sync',
+      )
+
+    return response.data
   },
 }
