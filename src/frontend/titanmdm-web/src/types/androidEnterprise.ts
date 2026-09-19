@@ -48,3 +48,26 @@ export interface CreateAndroidEnrollmentRequest {
   expirationMinutes: number
   policyId?: string | null
 }
+
+export interface AndroidDeviceSyncResult {
+  receivedFromGoogle: number
+  created: number
+  updated: number
+  markedMissing: number
+  failed: number
+  startedAtUtc: string
+  completedAtUtc: string
+  errors: string[]
+}
+
+export interface AndroidDeviceInventorySummary {
+  total: number
+  managed: number
+  missingInGoogle: number
+  fullyManaged: number
+  dedicated: number
+  workProfile: number
+  compliant: number
+  nonCompliant: number
+  lastSynchronizationUtc: string | null
+}

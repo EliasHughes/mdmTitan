@@ -11,8 +11,7 @@ import type {
 } from '../types/androidEnterprise'
 
 export const androidEnterpriseApi = {
-  async getStatus():
-    Promise<AndroidEnterpriseStatus> {
+  async getStatus(): Promise<AndroidEnterpriseStatus> {
     const response =
       await apiClient.get<AndroidEnterpriseStatus>(
         '/android-enterprise/status',
@@ -21,8 +20,7 @@ export const androidEnterpriseApi = {
     return response.data
   },
 
-  async createSignup():
-    Promise<AndroidSignupResponse> {
+  async createSignup(): Promise<AndroidSignupResponse> {
     const response =
       await apiClient.post<AndroidSignupResponse>(
         '/android-enterprise/signup',
@@ -31,8 +29,7 @@ export const androidEnterpriseApi = {
     return response.data
   },
 
-  async getEnrollments():
-    Promise<AndroidEnrollment[]> {
+  async getEnrollments(): Promise<AndroidEnrollment[]> {
     const response =
       await apiClient.get<AndroidEnrollment[]>(
         '/android-enterprise/enrollments',

@@ -241,6 +241,21 @@ public sealed class AndroidDeviceSyncService
             markedMissing++;
         }
 
+                var trackedConfiguration =
+                    await _dbContext
+                        .AndroidEnterpriseConfigurations
+                        .SingleAsync(
+                            x =>
+                                x.OrganizationId ==
+                                organizationId,
+                            cancellationToken);
+
+        trackedConfiguration
+            .RecordDeviceSynchronization(
+                received,
+                failed);
+
+
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
@@ -306,12 +321,30 @@ public sealed class AndroidDeviceSyncService
                 .ToListAsync(
                     cancellationToken);
 
-        var lastSync =
-            rows.Count == 0
-                ? (DateTime?)null
-                : rows.Max(
-                    x =>
-                        x.LastSynchronizedAtUtc);
+       var enterpriseLastSync =
+    await _dbContext
+        .AndroidEnterpriseConfigurations
+        .AsNoTracking()
+        .Where(
+            x =>
+                x.OrganizationId ==
+                organizationId)
+        .Select(
+            x =>
+                x.LastDeviceSyncAtUtc)
+        .SingleOrDefaultAsync(
+            cancellationToken);
+
+var deviceLastSync =
+    rows.Count == 0
+        ? (DateTime?)null
+        : rows.Max(
+            x =>
+                x.LastSynchronizedAtUtc);
+
+var lastSync =
+    enterpriseLastSync ??
+    deviceLastSync;
 
         return new AndroidDeviceInventorySummaryDto(
             Total:
@@ -704,6 +737,8 @@ public sealed class AndroidDeviceSyncService
             enrollmentTime,
             lastStatusReportTime,
             lastPolicySyncTime);
+        
+        
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
