@@ -350,3 +350,289 @@
     grid-template-columns: 1fr;
   }
 }
+
+/* ============================================================
+   ANDROID ENTERPRISE POLICY PUBLICATION
+============================================================ */
+
+.android-publication-card {
+  margin-bottom: 15px;
+  overflow: hidden;
+  border: 1px solid #d8e2f0;
+  border-radius: 12px;
+  background: #fff;
+}
+
+.android-publication-header {
+  min-height: 76px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 16px 18px;
+  border-bottom: 1px solid #edf1f6;
+}
+
+.android-publication-title {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #4169e1;
+}
+
+.android-publication-title h2 {
+  margin: 0;
+  color: #172033;
+  font-size: 14px;
+}
+
+.android-publication-title p {
+  margin: 4px 0 0;
+  color: #94a3b8;
+  font-size: 10px;
+}
+
+.android-publication-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 27px;
+  padding: 0 10px;
+  border: 1px solid #dce4ee;
+  border-radius: 999px;
+  color: #64748b;
+  background: #f8fafc;
+  font-size: 9px;
+  font-weight: 800;
+}
+
+.android-publication-status--published {
+  color: #168250;
+  border-color: #ccebd9;
+  background: #edf9f2;
+}
+
+.android-publication-status--publishing {
+  color: #3158ca;
+  border-color: #cbd8ff;
+  background: #edf2ff;
+}
+
+.android-publication-status--failed {
+  color: #b53e3e;
+  border-color: #f2cccc;
+  background: #fff2f2;
+}
+
+.android-publication-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(3, minmax(0, 1fr));
+  gap: 1px;
+  background: #edf1f6;
+}
+
+.android-publication-field {
+  min-width: 0;
+  padding: 14px 16px;
+  background: #fff;
+}
+
+.android-publication-field span {
+  display: block;
+  margin-bottom: 5px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.android-publication-field strong {
+  display: block;
+  overflow: hidden;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 800;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.android-publication-mono {
+  font-family:
+    "Cascadia Code",
+    Consolas,
+    monospace;
+  font-size: 9px !important;
+}
+
+.android-publication-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+  padding: 14px 16px;
+  border-top: 1px solid #edf1f6;
+  background: #fafbfd;
+}
+
+.android-publication-actions button {
+  min-height: 37px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 0 13px;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.android-publication-actions button:disabled {
+  cursor: not-allowed;
+  opacity: .5;
+}
+
+.android-publish-button {
+  border: 1px solid #4169e1;
+  color: #fff;
+  background: #4169e1;
+}
+
+.android-verify-button {
+  border: 1px solid #b9c9f8;
+  color: #3158ca;
+  background: #edf2ff;
+}
+
+.android-refresh-button {
+  border: 1px solid #dce4ee;
+  color: #526075;
+  background: #fff;
+}
+
+.android-publication-error {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 14px 16px 0;
+  padding: 11px 12px;
+  border: 1px solid #f2cccc;
+  border-radius: 8px;
+  color: #b53e3e;
+  background: #fff2f2;
+}
+
+.android-publication-error div {
+  min-width: 0;
+}
+
+.android-publication-error strong {
+  display: block;
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+
+.android-publication-error span {
+  display: block;
+  font-size: 9px;
+  line-height: 1.5;
+}
+
+.android-verification-result {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 16px 16px;
+  padding: 12px;
+  border: 1px solid #ccebd9;
+  border-radius: 9px;
+  color: #168250;
+  background: #edf9f2;
+}
+
+.android-verification-result > div {
+  min-width: 0;
+  flex: 1;
+}
+
+.android-verification-result strong,
+.android-verification-result span {
+  display: block;
+}
+
+.android-verification-result strong {
+  margin-bottom: 3px;
+  font-size: 10px;
+}
+
+.android-verification-result span {
+  overflow: hidden;
+  color: #3b7f61;
+  font-size: 9px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ============================================================
+   EXTENDED POLICY FIELDS
+============================================================ */
+
+.policy-setting-body select,
+.policy-setting-body input[type="text"] {
+  width: 100%;
+  min-height: 39px;
+  box-sizing: border-box;
+  padding: 0 11px;
+  border: 1px solid #dce4ee;
+  border-radius: 8px;
+  outline: none;
+  color: #334155;
+  background: #fff;
+  font: inherit;
+  font-weight: 500;
+}
+
+.policy-setting-body input:disabled,
+.policy-setting-body select:disabled {
+  cursor: not-allowed;
+  opacity: .55;
+  background: #f3f6f9;
+}
+
+.policy-spin {
+  animation:
+    policy-spin-animation
+    .8s linear infinite;
+}
+
+@keyframes policy-spin-animation {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (max-width: 1050px) {
+  .android-publication-grid {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 650px) {
+  .android-publication-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .android-publication-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .android-publication-actions {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .android-publication-actions button {
+    width: 100%;
+  }
+}

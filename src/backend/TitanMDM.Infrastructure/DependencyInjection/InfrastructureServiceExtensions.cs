@@ -26,6 +26,8 @@ using TitanMDM.Application.Policies;
 using TitanMDM.Infrastructure.Policies;
 using TitanMDM.Application.AndroidEnterprise;
 using TitanMDM.Infrastructure.Android;
+using TitanMDM.Application.Android.Policies;
+using TitanMDM.Infrastructure.Android.Policies;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
@@ -155,25 +157,42 @@ public static class InfrastructureServiceExtensions
     IPolicyService,
     PolicyService>();
 
-    services
+ services
     .AddOptions<AndroidManagementOptions>()
     .Bind(
         configuration.GetSection(
             AndroidManagementOptions.SectionName));
 
-    services.AddSingleton<
+services.AddSingleton<
     IGoogleAndroidAccessTokenProvider,
     GoogleAndroidAccessTokenProvider>();
 
-    services.AddHttpClient<AndroidManagementClient>();
+services.AddHttpClient<
+    AndroidManagementClient>();
 
-    services.AddScoped<
+// ============================================================
+// ANDROID ENTERPRISE
+// ============================================================
+
+services.AddScoped<
     IAndroidEnterpriseService,
     AndroidEnterpriseService>();
 
-    services.AddScoped<
+services.AddScoped<
     IAndroidDeviceSyncService,
     AndroidDeviceSyncService>();
+
+// ============================================================
+// ANDROID POLICY ENGINE
+// ============================================================
+
+services.AddScoped<
+    IAndroidPolicyCompiler,
+    AndroidPolicyCompiler>();
+
+services.AddScoped<
+    IAndroidPolicyPublisher,
+    AndroidPolicyPublisher>();
 
 services.AddScoped<TitanMdmSeeder>();
 
