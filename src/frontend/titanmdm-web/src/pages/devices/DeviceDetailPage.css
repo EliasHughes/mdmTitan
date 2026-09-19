@@ -442,17 +442,15 @@
 
 .device-row-clickable {
   cursor: pointer;
-}
-
-.device-row-clickable:hover {
-  background: #f7f9ff !important;
-}
-
-.device-row-clickable {
-  cursor: pointer;
   transition: background-color 0.15s ease;
 }
 
 .device-row-clickable:hover {
   background: #f7f9ff !important;
+}
+
+.device-detail-notice:not(.device-detail-notice--success):not(.device-detail-notice--error) {
+  color: #315edb;
+  background: #f4f7ff;
+  border: 1px solid #dce5ff;
 }
