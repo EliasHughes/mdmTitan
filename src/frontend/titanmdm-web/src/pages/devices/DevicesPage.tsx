@@ -2,12 +2,15 @@ import {
   Activity,
   Battery,
   CheckCircle2,
+  Clock3,
+  CloudCog,
   Laptop,
   MonitorSmartphone,
   RefreshCw,
   Search,
   ShieldAlert,
   Smartphone,
+  TriangleAlert,
   Wifi,
   WifiOff,
 } from 'lucide-react'
@@ -17,9 +20,15 @@ import {
   useMemo,
   useState,
 } from 'react'
-
-import { devicesApi  } from '../../api/devicesApi'
 import { useNavigate } from 'react-router-dom'
+
+import { androidEnterpriseApi } from '../../api/androidEnterpriseApi'
+import { devicesApi } from '../../api/devicesApi'
+
+import type {
+  AndroidDeviceInventorySummary,
+  AndroidDeviceSyncResult,
+} from '../../types/androidEnterprise'
 
 import type {
   DeviceListItem,
@@ -57,11 +66,12 @@ function getStatusIcon(status: DeviceStatus) {
   }
 }
 
-function formatLastSeen(
+function formatDateTime(
   value: string | null,
+  emptyText = 'Nunca',
 ): string {
   if (!value) {
-    return 'Sin comunicación'
+    return emptyText
   }
 
   const date = new Date(value)
@@ -73,50 +83,154 @@ function formatLastSeen(
   return date.toLocaleString()
 }
 
+function getErrorMessage(
+  error: unknown,
+  fallback: string,
+): string {
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    'response' in error
+  ) {
+    const response = (
+      error as {
+        response?: {
+          data?: {
+            message?: string
+          }
+        }
+      }
+    ).response
+
+    if (
+      response?.data?.message &&
+      typeof response.data.message === 'string'
+    ) {
+      return response.data.message
+    }
+  }
+
+  if (error instanceof Error && error.message) {
+    return error.message
+  }
+
+  return fallback
+}
+
 export function DevicesPage() {
+  const navigate = useNavigate()
+
   const [devices, setDevices] = useState<
     DeviceListItem[]
   >([])
-  
-  const navigate = useNavigate()
 
   const [total, setTotal] = useState(0)
 
   const [search, setSearch] = useState('')
-
-  const [platform, setPlatform] =
-    useState('')
-
-  const [status, setStatus] =
-    useState('')
+  const [platform, setPlatform] = useState('')
+  const [status, setStatus] = useState('')
 
   const [isLoading, setIsLoading] =
     useState(true)
 
+  const [isSyncingAndroid, setIsSyncingAndroid] =
+    useState(false)
+
   const [error, setError] =
     useState<string | null>(null)
+
+  const [androidError, setAndroidError] =
+    useState<string | null>(null)
+
+  const [androidSummary, setAndroidSummary] =
+    useState<AndroidDeviceInventorySummary | null>(
+      null,
+    )
+
+  const [lastSyncResult, setLastSyncResult] =
+    useState<AndroidDeviceSyncResult | null>(
+      null,
+    )
 
   const loadDevices = useCallback(async () => {
     try {
       setIsLoading(true)
       setError(null)
 
-      const response = await devicesApi.getDevices({
-  search,
-  platform,
-  status,
-    })
+      const response =
+        await devicesApi.getDevices({
+          search,
+          platform,
+          status,
+        })
 
-setDevices(response.items)
-setTotal(response.totalCount)
-    } catch {
+      setDevices(response.items)
+      setTotal(response.totalCount)
+    } catch (loadError) {
       setError(
-        'No fue posible obtener el inventario de dispositivos.',
+        getErrorMessage(
+          loadError,
+          'No fue posible obtener el inventario de dispositivos.',
+        ),
       )
     } finally {
       setIsLoading(false)
     }
   }, [search, platform, status])
+
+  const loadAndroidSummary =
+    useCallback(async () => {
+      try {
+        const summary =
+          await androidEnterpriseApi.getDeviceSummary()
+
+        setAndroidSummary(summary)
+        setAndroidError(null)
+      } catch (summaryError) {
+        setAndroidError(
+          getErrorMessage(
+            summaryError,
+            'No fue posible consultar el resumen de Android Enterprise.',
+          ),
+        )
+      }
+    }, [])
+
+  const synchronizeAndroid =
+    useCallback(async () => {
+      if (isSyncingAndroid) {
+        return
+      }
+
+      try {
+        setIsSyncingAndroid(true)
+        setAndroidError(null)
+        setLastSyncResult(null)
+
+        const result =
+          await androidEnterpriseApi.synchronizeDevices()
+
+        setLastSyncResult(result)
+
+        await Promise.all([
+          loadAndroidSummary(),
+          loadDevices(),
+        ])
+      } catch (syncError) {
+        setAndroidError(
+          getErrorMessage(
+            syncError,
+            'No fue posible sincronizar Android Enterprise.',
+          ),
+        )
+      } finally {
+        setIsSyncingAndroid(false)
+      }
+    }, [
+      isSyncingAndroid,
+      loadAndroidSummary,
+      loadDevices,
+    ])
 
   useEffect(() => {
     const timeout = window.setTimeout(() => {
@@ -127,6 +241,10 @@ setTotal(response.totalCount)
       window.clearTimeout(timeout)
     }
   }, [loadDevices])
+
+  useEffect(() => {
+    void loadAndroidSummary()
+  }, [loadAndroidSummary])
 
   useEffect(() => {
     document.title = 'Dispositivos | TitanMDM'
@@ -173,23 +291,54 @@ setTotal(response.totalCount)
           </p>
         </div>
 
-        <button
-          type="button"
-          className="devices-refresh-button"
-          onClick={() => void loadDevices()}
-          disabled={isLoading}
-        >
-          <RefreshCw
-            size={17}
-            className={
-              isLoading
-                ? 'devices-icon-spinning'
-                : ''
+        <div className="devices-heading__actions">
+          <button
+            type="button"
+            className="devices-refresh-button"
+            onClick={() => {
+              void Promise.all([
+                loadDevices(),
+                loadAndroidSummary(),
+              ])
+            }}
+            disabled={
+              isLoading || isSyncingAndroid
             }
-          />
+          >
+            <RefreshCw
+              size={17}
+              className={
+                isLoading
+                  ? 'devices-icon-spinning'
+                  : ''
+              }
+            />
 
-          Actualizar
-        </button>
+            Actualizar
+          </button>
+
+          <button
+            type="button"
+            className="devices-android-sync-button"
+            onClick={() =>
+              void synchronizeAndroid()
+            }
+            disabled={isSyncingAndroid}
+          >
+            <CloudCog
+              size={17}
+              className={
+                isSyncingAndroid
+                  ? 'devices-icon-spinning'
+                  : ''
+              }
+            />
+
+            {isSyncingAndroid
+              ? 'Sincronizando...'
+              : 'Sincronizar Android'}
+          </button>
+        </div>
       </div>
 
       <section className="devices-summary">
@@ -201,7 +350,9 @@ setTotal(response.totalCount)
           <div>
             <span>Total</span>
             <strong>{total}</strong>
-            <small>Dispositivos administrados</small>
+            <small>
+              Dispositivos administrados
+            </small>
           </div>
         </article>
 
@@ -240,6 +391,159 @@ setTotal(response.totalCount)
             <small>Cumplimiento correcto</small>
           </div>
         </article>
+      </section>
+
+      <section className="android-inventory-panel">
+        <div className="android-inventory-panel__header">
+          <div className="android-inventory-panel__identity">
+            <div className="android-inventory-panel__logo">
+              <Smartphone size={22} />
+            </div>
+
+            <div>
+              <span>
+                ANDROID ENTERPRISE
+              </span>
+
+              <h2>
+                Flota administrada
+              </h2>
+
+              <p>
+                Inventario sincronizado directamente
+                con Android Management API.
+              </p>
+            </div>
+          </div>
+
+          <div className="android-last-sync">
+            <Clock3 size={15} />
+
+            <div>
+              <span>
+                Última sincronización
+              </span>
+
+              <strong>
+                {formatDateTime(
+                  androidSummary
+                    ?.lastSynchronizationUtc ??
+                    null,
+                )}
+              </strong>
+            </div>
+          </div>
+        </div>
+
+        <div className="android-inventory-metrics">
+          <div>
+            <span>Inventario Android</span>
+            <strong>
+              {androidSummary?.total ?? 0}
+            </strong>
+          </div>
+
+          <div>
+            <span>Administrados</span>
+            <strong>
+              {androidSummary?.managed ?? 0}
+            </strong>
+          </div>
+
+          <div>
+            <span>Totalmente administrados</span>
+            <strong>
+              {androidSummary?.fullyManaged ?? 0}
+            </strong>
+          </div>
+
+          <div>
+            <span>Kiosk / dedicados</span>
+            <strong>
+              {androidSummary?.dedicated ?? 0}
+            </strong>
+          </div>
+
+          <div>
+            <span>Perfil de trabajo</span>
+            <strong>
+              {androidSummary?.workProfile ?? 0}
+            </strong>
+          </div>
+
+          <div>
+            <span>Ausentes en Google</span>
+            <strong>
+              {androidSummary?.missingInGoogle ?? 0}
+            </strong>
+          </div>
+        </div>
+
+        {lastSyncResult && (
+          <div
+            className={
+              lastSyncResult.failed > 0
+                ? 'android-sync-result android-sync-result--warning'
+                : 'android-sync-result android-sync-result--success'
+            }
+          >
+            {lastSyncResult.failed > 0 ? (
+              <TriangleAlert size={19} />
+            ) : (
+              <CheckCircle2 size={19} />
+            )}
+
+            <div>
+              <strong>
+                Sincronización finalizada
+              </strong>
+
+              <span>
+                Google reportó{' '}
+                {lastSyncResult.receivedFromGoogle}{' '}
+                dispositivo
+                {lastSyncResult.receivedFromGoogle ===
+                1
+                  ? ''
+                  : 's'}
+                . Nuevos: {lastSyncResult.created}.
+                Actualizados:{' '}
+                {lastSyncResult.updated}. Ausentes:{' '}
+                {lastSyncResult.markedMissing}.
+                Errores: {lastSyncResult.failed}.
+              </span>
+
+              {lastSyncResult.errors.length >
+                0 && (
+                <ul>
+                  {lastSyncResult.errors.map(
+                    (message, index) => (
+                      <li
+                        key={`${index}-${message}`}
+                      >
+                        {message}
+                      </li>
+                    ),
+                  )}
+                </ul>
+              )}
+            </div>
+          </div>
+        )}
+
+        {androidError && (
+          <div className="android-sync-result android-sync-result--error">
+            <ShieldAlert size={19} />
+
+            <div>
+              <strong>
+                Android Enterprise
+              </strong>
+
+              <span>{androidError}</span>
+            </div>
+          </div>
+        )}
       </section>
 
       <section className="devices-panel">
@@ -345,7 +649,8 @@ setTotal(response.totalCount)
             </thead>
 
             <tbody>
-              {isLoading && devices.length === 0 ? (
+              {isLoading &&
+              devices.length === 0 ? (
                 <tr>
                   <td
                     colSpan={7}
@@ -372,21 +677,24 @@ setTotal(response.totalCount)
                     </strong>
 
                     <span>
-                      Cuando inscribamos el primer
-                      dispositivo aparecerá aquí.
+                      Los dispositivos Android
+                      Enterprise y Windows aparecerán
+                      aquí.
                     </span>
                   </td>
                 </tr>
               ) : (
                 devices.map((device) => (
                   <tr
-                        key={device.id}
-                        className="device-row-clickable"
-                        onClick={() =>
-                          navigate(`/devices/${device.id}`)
-                        }
-                      >
-                        <td>
+                    key={device.id}
+                    className="device-row-clickable"
+                    onClick={() =>
+                      navigate(
+                        `/devices/${device.id}`,
+                      )
+                    }
+                  >
+                    <td>
                       <div className="device-identity">
                         <div className="device-platform-icon">
                           {getPlatformIcon(
@@ -410,7 +718,8 @@ setTotal(response.totalCount)
                           </span>
 
                           <small>
-                            SN: {device.serialNumber}
+                            SN:{' '}
+                            {device.serialNumber}
                           </small>
                         </div>
                       </div>
@@ -469,7 +778,8 @@ setTotal(response.totalCount)
                         <Battery size={16} />
 
                         <span>
-                          {device.batteryLevel !== null
+                          {device.batteryLevel !==
+                          null
                             ? `${device.batteryLevel}%`
                             : 'N/D'}
                         </span>
@@ -477,8 +787,9 @@ setTotal(response.totalCount)
                     </td>
 
                     <td>
-                      {formatLastSeen(
+                      {formatDateTime(
                         device.lastSeenAtUtc,
+                        'Sin comunicación',
                       )}
                     </td>
                   </tr>
