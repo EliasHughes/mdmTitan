@@ -1,6 +1,7 @@
 import apiClient from './apiClient'
 
 import type {
+  AndroidDeviceDetails,
   DeviceDetails,
   DeviceListResult,
 } from '../types/device'
@@ -25,14 +26,19 @@ export const devicesApi = {
           params: {
             search:
               parameters.search || undefined,
+
             platform:
               parameters.platform || undefined,
+
             status:
               parameters.status || undefined,
+
             compliance:
               parameters.compliance || undefined,
+
             page:
               parameters.page ?? 1,
+
             pageSize:
               parameters.pageSize ?? 25,
           },
@@ -48,6 +54,17 @@ export const devicesApi = {
     const response =
       await apiClient.get<DeviceDetails>(
         `/devices/${deviceId}`,
+      )
+
+    return response.data
+  },
+
+  async getAndroidDeviceDetails(
+    deviceId: string,
+  ): Promise<AndroidDeviceDetails> {
+    const response =
+      await apiClient.get<AndroidDeviceDetails>(
+        `/devices/${deviceId}/android`,
       )
 
     return response.data

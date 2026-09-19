@@ -73,3 +73,46 @@ export interface DeviceListResult {
   pageSize: number
   totalPages: number
 }
+
+export interface AndroidDeviceDetails {
+  androidDeviceId: string
+  deviceId: string
+
+  googleDeviceName: string
+  googleDeviceId: string | null
+
+  managementMode: string | null
+  ownership: string | null
+  state: string | null
+
+  appliedPolicyName: string | null
+  appliedPolicyVersion: number | null
+  appliedPolicyState: string | null
+
+  enrollmentTokenName: string | null
+  userName: string | null
+
+  brand: string | null
+  hardware: string | null
+  deviceBasebandVersion: string | null
+  bootloaderVersion: string | null
+
+  securityPatchLevel: string | null
+  apiLevel: number | null
+  buildNumber: string | null
+  kernelVersion: string | null
+
+  androidDevicePolicyVersion: string | null
+  androidDevicePolicyVersionCode: string | null
+
+  encryptionStatus: string | null
+  securityPosture: string | null
+
+  enrollmentTimeUtc: string | null
+  lastStatusReportTimeUtc: string | null
+  lastPolicySyncTimeUtc: string | null
+  lastSynchronizedAtUtc: string
+
+  isDeletedInGoogle: boolean
+  deletedInGoogleAtUtc: string | null
+}

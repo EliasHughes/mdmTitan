@@ -14,15 +14,19 @@ import {
   RefreshCw,
   RotateCw,
   ShieldCheck,
+  Smartphone,
   Terminal,
+  User,
   Wifi,
   XCircle,
 } from 'lucide-react'
+
 import {
   useCallback,
   useEffect,
   useState,
 } from 'react'
+
 import {
   useNavigate,
   useParams,
@@ -32,16 +36,52 @@ import {
   deviceCommandsApi,
   type DeviceCommand,
 } from '../../api/deviceCommandsApi'
-import { devicesApi } from '../../api/devicesApi'
-import type { DeviceDetails } from '../../types/device'
+
+import {
+  devicesApi,
+} from '../../api/devicesApi'
+
+import type {
+  AndroidDeviceDetails,
+  DeviceDetails,
+} from '../../types/device'
 
 import './DeviceDetailPage.css'
 
 type TabName =
   | 'overview'
+  | 'enterprise'
   | 'hardware'
+  | 'system'
+  | 'security'
+  | 'policy'
+  | 'sync'
   | 'network'
   | 'commands'
+
+interface FieldProps {
+  label: string
+  value: string | number | null | undefined
+}
+
+function DetailField({
+  label,
+  value,
+}: FieldProps) {
+  const displayValue =
+    value === null ||
+    value === undefined ||
+    value === ''
+      ? 'N/D'
+      : String(value)
+
+  return (
+    <div>
+      <span>{label}</span>
+      <strong>{displayValue}</strong>
+    </div>
+  )
+}
 
 function formatDate(
   value: string | null | undefined,
@@ -73,6 +113,10 @@ function getBatteryText(
     : `${batteryLevel}%`
 }
 
+function getYesNo(value: boolean): string {
+  return value ? 'Sí' : 'No'
+}
+
 export function DeviceDetailPage() {
   const { deviceId } = useParams<{
     deviceId: string
@@ -82,6 +126,9 @@ export function DeviceDetailPage() {
 
   const [device, setDevice] =
     useState<DeviceDetails | null>(null)
+
+  const [androidDetails, setAndroidDetails] =
+    useState<AndroidDeviceDetails | null>(null)
 
   const [commands, setCommands] =
     useState<DeviceCommand[]>([])
@@ -101,13 +148,18 @@ export function DeviceDetailPage() {
   const [message, setMessage] =
     useState<string | null>(null)
 
+  const isAndroid =
+    device?.platform === 'Android'
+
   const loadDevice = useCallback(
     async (): Promise<void> => {
       if (!deviceId) {
         setLoading(false)
+
         setError(
           'No se recibió un identificador de dispositivo válido.',
         )
+
         return
       }
 
@@ -120,6 +172,7 @@ export function DeviceDetailPage() {
           commandResponse,
         ] = await Promise.all([
           devicesApi.getDeviceById(deviceId),
+
           deviceCommandsApi.getForDevice(
             deviceId,
           ),
@@ -127,6 +180,20 @@ export function DeviceDetailPage() {
 
         setDevice(deviceResponse)
         setCommands(commandResponse.items)
+
+        if (
+          deviceResponse.platform ===
+          'Android'
+        ) {
+          const androidResponse =
+            await devicesApi.getAndroidDeviceDetails(
+              deviceId,
+            )
+
+          setAndroidDetails(androidResponse)
+        } else {
+          setAndroidDetails(null)
+        }
       } catch (loadError) {
         console.error(
           'Error cargando dispositivo:',
@@ -173,6 +240,15 @@ export function DeviceDetailPage() {
       setError(
         'No existe un identificador válido para enviar el comando.',
       )
+
+      return
+    }
+
+    if (isAndroid) {
+      setError(
+        'Los comandos Android se habilitarán mediante Android Management API en la fase A7.',
+      )
+
       return
     }
 
@@ -274,7 +350,9 @@ export function DeviceDetailPage() {
 
         <button
           type="button"
-          onClick={() => navigate('/devices')}
+          onClick={() =>
+            navigate('/devices')
+          }
         >
           Volver a dispositivos
         </button>
@@ -287,7 +365,9 @@ export function DeviceDetailPage() {
       <button
         type="button"
         className="device-detail-back"
-        onClick={() => navigate('/devices')}
+        onClick={() =>
+          navigate('/devices')
+        }
       >
         <ArrowLeft size={16} />
         Dispositivos
@@ -296,7 +376,11 @@ export function DeviceDetailPage() {
       <header className="device-detail-header">
         <div className="device-detail-identity">
           <div className="device-detail-device-icon">
-            <Laptop size={27} />
+            {isAndroid ? (
+              <Smartphone size={27} />
+            ) : (
+              <Laptop size={27} />
+            )}
           </div>
 
           <div>
@@ -345,38 +429,46 @@ export function DeviceDetailPage() {
             Actualizar
           </button>
 
-          <button
-            type="button"
-            className="device-action-primary"
-            disabled={sendingCommand !== null}
-            onClick={() => {
-              void sendCommand('PING')
-            }}
-          >
-            <Play size={16} />
+          {!isAndroid && (
+            <>
+              <button
+                type="button"
+                className="device-action-primary"
+                disabled={
+                  sendingCommand !== null
+                }
+                onClick={() => {
+                  void sendCommand('PING')
+                }}
+              >
+                <Play size={16} />
 
-            {sendingCommand === 'PING'
-              ? 'Enviando...'
-              : 'PING'}
-          </button>
+                {sendingCommand === 'PING'
+                  ? 'Enviando...'
+                  : 'PING'}
+              </button>
 
-          <button
-            type="button"
-            className="device-action-primary"
-            disabled={sendingCommand !== null}
-            onClick={() => {
-              void sendCommand(
-                'DEVICE_INFO',
-              )
-            }}
-          >
-            <Database size={16} />
+              <button
+                type="button"
+                className="device-action-primary"
+                disabled={
+                  sendingCommand !== null
+                }
+                onClick={() => {
+                  void sendCommand(
+                    'DEVICE_INFO',
+                  )
+                }}
+              >
+                <Database size={16} />
 
-            {sendingCommand ===
-            'DEVICE_INFO'
-              ? 'Solicitando...'
-              : 'DEVICE INFO'}
-          </button>
+                {sendingCommand ===
+                'DEVICE_INFO'
+                  ? 'Solicitando...'
+                  : 'DEVICE INFO'}
+              </button>
+            </>
+          )}
         </div>
       </header>
 
@@ -400,7 +492,9 @@ export function DeviceDetailPage() {
 
           <div>
             <span>Estado</span>
-            <strong>{device.status}</strong>
+            <strong>
+              {device.status}
+            </strong>
           </div>
         </article>
 
@@ -461,6 +555,23 @@ export function DeviceDetailPage() {
           Resumen
         </button>
 
+        {isAndroid && (
+          <button
+            type="button"
+            className={
+              activeTab === 'enterprise'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setActiveTab('enterprise')
+            }
+          >
+            <Smartphone size={16} />
+            Android Enterprise
+          </button>
+        )}
+
         <button
           type="button"
           className={
@@ -475,6 +586,70 @@ export function DeviceDetailPage() {
           <Cpu size={16} />
           Hardware
         </button>
+
+        {isAndroid && (
+          <>
+            <button
+              type="button"
+              className={
+                activeTab === 'system'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setActiveTab('system')
+              }
+            >
+              <Database size={16} />
+              Sistema
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === 'security'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setActiveTab('security')
+              }
+            >
+              <ShieldCheck size={16} />
+              Seguridad
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === 'policy'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setActiveTab('policy')
+              }
+            >
+              <CheckCircle2 size={16} />
+              Política
+            </button>
+
+            <button
+              type="button"
+              className={
+                activeTab === 'sync'
+                  ? 'active'
+                  : ''
+              }
+              onClick={() =>
+                setActiveTab('sync')
+              }
+            >
+              <RefreshCw size={16} />
+              Sincronización
+            </button>
+          </>
+        )}
 
         <button
           type="button"
@@ -512,110 +687,192 @@ export function DeviceDetailPage() {
         <section className="device-detail-grid">
           <article className="device-detail-card">
             <header>
+              <Info size={18} />
               <h2>
                 Información general
               </h2>
             </header>
 
             <div className="device-detail-fields">
-              <div>
-                <span>Nombre</span>
-                <strong>
-                  {device.deviceName}
-                </strong>
-              </div>
+              <DetailField
+                label="Nombre"
+                value={device.deviceName}
+              />
 
-              <div>
-                <span>Plataforma</span>
-                <strong>
-                  {device.platform}
-                </strong>
-              </div>
+              <DetailField
+                label="Plataforma"
+                value={device.platform}
+              />
 
-              <div>
-                <span>
-                  Sistema operativo
-                </span>
-                <strong>
-                  {device.operatingSystem ??
-                    'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Sistema operativo"
+                value={
+                  device.operatingSystem
+                }
+              />
 
-              <div>
-                <span>
-                  Versión del SO
-                </span>
-                <strong>
-                  {device.operatingSystemVersion ??
-                    'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Versión del SO"
+                value={
+                  device.operatingSystemVersion
+                }
+              />
 
-              <div>
-                <span>
-                  Versión del agente
-                </span>
-                <strong>
-                  {device.agentVersion ??
-                    'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Versión del agente"
+                value={
+                  device.agentVersion
+                }
+              />
 
-              <div>
-                <span>Administrado</span>
-                <strong>
-                  {device.isManaged
-                    ? 'Sí'
-                    : 'No'}
-                </strong>
-              </div>
+              <DetailField
+                label="Administrado"
+                value={getYesNo(
+                  device.isManaged,
+                )}
+              />
             </div>
           </article>
 
           <article className="device-detail-card">
             <header>
+              <User size={18} />
               <h2>Asignación</h2>
             </header>
 
             <div className="device-detail-fields">
-              <div>
-                <span>Usuario</span>
-                <strong>
-                  {device.assignedUser ??
-                    'Sin asignar'}
-                </strong>
-              </div>
+              <DetailField
+                label="Usuario"
+                value={
+                  device.assignedUser ??
+                  'Sin asignar'
+                }
+              />
 
-              <div>
-                <span>Departamento</span>
-                <strong>
-                  {device.department ??
-                    'Sin departamento'}
-                </strong>
-              </div>
+              <DetailField
+                label="Departamento"
+                value={
+                  device.department ??
+                  'Sin departamento'
+                }
+              />
 
-              <div>
-                <span>Inscrito</span>
-                <strong>
-                  {formatDate(
-                    device.enrolledAtUtc,
-                  )}
-                </strong>
-              </div>
+              <DetailField
+                label="Inscrito"
+                value={formatDate(
+                  device.enrolledAtUtc,
+                )}
+              />
 
-              <div>
-                <span>Actualizado</span>
-                <strong>
-                  {formatDate(
-                    device.updatedAtUtc,
-                  )}
-                </strong>
-              </div>
+              <DetailField
+                label="Actualizado"
+                value={formatDate(
+                  device.updatedAtUtc,
+                )}
+              />
+
+              {isAndroid &&
+                androidDetails && (
+                  <>
+                    <DetailField
+                      label="Modo de administración"
+                      value={
+                        androidDetails.managementMode
+                      }
+                    />
+
+                    <DetailField
+                      label="Propiedad"
+                      value={
+                        androidDetails.ownership
+                      }
+                    />
+                  </>
+                )}
             </div>
           </article>
         </section>
       )}
+
+      {activeTab === 'enterprise' &&
+        isAndroid && (
+          <section className="device-detail-grid">
+            <article className="device-detail-card device-detail-card--wide">
+              <header>
+                <Smartphone size={18} />
+                <h2>
+                  Android Enterprise
+                </h2>
+              </header>
+
+              {androidDetails ? (
+                <div className="device-detail-fields">
+                  <DetailField
+                    label="Google Device ID"
+                    value={
+                      androidDetails.googleDeviceId
+                    }
+                  />
+
+                  <DetailField
+                    label="Recurso de Google"
+                    value={
+                      androidDetails.googleDeviceName
+                    }
+                  />
+
+                  <DetailField
+                    label="Modo de administración"
+                    value={
+                      androidDetails.managementMode
+                    }
+                  />
+
+                  <DetailField
+                    label="Propiedad"
+                    value={
+                      androidDetails.ownership
+                    }
+                  />
+
+                  <DetailField
+                    label="Estado AMAPI"
+                    value={
+                      androidDetails.state
+                    }
+                  />
+
+                  <DetailField
+                    label="Usuario"
+                    value={
+                      androidDetails.userName
+                    }
+                  />
+
+                  <DetailField
+                    label="Enrollment Token"
+                    value={
+                      androidDetails.enrollmentTokenName
+                    }
+                  />
+
+                  <DetailField
+                    label="Fecha de inscripción"
+                    value={formatDate(
+                      androidDetails.enrollmentTimeUtc,
+                    )}
+                  />
+                </div>
+              ) : (
+                <p>
+                  No existe información
+                  Android Enterprise para
+                  este dispositivo.
+                </p>
+              )}
+            </article>
+          </section>
+        )}
 
       {activeTab === 'hardware' && (
         <section className="device-detail-grid">
@@ -628,49 +885,319 @@ export function DeviceDetailPage() {
             </header>
 
             <div className="device-detail-fields">
-              <div>
-                <span>Fabricante</span>
-                <strong>
-                  {device.manufacturer ??
-                    'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Fabricante"
+                value={
+                  device.manufacturer
+                }
+              />
 
-              <div>
-                <span>Modelo</span>
-                <strong>
-                  {device.model ?? 'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Modelo"
+                value={device.model}
+              />
 
-              <div>
-                <span>
-                  Número de serie
-                </span>
-                <strong>
-                  {device.serialNumber}
-                </strong>
-              </div>
+              <DetailField
+                label="Número de serie"
+                value={
+                  device.serialNumber
+                }
+              />
 
-              <div>
-                <span>IMEI</span>
-                <strong>
-                  {device.imei ?? 'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="IMEI"
+                value={device.imei}
+              />
 
-              <div>
-                <span>Batería</span>
-                <strong>
-                  {getBatteryText(
-                    device.batteryLevel,
-                  )}
-                </strong>
-              </div>
+              <DetailField
+                label="Batería"
+                value={getBatteryText(
+                  device.batteryLevel,
+                )}
+              />
+
+              {isAndroid &&
+                androidDetails && (
+                  <>
+                    <DetailField
+                      label="Marca"
+                      value={
+                        androidDetails.brand
+                      }
+                    />
+
+                    <DetailField
+                      label="Hardware"
+                      value={
+                        androidDetails.hardware
+                      }
+                    />
+
+                    <DetailField
+                      label="Baseband"
+                      value={
+                        androidDetails.deviceBasebandVersion
+                      }
+                    />
+
+                    <DetailField
+                      label="Bootloader"
+                      value={
+                        androidDetails.bootloaderVersion
+                      }
+                    />
+                  </>
+                )}
             </div>
           </article>
         </section>
       )}
+
+      {activeTab === 'system' &&
+        isAndroid && (
+          <section className="device-detail-grid">
+            <article className="device-detail-card device-detail-card--wide">
+              <header>
+                <Database size={18} />
+                <h2>
+                  Sistema Android
+                </h2>
+              </header>
+
+              {androidDetails ? (
+                <div className="device-detail-fields">
+                  <DetailField
+                    label="Versión Android"
+                    value={
+                      device.operatingSystemVersion
+                    }
+                  />
+
+                  <DetailField
+                    label="API Level"
+                    value={
+                      androidDetails.apiLevel
+                    }
+                  />
+
+                  <DetailField
+                    label="Build"
+                    value={
+                      androidDetails.buildNumber
+                    }
+                  />
+
+                  <DetailField
+                    label="Kernel"
+                    value={
+                      androidDetails.kernelVersion
+                    }
+                  />
+
+                  <DetailField
+                    label="Security Patch"
+                    value={
+                      androidDetails.securityPatchLevel
+                    }
+                  />
+
+                  <DetailField
+                    label="Android Device Policy"
+                    value={
+                      androidDetails.androidDevicePolicyVersion
+                    }
+                  />
+
+                  <DetailField
+                    label="ADP Version Code"
+                    value={
+                      androidDetails.androidDevicePolicyVersionCode
+                    }
+                  />
+                </div>
+              ) : (
+                <p>
+                  Información del sistema
+                  Android no disponible.
+                </p>
+              )}
+            </article>
+          </section>
+        )}
+
+      {activeTab === 'security' &&
+        isAndroid && (
+          <section className="device-detail-grid">
+            <article className="device-detail-card device-detail-card--wide">
+              <header>
+                <ShieldCheck size={18} />
+                <h2>
+                  Seguridad Android
+                </h2>
+              </header>
+
+              {androidDetails ? (
+                <div className="device-detail-fields">
+                  <DetailField
+                    label="Security Posture"
+                    value={
+                      androidDetails.securityPosture
+                    }
+                  />
+
+                  <DetailField
+                    label="Cifrado"
+                    value={
+                      androidDetails.encryptionStatus
+                    }
+                  />
+
+                  <DetailField
+                    label="Cumplimiento"
+                    value={
+                      device.complianceStatus
+                    }
+                  />
+
+                  <DetailField
+                    label="Administrado"
+                    value={getYesNo(
+                      device.isManaged,
+                    )}
+                  />
+
+                  <DetailField
+                    label="Security Patch"
+                    value={
+                      androidDetails.securityPatchLevel
+                    }
+                  />
+
+                  <DetailField
+                    label="Estado AMAPI"
+                    value={
+                      androidDetails.state
+                    }
+                  />
+                </div>
+              ) : (
+                <p>
+                  Información de seguridad
+                  Android no disponible.
+                </p>
+              )}
+            </article>
+          </section>
+        )}
+
+      {activeTab === 'policy' &&
+        isAndroid && (
+          <section className="device-detail-grid">
+            <article className="device-detail-card device-detail-card--wide">
+              <header>
+                <CheckCircle2 size={18} />
+                <h2>
+                  Política Android
+                </h2>
+              </header>
+
+              {androidDetails ? (
+                <div className="device-detail-fields">
+                  <DetailField
+                    label="Política aplicada"
+                    value={
+                      androidDetails.appliedPolicyName
+                    }
+                  />
+
+                  <DetailField
+                    label="Versión"
+                    value={
+                      androidDetails.appliedPolicyVersion
+                    }
+                  />
+
+                  <DetailField
+                    label="Estado de aplicación"
+                    value={
+                      androidDetails.appliedPolicyState
+                    }
+                  />
+
+                  <DetailField
+                    label="Última sincronización de política"
+                    value={formatDate(
+                      androidDetails.lastPolicySyncTimeUtc,
+                    )}
+                  />
+                </div>
+              ) : (
+                <p>
+                  No existe información de
+                  política Android disponible.
+                </p>
+              )}
+            </article>
+          </section>
+        )}
+
+      {activeTab === 'sync' &&
+        isAndroid && (
+          <section className="device-detail-grid">
+            <article className="device-detail-card device-detail-card--wide">
+              <header>
+                <RefreshCw size={18} />
+                <h2>
+                  Sincronización
+                </h2>
+              </header>
+
+              {androidDetails ? (
+                <div className="device-detail-fields">
+                  <DetailField
+                    label="Último reporte de estado"
+                    value={formatDate(
+                      androidDetails.lastStatusReportTimeUtc,
+                    )}
+                  />
+
+                  <DetailField
+                    label="Última sincronización TitanMDM"
+                    value={formatDate(
+                      androidDetails.lastSynchronizedAtUtc,
+                    )}
+                  />
+
+                  <DetailField
+                    label="Última sincronización de política"
+                    value={formatDate(
+                      androidDetails.lastPolicySyncTimeUtc,
+                    )}
+                  />
+
+                  <DetailField
+                    label="Eliminado en Google"
+                    value={getYesNo(
+                      androidDetails.isDeletedInGoogle,
+                    )}
+                  />
+
+                  <DetailField
+                    label="Fecha eliminación Google"
+                    value={formatDate(
+                      androidDetails.deletedInGoogleAtUtc,
+                    )}
+                  />
+                </div>
+              ) : (
+                <p>
+                  Información de sincronización
+                  Android no disponible.
+                </p>
+              )}
+            </article>
+          </section>
+        )}
 
       {activeTab === 'network' && (
         <section className="device-detail-grid">
@@ -683,25 +1210,15 @@ export function DeviceDetailPage() {
             </header>
 
             <div className="device-detail-fields">
-              <div>
-                <span>
-                  Dirección IP
-                </span>
-                <strong>
-                  {device.ipAddress ??
-                    'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Dirección IP"
+                value={device.ipAddress}
+              />
 
-              <div>
-                <span>
-                  Dirección MAC
-                </span>
-                <strong>
-                  {device.macAddress ??
-                    'N/D'}
-                </strong>
-              </div>
+              <DetailField
+                label="Dirección MAC"
+                value={device.macAddress}
+              />
             </div>
           </article>
         </section>
@@ -732,6 +1249,20 @@ export function DeviceDetailPage() {
               Actualizar
             </button>
           </header>
+
+          {isAndroid && (
+            <div className="device-detail-notice">
+              <Info size={17} />
+
+              <span>
+                El historial está preparado
+                para Android. Los comandos
+                remotos mediante Android
+                Management API se habilitarán
+                en A7.
+              </span>
+            </div>
+          )}
 
           <div className="device-command-table-wrapper">
             <table className="device-command-table">
@@ -764,7 +1295,9 @@ export function DeviceDetailPage() {
                       <tr key={command.id}>
                         <td>
                           <strong>
-                            {command.commandType}
+                            {
+                              command.commandType
+                            }
                           </strong>
                         </td>
 
