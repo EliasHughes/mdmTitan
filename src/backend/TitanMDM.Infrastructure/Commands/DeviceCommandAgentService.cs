@@ -24,6 +24,9 @@ public sealed class DeviceCommandAgentService
     private readonly ISecurityPostureService
         _securityPostureService;
 
+    private readonly IDeviceLocationService
+    _deviceLocationService;
+
     public DeviceCommandAgentService(
     TitanMdmDbContext dbContext,
     IApplicationInventoryService applicationInventoryService,
