@@ -34,7 +34,8 @@ using TitanMDM.Infrastructure.Enrollment;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Seed;
 using TitanMDM.Infrastructure.Policies;
-
+using TitanMDM.Application.Security;
+using TitanMDM.Infrastructure.Security;
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceExtensions
@@ -256,6 +257,14 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IAndroidPolicyAssignmentService,
             AndroidPolicyAssignmentService>();
+
+        // ============================================================
+        // SECURITY / COMPLIANCE
+        // ============================================================
+
+        services.AddScoped<
+            ISecurityPostureService,
+            SecurityPostureService>();
 
         // ============================================================
         // DATABASE SEED

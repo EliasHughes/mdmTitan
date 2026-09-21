@@ -80,6 +80,10 @@ public sealed class TitanMdmDbContext : DbContext
         AndroidDevices =>
             Set<AndroidDevice>();
 
+    public DbSet<DeviceSecurityPosture>
+    DeviceSecurityPostures =>
+        Set<DeviceSecurityPosture>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
