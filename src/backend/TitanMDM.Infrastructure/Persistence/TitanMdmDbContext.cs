@@ -84,6 +84,13 @@ public sealed class TitanMdmDbContext : DbContext
     DeviceSecurityPostures =>
         Set<DeviceSecurityPosture>();
 
+    public DbSet<DeviceGroup> DeviceGroups =>
+        Set<DeviceGroup>();
+
+    public DbSet<DeviceGroupMember>
+        DeviceGroupMembers =>
+        Set<DeviceGroupMember>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
