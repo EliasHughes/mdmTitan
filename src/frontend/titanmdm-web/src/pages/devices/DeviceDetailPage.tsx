@@ -151,64 +151,115 @@ export function DeviceDetailPage() {
   const isAndroid =
     device?.platform === 'Android'
 
-  const loadDevice = useCallback(
-    async (): Promise<void> => {
-      if (!deviceId) {
-        setLoading(false)
+const loadDevice = useCallback(
+  async (): Promise<void> => {
+    if (!deviceId) {
+      setLoading(false)
 
-        setError(
-          'No se recibió un identificador de dispositivo válido.',
+      setError(
+        'No se recibió un identificador de dispositivo válido.',
+      )
+
+      return
+    }
+
+    try {
+      setLoading(true)
+      setError(null)
+
+      /*
+       * ======================================================
+       * CORE DEVICE
+       * ======================================================
+       *
+       * La información principal del dispositivo no depende
+       * de Android Enterprise.
+       */
+      const deviceResponse =
+        await devicesApi.getDeviceById(
+          deviceId,
         )
 
-        return
+      setDevice(deviceResponse)
+
+      /*
+       * ======================================================
+       * COMMAND HISTORY
+       * ======================================================
+       *
+       * Un fallo cargando comandos no debe impedir mostrar
+       * el dispositivo.
+       */
+      try {
+        const commandResponse =
+          await deviceCommandsApi.getForDevice(
+            deviceId,
+          )
+
+        setCommands(
+          commandResponse.items,
+        )
+      } catch (commandError) {
+        console.error(
+          'Error cargando historial de comandos:',
+          commandError,
+        )
+
+        setCommands([])
       }
 
-      try {
-        setLoading(true)
-        setError(null)
-
-        const [
-          deviceResponse,
-          commandResponse,
-        ] = await Promise.all([
-          devicesApi.getDeviceById(deviceId),
-
-          deviceCommandsApi.getForDevice(
-            deviceId,
-          ),
-        ])
-
-        setDevice(deviceResponse)
-        setCommands(commandResponse.items)
-
-        if (
-          deviceResponse.platform ===
-          'Android'
-        ) {
+      /*
+       * ======================================================
+       * ANDROID ENTERPRISE
+       * ======================================================
+       *
+       * Un Android registrado mediante TitanMDM Agent puede
+       * no existir todavía en Google AMAPI.
+       *
+       * Eso NO convierte al dispositivo en inválido.
+       */
+      if (
+        deviceResponse.platform ===
+        'Android'
+      ) {
+        try {
           const androidResponse =
-            await devicesApi.getAndroidDeviceDetails(
-              deviceId,
-            )
+            await devicesApi
+              .getAndroidDeviceDetails(
+                deviceId,
+              )
 
-          setAndroidDetails(androidResponse)
-        } else {
+          setAndroidDetails(
+            androidResponse,
+          )
+        } catch (androidError) {
+          console.info(
+            'El dispositivo Android no tiene información AMAPI asociada:',
+            androidError,
+          )
+
           setAndroidDetails(null)
         }
-      } catch (loadError) {
-        console.error(
-          'Error cargando dispositivo:',
-          loadError,
-        )
-
-        setError(
-          'No fue posible obtener la información del dispositivo.',
-        )
-      } finally {
-        setLoading(false)
+      } else {
+        setAndroidDetails(null)
       }
-    },
-    [deviceId],
-  )
+    } catch (loadError) {
+      console.error(
+        'Error cargando dispositivo:',
+        loadError,
+      )
+
+      setDevice(null)
+
+      setError(
+        'No fue posible obtener la información principal del dispositivo.',
+      )
+    } finally {
+      setLoading(false)
+    }
+  },
+  [deviceId],
+)
 
   const refreshCommands = useCallback(
     async (): Promise<void> => {
@@ -234,63 +285,64 @@ export function DeviceDetailPage() {
   )
 
   const sendCommand = async (
-    commandType: string,
-  ): Promise<void> => {
-    if (!deviceId) {
-      setError(
-        'No existe un identificador válido para enviar el comando.',
-      )
+  commandType: string,
+  payloadJson = '{}',
+): Promise<void> => {
+  if (!deviceId) {
+    setError(
+      'No existe un identificador válido para enviar el comando.',
+    )
 
-      return
-    }
+    return
+  }
 
-    if (isAndroid) {
-      setError(
-        'Los comandos Android se habilitarán mediante Android Management API en la fase A7.',
-      )
+  if (sendingCommand !== null) {
+    return
+  }
 
-      return
-    }
+  try {
+    setSendingCommand(commandType)
+    setError(null)
+    setMessage(null)
 
-    try {
-      setSendingCommand(commandType)
-      setError(null)
-      setMessage(null)
+    const command =
+      await deviceCommandsApi.create({
+        deviceId,
+        commandType,
+        payloadJson,
+        expirationMinutes: 30,
+      })
 
-      const command =
-        await deviceCommandsApi.create({
-          deviceId,
-          commandType,
-          payloadJson: '{}',
-          expirationMinutes: 30,
-        })
-
-      setCommands((currentCommands) => [
+    setCommands(
+      (currentCommands) => [
         command,
         ...currentCommands.filter(
           (currentCommand) =>
-            currentCommand.id !== command.id,
+            currentCommand.id !==
+            command.id,
         ),
-      ])
+      ],
+    )
 
-      setMessage(
-        `Comando ${commandType} creado correctamente.`,
-      )
+    setMessage(
+      `Comando ${commandType} enviado correctamente. ` +
+        `Estado actual: ${command.status}.`,
+    )
 
-      setActiveTab('commands')
-    } catch (commandError) {
-      console.error(
-        `Error enviando ${commandType}:`,
-        commandError,
-      )
+    setActiveTab('commands')
+  } catch (commandError) {
+    console.error(
+      `Error enviando ${commandType}:`,
+      commandError,
+    )
 
-      setError(
-        `No fue posible enviar el comando ${commandType}.`,
-      )
-    } finally {
-      setSendingCommand(null)
-    }
+    setError(
+      `No fue posible enviar el comando ${commandType}.`,
+    )
+  } finally {
+    setSendingCommand(null)
   }
+}
 
   useEffect(() => {
     void loadDevice()
@@ -429,8 +481,7 @@ export function DeviceDetailPage() {
             Actualizar
           </button>
 
-          {!isAndroid && (
-            <>
+          
               <button
                 type="button"
                 className="device-action-primary"
@@ -467,8 +518,8 @@ export function DeviceDetailPage() {
                   ? 'Solicitando...'
                   : 'DEVICE INFO'}
               </button>
-            </>
-          )}
+            
+          
         </div>
       </header>
 
@@ -1250,16 +1301,17 @@ export function DeviceDetailPage() {
             </button>
           </header>
 
-          {isAndroid && (
+                  {isAndroid && (
             <div className="device-detail-notice">
               <Info size={17} />
 
               <span>
-                El historial está preparado
-                para Android. Los comandos
-                remotos mediante Android
-                Management API se habilitarán
-                en A7.
+                Motor TitanMDM Agent activo.
+                PING y DEVICE_INFO se ejecutan
+                directamente mediante el agente
+                Android. Las acciones nativas de
+                Android Enterprise se integrarán
+                independientemente mediante AMAPI.
               </span>
             </div>
           )}
