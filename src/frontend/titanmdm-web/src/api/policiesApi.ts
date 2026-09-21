@@ -124,6 +124,31 @@ export interface AndroidPolicyRemoteVerificationResult {
   googlePolicyJson: string
 }
 
+export interface AndroidPolicyAssignment {
+  assignmentId: string
+  policyId: string
+  deviceId: string
+  androidDeviceId: string
+
+  policyVersion: number
+
+  googleDeviceName: string
+  googlePolicyName: string
+
+  assignmentStatus: string
+
+  assignedAtUtc: string
+  updatedAtUtc: string
+  appliedAtUtc: string | null
+
+  appliedPolicyName: string | null
+  appliedPolicyVersion: number | null
+  appliedPolicyState: string | null
+  lastPolicySyncTimeUtc: string | null
+
+  errorMessage: string | null
+}
+
 // ============================================================
 // POLICIES API
 // ============================================================
@@ -305,4 +330,53 @@ export const policiesApi = {
 
     return response.data
   },
+  async assignAndroid(
+  policyId: string,
+  deviceId: string,
+): Promise<AndroidPolicyAssignment> {
+  const response =
+    await apiClient.post<AndroidPolicyAssignment>(
+      `/policies/${policyId}/android/assign`,
+      {
+        deviceId,
+      },
+    )
+
+  return response.data
+},
+
+async getAndroidAssignment(
+  policyId: string,
+  deviceId: string,
+): Promise<AndroidPolicyAssignment | null> {
+  try {
+    const response =
+      await apiClient.get<AndroidPolicyAssignment>(
+        `/policies/${policyId}/android/assignments/${deviceId}`,
+      )
+
+    return response.data
+  } catch (error: unknown) {
+    if (
+      typeof error === 'object' &&
+      error !== null &&
+      'response' in error
+    ) {
+      const status =
+        (
+          error as {
+            response?: {
+              status?: number
+            }
+          }
+        ).response?.status
+
+      if (status === 404) {
+        return null
+      }
+    }
+
+    throw error
+  }
+},
 }

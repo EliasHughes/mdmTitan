@@ -512,6 +512,7 @@ const openPolicyMenu = (
             Android
           </option>
         </select>
+        
 
         <select
           value={status}

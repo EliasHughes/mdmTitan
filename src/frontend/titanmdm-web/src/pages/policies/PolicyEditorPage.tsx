@@ -39,7 +39,8 @@ import {
 } from '../../api/policiesApi'
 
 import './PolicyEditorPage.css'
-
+import AndroidPolicyAssignmentPanel
+  from './AndroidPolicyAssignmentPanel'
 // ============================================================
 // CONFIGURATION TYPES
 // ============================================================
@@ -1230,6 +1231,7 @@ export function PolicyEditorPage() {
                   </div>
                 </div>
 
+
                 {loadingPublication ? (
                   <span className="android-publication-status">
                     <Loader2
@@ -1420,8 +1422,18 @@ export function PolicyEditorPage() {
                   <ExternalLink size={16} />
                 </div>
               )}
-            </section>
-          )}
+           </section>
+                )}
+
+                {editing &&
+                  platform === 'Android' &&
+                  policyId && (
+                    <AndroidPolicyAssignmentPanel
+                      policyId={policyId}
+                      publication={publication}
+                      policyDirty={false}
+                    />
+                  )}
 
           {/* ==================================================
               ANDROID SETTINGS
