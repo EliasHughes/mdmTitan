@@ -1,119 +1,102 @@
-package com.titanmdm.agent.commands.handlers
+package com.titanmdm.agent.commands
 
 import android.content.Context
-import com.titanmdm.agent.commands.CommandExecutionResult
+import com.titanmdm.agent.commands.handlers.AppInventoryCommandHandler
+import com.titanmdm.agent.commands.handlers.CommandHandler
+import com.titanmdm.agent.commands.handlers.ComplianceCheckCommandHandler
+import com.titanmdm.agent.commands.handlers.DeviceInfoCommandHandler
+import com.titanmdm.agent.commands.handlers.LocationCommandHandler
+import com.titanmdm.agent.commands.handlers.LostModeCommandHandler
+import com.titanmdm.agent.commands.handlers.PingCommandHandler
+import com.titanmdm.agent.commands.handlers.SecurityStatusCommandHandler
 import com.titanmdm.agent.core.network.DeviceCommandDto
-import kotlinx.serialization.Serializable
-import kotlinx.serialization.json.Json
 
-class LostModeCommandHandler(
+class CommandDispatcher(
     context: Context
-) : CommandHandler {
+) {
 
-    private val preferences =
+    private val applicationContext =
         context.applicationContext
-            .getSharedPreferences(
-                "titan_lost_mode",
-                Context.MODE_PRIVATE
+
+    private val handlers:
+            List<CommandHandler> =
+        listOf(
+            PingCommandHandler(),
+
+            DeviceInfoCommandHandler(
+                applicationContext
+            ),
+
+            AppInventoryCommandHandler(
+                applicationContext
+            ),
+
+            SecurityStatusCommandHandler(
+                applicationContext
+            ),
+
+            ComplianceCheckCommandHandler(
+                applicationContext
+            ),
+
+            LocationCommandHandler(
+                applicationContext
+            ),
+
+            LostModeCommandHandler(
+                applicationContext
             )
+        )
 
-    override fun supports(
-        commandType: String
-    ): Boolean {
-        return commandType.equals(
-            "LOST_MODE_ENABLE",
-            ignoreCase = true
-        ) ||
-                commandType.equals(
-                    "LOST_MODE_DISABLE",
-                    ignoreCase = true
-                )
-    }
-
-    override suspend fun execute(
+    suspend fun dispatch(
         command: DeviceCommandDto
     ): CommandExecutionResult {
 
-        return if (
-            command.commandType.equals(
-                "LOST_MODE_ENABLE",
-                ignoreCase = true
+        val commandType =
+            command.commandType.trim()
+
+        if (commandType.isBlank()) {
+            return CommandExecutionResult.Failure(
+                errorCode =
+                    "INVALID_COMMAND_TYPE",
+
+                errorMessage =
+                    "El comando recibido no contiene CommandType."
             )
-        ) {
-            enable(command)
-        } else {
-            disable()
         }
-    }
 
-    private fun enable(
-        command: DeviceCommandDto
-    ): CommandExecutionResult {
-
-        val payload =
-            try {
-                Json.decodeFromString<
-                        LostModePayload
-                        >(
-                    command.payloadJson
-                )
-            } catch (
-                exception: Exception
-            ) {
-                return CommandExecutionResult.Failure(
-                    errorCode =
-                        "INVALID_LOST_MODE_PAYLOAD",
-
-                    errorMessage =
-                        exception.message
-                            ?: "Payload de Lost Mode inválido."
+        val handler =
+            handlers.firstOrNull {
+                it.supports(
+                    commandType
                 )
             }
 
-        preferences
-            .edit()
-            .putBoolean(
-                "enabled",
-                true
-            )
-            .putString(
-                "message",
-                payload.message
-            )
-            .putString(
-                "phoneNumber",
-                payload.phoneNumber
-            )
-            .apply()
+        if (handler == null) {
+            return CommandExecutionResult.Failure(
+                errorCode =
+                    "COMMAND_NOT_SUPPORTED",
 
-        /*
-         * Este estado complementa Android Enterprise.
-         * No pretende sustituir Device Owner / Android Device Policy.
-         */
+                errorMessage =
+                    "El agente Android no soporta el comando '$commandType'."
+            )
+        }
 
-        return CommandExecutionResult.Success(
-            resultJson =
-                """{"lostMode":true,"agentState":"enabled"}"""
-        )
+        return try {
+            handler.execute(
+                command
+            )
+        } catch (
+            exception: Exception
+        ) {
+            CommandExecutionResult.Failure(
+                errorCode =
+                    "COMMAND_EXECUTION_EXCEPTION",
+
+                errorMessage =
+                    exception.message
+                        ?: "Error inesperado ejecutando '$commandType'."
+            )
+        }
     }
-
-    private fun disable():
-            CommandExecutionResult {
-
-        preferences
-            .edit()
-            .clear()
-            .apply()
-
-        return CommandExecutionResult.Success(
-            resultJson =
-                """{"lostMode":false,"agentState":"disabled"}"""
-        )
-    }
-
-    @Serializable
-    private data class LostModePayload(
-        val message: String,
-        val phoneNumber: String? = null
-    )
 }
