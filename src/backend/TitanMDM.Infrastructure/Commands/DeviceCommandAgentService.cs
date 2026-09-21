@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using TitanMDM.Application.Applications;
 using TitanMDM.Application.Commands.Agent;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
@@ -11,10 +12,17 @@ public sealed class DeviceCommandAgentService
 {
     private readonly TitanMdmDbContext _dbContext;
 
+    private readonly IApplicationInventoryService
+        _applicationInventoryService;
+
     public DeviceCommandAgentService(
-        TitanMdmDbContext dbContext)
+        TitanMdmDbContext dbContext,
+        IApplicationInventoryService applicationInventoryService)
     {
         _dbContext = dbContext;
+
+        _applicationInventoryService =
+            applicationInventoryService;
     }
 
     public async Task<IReadOnlyCollection<AgentCommandDto>>
@@ -41,7 +49,8 @@ public sealed class DeviceCommandAgentService
                         x.Status == DeviceCommandStatus.Sent
                     ) &&
                     x.ExpiresAtUtc <= now)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(
+                    cancellationToken);
 
         foreach (var expiredCommand in expiredCommands)
         {
@@ -57,9 +66,11 @@ public sealed class DeviceCommandAgentService
                         x.Status == DeviceCommandStatus.Queued
                     ) &&
                     x.ExpiresAtUtc > now)
-                .OrderBy(x => x.CreatedAtUtc)
+                .OrderBy(
+                    x => x.CreatedAtUtc)
                 .Take(20)
-                .ToListAsync(cancellationToken);
+                .ToListAsync(
+                    cancellationToken);
 
         var result =
             new List<AgentCommandDto>();
@@ -130,6 +141,32 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
+        /*
+         * APP_INVENTORY se procesa antes de cerrar
+         * definitivamente el comando.
+         *
+         * Si la persistencia falla, el comando NO debe
+         * quedar como Success porque TitanMDM habría
+         * perdido el inventario.
+         */
+        if (command.CommandType.Equals(
+                "APP_INVENTORY",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            if (string.IsNullOrWhiteSpace(
+                    resultJson))
+            {
+                throw new InvalidOperationException(
+                    "APP_INVENTORY no devolvió información.");
+            }
+
+            await _applicationInventoryService
+                .ProcessInventoryAsync(
+                    deviceId,
+                    resultJson,
+                    cancellationToken);
+        }
+
         command.CompleteSuccess(
             resultJson);
 
@@ -145,12 +182,15 @@ public sealed class DeviceCommandAgentService
         string? resultJson,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(errorCode))
+        if (string.IsNullOrWhiteSpace(
+                errorCode))
         {
-            errorCode = "COMMAND_FAILED";
+            errorCode =
+                "COMMAND_FAILED";
         }
 
-        if (string.IsNullOrWhiteSpace(errorMessage))
+        if (string.IsNullOrWhiteSpace(
+                errorMessage))
         {
             errorMessage =
                 "El agente informó que el comando falló.";
