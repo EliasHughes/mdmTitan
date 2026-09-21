@@ -5,49 +5,112 @@ import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.Header
 import retrofit2.http.POST
-import retrofit2.http.PATCH
 import retrofit2.http.Path
 
 interface TitanApiService {
 
     /*
-     * Registro inicial del agente.
-     *
-     * La ruta se validará contra el contrato definitivo del backend
-     * TitanMDM antes de realizar la prueba end-to-end.
+     * ========================================================
+     * REGISTRATION
+     * ========================================================
      */
-    @POST("api/device/register")
+
+    @POST("api/enrollment/register")
     suspend fun registerDevice(
         @Body request: RegisterDeviceRequest
     ): Response<RegisterDeviceResponse>
 
+
     /*
-     * Heartbeat autenticado del dispositivo.
+     * ========================================================
+     * HEARTBEAT
+     *
+     * El backend autentica actualmente mediante DeviceId +
+     * DeviceSecret incluidos en DeviceHeartbeatRequest.
+     * ========================================================
      */
+
     @POST("api/device/heartbeat")
     suspend fun heartbeat(
-        @Header("X-Device-Id") deviceId: String,
-        @Header("X-Device-Secret") deviceSecret: String,
         @Body request: HeartbeatRequest
     ): Response<HeartbeatResponse>
 
-    /*
-     * Recuperación de comandos pendientes.
-     */
-    @GET("api/device/commands")
-    suspend fun getPendingCommands(
-        @Header("X-Device-Id") deviceId: String,
-        @Header("X-Device-Secret") deviceSecret: String
-    ): Response<List<DeviceCommandDto>>
 
     /*
-     * Actualización del estado de un comando.
+     * ========================================================
+     * COMMAND ENGINE
+     *
+     * El backend DeviceCommandAgentController autentica usando:
+     *
+     * X-Titan-Device-Id
+     * X-Titan-Device-Secret
+     * ========================================================
      */
-    @PATCH("api/device/commands/{commandId}/status")
-    suspend fun updateCommandStatus(
-        @Path("commandId") commandId: String,
-        @Header("X-Device-Id") deviceId: String,
-        @Header("X-Device-Secret") deviceSecret: String,
-        @Body request: CommandStatusRequest
-    ): Response<ApiMessageResponse>
+
+    @GET("api/device/commands")
+    suspend fun getPendingCommands(
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String
+    ): Response<List<DeviceCommandDto>>
+
+
+    @POST("api/device/commands/{commandId}/delivered")
+    suspend fun markCommandDelivered(
+        @Path("commandId")
+        commandId: String,
+
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String
+    ): Response<Unit>
+
+
+    @POST("api/device/commands/{commandId}/executing")
+    suspend fun markCommandExecuting(
+        @Path("commandId")
+        commandId: String,
+
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String
+    ): Response<Unit>
+
+
+    @POST("api/device/commands/{commandId}/success")
+    suspend fun markCommandSuccess(
+        @Path("commandId")
+        commandId: String,
+
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String,
+
+        @Body
+        request: CommandSuccessRequest
+    ): Response<Unit>
+
+
+    @POST("api/device/commands/{commandId}/failed")
+    suspend fun markCommandFailed(
+        @Path("commandId")
+        commandId: String,
+
+        @Header("X-Titan-Device-Id")
+        deviceId: String,
+
+        @Header("X-Titan-Device-Secret")
+        deviceSecret: String,
+
+        @Body
+        request: CommandFailedRequest
+    ): Response<Unit>
 }

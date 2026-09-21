@@ -5,23 +5,25 @@ import kotlinx.serialization.Serializable
 
 /*
  * ============================================================
- * TITANMDM ANDROID AGENT - API CONTRACT MODELS
+ * TITANMDM ANDROID AGENT
+ * API CONTRACT MODELS
  * ============================================================
  *
- * Modelos utilizados para la comunicación entre:
+ * Estos modelos reflejan los contratos actuales del backend
+ * TitanMDM.
  *
- * TitanMDM Android Agent
- *          |
- *          v
- * TitanMDM ASP.NET Core API
- *
- * No almacenar secretos de dispositivo en logs.
+ * IMPORTANTE:
+ * - Nunca registrar deviceSecret en logs.
+ * - Nunca persistir enrollmentToken después del registro.
  * ============================================================
  */
 
 
 /* ============================================================
- * REGISTRATION
+ * DEVICE REGISTRATION
+ *
+ * Backend:
+ * POST /api/enrollment/register
  * ============================================================ */
 
 @Serializable
@@ -34,10 +36,10 @@ data class RegisterDeviceRequest(
     val deviceName: String,
 
     @SerialName("platform")
-    val platform: String = "Android",
+    val platform: String,
 
     @SerialName("serialNumber")
-    val serialNumber: String? = null,
+    val serialNumber: String,
 
     @SerialName("manufacturer")
     val manufacturer: String? = null,
@@ -46,43 +48,19 @@ data class RegisterDeviceRequest(
     val model: String? = null,
 
     @SerialName("operatingSystem")
-    val operatingSystem: String = "Android",
+    val operatingSystem: String? = null,
 
     @SerialName("operatingSystemVersion")
     val operatingSystemVersion: String? = null,
 
     @SerialName("agentVersion")
-    val agentVersion: String,
+    val agentVersion: String? = null,
 
     @SerialName("ipAddress")
     val ipAddress: String? = null,
 
-    @SerialName("androidId")
-    val androidId: String? = null,
-
-    @SerialName("apiLevel")
-    val apiLevel: Int? = null,
-
-    @SerialName("securityPatch")
-    val securityPatch: String? = null,
-
-    @SerialName("hardware")
-    val hardware: String? = null,
-
-    @SerialName("board")
-    val board: String? = null,
-
-    @SerialName("bootloader")
-    val bootloader: String? = null,
-
-    @SerialName("buildNumber")
-    val buildNumber: String? = null,
-
-    @SerialName("device")
-    val device: String? = null,
-
-    @SerialName("product")
-    val product: String? = null
+    @SerialName("macAddress")
+    val macAddress: String? = null
 )
 
 
@@ -92,25 +70,37 @@ data class RegisterDeviceResponse(
     @SerialName("deviceId")
     val deviceId: String,
 
-    @SerialName("deviceSecret")
-    val deviceSecret: String,
-
     @SerialName("organizationId")
-    val organizationId: String? = null,
+    val organizationId: String,
 
     @SerialName("deviceName")
-    val deviceName: String? = null,
+    val deviceName: String,
 
-    @SerialName("registeredAtUtc")
-    val registeredAtUtc: String? = null,
+    @SerialName("platform")
+    val platform: String,
 
-    @SerialName("message")
-    val message: String? = null
+    @SerialName("status")
+    val status: String,
+
+    @SerialName("complianceStatus")
+    val complianceStatus: String,
+
+    @SerialName("isManaged")
+    val isManaged: Boolean,
+
+    @SerialName("enrolledAtUtc")
+    val enrolledAtUtc: String,
+
+    @SerialName("deviceSecret")
+    val deviceSecret: String
 )
 
 
 /* ============================================================
  * HEARTBEAT
+ *
+ * Backend:
+ * POST /api/device/heartbeat
  * ============================================================ */
 
 @Serializable
@@ -122,49 +112,37 @@ data class HeartbeatRequest(
     @SerialName("deviceSecret")
     val deviceSecret: String,
 
-    @SerialName("agentVersion")
-    val agentVersion: String,
+    @SerialName("ipAddress")
+    val ipAddress: String? = null,
 
     @SerialName("batteryLevel")
     val batteryLevel: Int? = null,
 
-    @SerialName("ipAddress")
-    val ipAddress: String? = null,
+    @SerialName("agentVersion")
+    val agentVersion: String? = null,
 
     @SerialName("operatingSystemVersion")
-    val operatingSystemVersion: String? = null,
-
-    @SerialName("apiLevel")
-    val apiLevel: Int? = null,
-
-    @SerialName("securityPatch")
-    val securityPatch: String? = null,
-
-    @SerialName("manufacturer")
-    val manufacturer: String? = null,
-
-    @SerialName("model")
-    val model: String? = null,
-
-    @SerialName("serialNumber")
-    val serialNumber: String? = null
+    val operatingSystemVersion: String? = null
 )
 
 
 @Serializable
 data class HeartbeatResponse(
 
-    @SerialName("success")
-    val success: Boolean = true,
+    @SerialName("deviceId")
+    val deviceId: String,
 
-    @SerialName("message")
-    val message: String? = null,
+    @SerialName("status")
+    val status: String,
+
+    @SerialName("complianceStatus")
+    val complianceStatus: String,
 
     @SerialName("serverTimeUtc")
-    val serverTimeUtc: String? = null,
+    val serverTimeUtc: String,
 
-    @SerialName("nextHeartbeatSeconds")
-    val nextHeartbeatSeconds: Long? = null
+    @SerialName("lastSeenAtUtc")
+    val lastSeenAtUtc: String? = null
 )
 
 
@@ -199,29 +177,32 @@ data class DeviceCommandDto(
 
 
 /* ============================================================
- * COMMAND STATUS
+ * COMMAND SUCCESS
  * ============================================================ */
 
 @Serializable
-data class CommandStatusRequest(
+data class CommandSuccessRequest(
 
-    @SerialName("deviceId")
-    val deviceId: String,
+    @SerialName("resultJson")
+    val resultJson: String? = null
+)
 
-    @SerialName("deviceSecret")
-    val deviceSecret: String,
 
-    @SerialName("status")
-    val status: String,
+/* ============================================================
+ * COMMAND FAILURE
+ * ============================================================ */
 
-    @SerialName("result")
-    val result: String? = null,
+@Serializable
+data class CommandFailedRequest(
 
-    @SerialName("error")
-    val error: String? = null,
+    @SerialName("errorCode")
+    val errorCode: String,
 
-    @SerialName("executedAtUtc")
-    val executedAtUtc: String? = null
+    @SerialName("errorMessage")
+    val errorMessage: String,
+
+    @SerialName("resultJson")
+    val resultJson: String? = null
 )
 
 
@@ -232,93 +213,6 @@ data class CommandStatusRequest(
 @Serializable
 data class ApiMessageResponse(
 
-    @SerialName("success")
-    val success: Boolean = true,
-
     @SerialName("message")
     val message: String? = null
-)
-
-
-/* ============================================================
- * DEVICE INVENTORY
- * ============================================================ */
-
-@Serializable
-data class DeviceInventoryRequest(
-
-    @SerialName("deviceId")
-    val deviceId: String,
-
-    @SerialName("deviceSecret")
-    val deviceSecret: String,
-
-    @SerialName("deviceName")
-    val deviceName: String,
-
-    @SerialName("manufacturer")
-    val manufacturer: String? = null,
-
-    @SerialName("model")
-    val model: String? = null,
-
-    @SerialName("serialNumber")
-    val serialNumber: String? = null,
-
-    @SerialName("operatingSystem")
-    val operatingSystem: String = "Android",
-
-    @SerialName("operatingSystemVersion")
-    val operatingSystemVersion: String? = null,
-
-    @SerialName("apiLevel")
-    val apiLevel: Int? = null,
-
-    @SerialName("securityPatch")
-    val securityPatch: String? = null,
-
-    @SerialName("agentVersion")
-    val agentVersion: String,
-
-    @SerialName("ipAddress")
-    val ipAddress: String? = null,
-
-    @SerialName("androidId")
-    val androidId: String? = null,
-
-    @SerialName("hardware")
-    val hardware: String? = null,
-
-    @SerialName("board")
-    val board: String? = null,
-
-    @SerialName("bootloader")
-    val bootloader: String? = null,
-
-    @SerialName("buildNumber")
-    val buildNumber: String? = null,
-
-    @SerialName("batteryLevel")
-    val batteryLevel: Int? = null
-)
-
-
-/* ============================================================
- * AGENT STATUS
- * ============================================================ */
-
-@Serializable
-data class AgentStatusResponse(
-
-    @SerialName("registered")
-    val registered: Boolean = false,
-
-    @SerialName("deviceId")
-    val deviceId: String? = null,
-
-    @SerialName("organizationId")
-    val organizationId: String? = null,
-
-    @SerialName("serverTimeUtc")
-    val serverTimeUtc: String? = null
 )

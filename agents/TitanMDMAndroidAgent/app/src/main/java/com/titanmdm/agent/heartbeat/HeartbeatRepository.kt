@@ -47,21 +47,15 @@ class HeartbeatRepository(
                 HeartbeatRequest(
                     deviceId = identity.deviceId,
                     deviceSecret = identity.deviceSecret,
-                    agentVersion = AgentConfig.AGENT_VERSION,
-                    batteryLevel = inventory.batteryLevel,
                     ipAddress = inventory.ipAddress,
+                    batteryLevel = inventory.batteryLevel,
+                    agentVersion = AgentConfig.AGENT_VERSION,
                     operatingSystemVersion =
-                        inventory.operatingSystemVersion,
-                    apiLevel = inventory.apiLevel,
-                    manufacturer = inventory.manufacturer,
-                    model = inventory.model,
-                    serialNumber = inventory.serialNumber
+                        inventory.operatingSystemVersion
                 )
 
             val response =
                 TitanApiClient.service.heartbeat(
-                    deviceId = identity.deviceId,
-                    deviceSecret = identity.deviceSecret,
                     request = request
                 )
 
