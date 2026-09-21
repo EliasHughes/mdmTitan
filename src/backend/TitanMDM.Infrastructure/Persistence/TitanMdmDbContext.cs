@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using TitanMDM.Domain.Entities;
+using TitanMDM.Domain.Automation;
 
 namespace TitanMDM.Infrastructure.Persistence;
 
@@ -100,6 +101,14 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<GeofenceDeviceAssignment>
         GeofenceDeviceAssignments =>
             Set<GeofenceDeviceAssignment>();
+
+    public DbSet<AutomationRule>
+    AutomationRules =>
+        Set<AutomationRule>();
+
+    public DbSet<AutomationExecution>
+    AutomationExecutions =>
+        Set<AutomationExecution>();
 
     public DbSet<LostModeSession>
         LostModeSessions =>

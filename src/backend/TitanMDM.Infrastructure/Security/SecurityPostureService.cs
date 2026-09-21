@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
+using TitanMDM.Application.Automation;
 using TitanMDM.Application.Security;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
@@ -13,18 +14,23 @@ public sealed class SecurityPostureService
     private readonly TitanMdmDbContext
         _dbContext;
 
-    private static readonly JsonSerializerOptions
-        JsonOptions =
+    private readonly IAutomationEventDispatcher
+        _automation;
+
+    private static readonly
+        JsonSerializerOptions JsonOptions =
             new()
             {
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive =
+                    true
             };
 
     public SecurityPostureService(
-        TitanMdmDbContext dbContext)
+        TitanMdmDbContext dbContext,
+        IAutomationEventDispatcher automation)
     {
-        _dbContext =
-            dbContext;
+        _dbContext = dbContext;
+        _automation = automation;
     }
 
     public async Task ProcessSecurityStatusAsync(
@@ -56,6 +62,57 @@ public sealed class SecurityPostureService
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        var hasSecurityRisk =
+            payload.RootDetected ||
+            payload.AdbEnabled ||
+            payload.DeveloperOptionsEnabled ||
+            !payload.DeviceSecure ||
+            payload.BootloaderLocked == false ||
+            payload.SelinuxEnforced == false ||
+            payload.UnknownSourcesAllowed == true;
+
+        if (hasSecurityRisk)
+        {
+            await _automation.DispatchAsync(
+                device.OrganizationId,
+                device.Id,
+                "SecurityRisk",
+                new
+                {
+                    platform =
+                        device.Platform.ToString(),
+
+                    deviceName =
+                        device.DeviceName,
+
+                    rootDetected =
+                        payload.RootDetected,
+
+                    adbEnabled =
+                        payload.AdbEnabled,
+
+                    developerOptionsEnabled =
+                        payload.DeveloperOptionsEnabled,
+
+                    deviceSecure =
+                        payload.DeviceSecure,
+
+                    bootloaderLocked =
+                        payload.BootloaderLocked,
+
+                    selinuxEnforced =
+                        payload.SelinuxEnforced,
+
+                    unknownSourcesAllowed =
+                        payload.UnknownSourcesAllowed,
+
+                    securityPatchLevel =
+                        payload.SecurityPatchLevel
+                },
+                cancellationToken:
+                    cancellationToken);
+        }
     }
 
     public async Task ProcessComplianceAsync(
@@ -101,15 +158,90 @@ public sealed class SecurityPostureService
             payload.FailedChecks,
             findingsJson);
 
-        device.SetCompliance(
+        var compliant =
             payload.Status.Equals(
                 "Compliant",
-                StringComparison.OrdinalIgnoreCase)
+                StringComparison.OrdinalIgnoreCase);
+
+        device.SetCompliance(
+            compliant
                 ? ComplianceStatus.Compliant
                 : ComplianceStatus.NonCompliant);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
+
+        if (!compliant)
+        {
+            await _automation.DispatchAsync(
+                device.OrganizationId,
+                device.Id,
+                "DeviceNonCompliant",
+                new
+                {
+                    platform =
+                        device.Platform.ToString(),
+
+                    deviceName =
+                        device.DeviceName,
+
+                    status =
+                        payload.Status,
+
+                    score =
+                        payload.Score,
+
+                    riskLevel =
+                        payload.RiskLevel,
+
+                    totalChecks =
+                        payload.TotalChecks,
+
+                    passedChecks =
+                        payload.PassedChecks,
+
+                    failedChecks =
+                        payload.FailedChecks
+                },
+                cancellationToken:
+                    cancellationToken);
+        }
+
+        if (
+            payload.Posture is not null &&
+            (
+                payload.Posture.RootDetected ||
+                payload.Posture.AdbEnabled ||
+                payload.Posture
+                    .DeveloperOptionsEnabled ||
+                !payload.Posture.DeviceSecure ||
+                payload.Posture
+                    .BootloaderLocked == false ||
+                payload.Posture
+                    .SelinuxEnforced == false
+            ))
+        {
+            await _automation.DispatchAsync(
+                device.OrganizationId,
+                device.Id,
+                "SecurityRisk",
+                new
+                {
+                    platform =
+                        device.Platform.ToString(),
+
+                    deviceName =
+                        device.DeviceName,
+
+                    riskLevel =
+                        payload.RiskLevel,
+
+                    source =
+                        "ComplianceCheck"
+                },
+                cancellationToken:
+                    cancellationToken);
+        }
     }
 
     public async Task<SecurityDashboardDto>
