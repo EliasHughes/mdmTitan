@@ -27,6 +27,7 @@ import { SettingsPage } from './pages/settings/SettingsPage'
 import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
 import { PolicyEditorPage } from './pages/policies/PolicyEditorPage'
 import { DeviceGroupsPage } from './pages/groups/DeviceGroupsPage'
+import { AutomationPage } from './pages/automation/AutomationPage'
 
 
 
@@ -121,6 +122,11 @@ function App() {
         <Route
           path="geofencing"
           element={<GeofencingPage />}
+        />
+
+        <Route
+          path="automation"
+          element={<AutomationPage />}
         />
 
         <Route

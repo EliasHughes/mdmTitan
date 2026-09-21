@@ -15,6 +15,7 @@ import {
   UserCog,
   Users,
   Network,
+  Workflow,
 } from 'lucide-react'
 
 export interface NavigationItem {
@@ -84,6 +85,12 @@ export const navigationItems: NavigationItem[] = [
     path: '/geofencing',
     permission: 'geofencing.view',
     icon: MapPinned,
+  },
+  {
+  label: 'Automatización',
+  path: '/automation',
+  permission: 'devices.view',
+  icon: Workflow,
   },
   {
     label: 'Soporte remoto',

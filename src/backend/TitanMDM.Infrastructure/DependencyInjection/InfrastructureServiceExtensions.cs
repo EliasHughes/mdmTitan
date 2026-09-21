@@ -43,7 +43,8 @@ using TitanMDM.Application.Location;
 using TitanMDM.Application.LostMode;
 using TitanMDM.Infrastructure.Location;
 using TitanMDM.Infrastructure.LostMode;
-
+using TitanMDM.Application.Automation;
+using TitanMDM.Infrastructure.Automation;
 
 
 
@@ -285,6 +286,14 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IDeviceGroupService,
             DeviceGroupService>();
+        
+        // ============================================================
+        // AUTOMATION ENGINE
+        // ============================================================
+
+        services.AddScoped<
+            IAutomationService,
+            AutomationService>();
 
         // ============================================================
         // LOST MODE / LOCATION / GEOFENCING
@@ -297,6 +306,10 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             ILostModeService,
             LostModeService>();
+
+        services.AddScoped<
+            IAutomationEventDispatcher,
+            AutomationEventDispatcher>();
 
         // ============================================================
         // DATABASE SEED
