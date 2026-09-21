@@ -33,6 +33,9 @@ object AgentConfig {
 
     const val HEARTBEAT_INTERVAL_MINUTES = 15L
 
+    const val HEARTBEAT_WORK_NAME =
+        "titanmdm_periodic_heartbeat"
+
     const val COMMAND_POLL_INTERVAL_MINUTES = 15L
 
     const val REGISTRATION_MAX_RETRIES = 3

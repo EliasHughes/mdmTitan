@@ -2,18 +2,16 @@ package com.titanmdm.agent.heartbeat
 
 import android.content.Context
 import com.titanmdm.agent.core.config.AgentConfig
-import com.titanmdm.agent.core.network.DeviceHeartbeatRequest
+import com.titanmdm.agent.core.network.HeartbeatRequest
 import com.titanmdm.agent.core.network.TitanApiClient
 import com.titanmdm.agent.core.storage.AgentIdentityStore
 import com.titanmdm.agent.inventory.DeviceInventoryProvider
 
 sealed interface HeartbeatResult {
 
-    data object Success :
-        HeartbeatResult
+    data object Success : HeartbeatResult
 
-    data object NotEnrolled :
-        HeartbeatResult
+    data object NotEnrolled : HeartbeatResult
 
     data class Failure(
         val message: String,
@@ -45,47 +43,68 @@ class HeartbeatRepository(
             val inventory =
                 inventoryProvider.collect()
 
+            val request =
+                HeartbeatRequest(
+                    deviceId = identity.deviceId,
+                    deviceSecret = identity.deviceSecret,
+                    agentVersion = AgentConfig.AGENT_VERSION,
+                    batteryLevel = inventory.batteryLevel,
+                    ipAddress = inventory.ipAddress,
+                    operatingSystemVersion =
+                        inventory.operatingSystemVersion,
+                    apiLevel = inventory.apiLevel,
+                    manufacturer = inventory.manufacturer,
+                    model = inventory.model,
+                    serialNumber = inventory.serialNumber
+                )
+
             val response =
                 TitanApiClient.service.heartbeat(
-                    DeviceHeartbeatRequest(
-                        deviceId =
-                            identity.deviceId,
-
-                        deviceSecret =
-                            identity.deviceSecret,
-
-                        ipAddress =
-                            inventory.ipAddress,
-
-                        batteryLevel =
-                            inventory.batteryLevel,
-
-                        agentVersion =
-                            AgentConfig.agentVersion,
-
-                        operatingSystemVersion =
-                            inventory.operatingSystemVersion
-                    )
+                    deviceId = identity.deviceId,
+                    deviceSecret = identity.deviceSecret,
+                    request = request
                 )
 
             when {
 
-                response.isSuccessful ->
+                response.isSuccessful -> {
                     HeartbeatResult.Success
+                }
 
-                response.code() in 500..599 ->
+                response.code() in 500..599 -> {
                     HeartbeatResult.Failure(
                         message =
                             "TitanMDM API HTTP ${response.code()}",
                         retryable = true
                     )
+                }
 
-                else ->
+                response.code() == 408 ||
+                        response.code() == 429 -> {
+                    HeartbeatResult.Failure(
+                        message =
+                            "Heartbeat temporalmente rechazado HTTP ${response.code()}",
+                        retryable = true
+                    )
+                }
+
+                response.code() == 401 ||
+                        response.code() == 403 ||
+                        response.code() == 404 -> {
+                    HeartbeatResult.Failure(
+                        message =
+                            "Identidad del dispositivo rechazada HTTP ${response.code()}",
+                        retryable = false
+                    )
+                }
+
+                else -> {
                     HeartbeatResult.Failure(
                         message =
                             "Heartbeat rechazado HTTP ${response.code()}",
                         retryable = false
                     )
+                }
             }
 
         } catch (exception: Exception) {
@@ -93,7 +112,7 @@ class HeartbeatRepository(
             HeartbeatResult.Failure(
                 message =
                     exception.message
-                        ?: "Error de comunicación.",
+                        ?: "Error de comunicación con TitanMDM.",
                 retryable = true
             )
         }
