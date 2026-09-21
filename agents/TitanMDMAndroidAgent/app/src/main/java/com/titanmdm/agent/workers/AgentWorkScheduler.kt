@@ -12,23 +12,35 @@ import java.util.concurrent.TimeUnit
 
 object AgentWorkScheduler {
 
-    fun schedule(context: Context) {
+    fun schedule(
+        context: Context
+    ) {
+
+        val appContext =
+            context.applicationContext
 
         scheduleHeartbeat(
-            context.applicationContext
+            appContext
         )
+
+        scheduleCommands(
+            appContext
+        )
+    }
+
+    private fun networkConstraints():
+            Constraints {
+
+        return Constraints.Builder()
+            .setRequiredNetworkType(
+                NetworkType.CONNECTED
+            )
+            .build()
     }
 
     private fun scheduleHeartbeat(
         context: Context
     ) {
-
-        val constraints =
-            Constraints.Builder()
-                .setRequiredNetworkType(
-                    NetworkType.CONNECTED
-                )
-                .build()
 
         val request =
             PeriodicWorkRequestBuilder<
@@ -36,9 +48,12 @@ object AgentWorkScheduler {
                     >(
                 AgentConfig
                     .HEARTBEAT_INTERVAL_MINUTES,
+
                 TimeUnit.MINUTES
             )
-                .setConstraints(constraints)
+                .setConstraints(
+                    networkConstraints()
+                )
                 .setBackoffCriteria(
                     BackoffPolicy.EXPONENTIAL,
                     30,
@@ -49,8 +64,46 @@ object AgentWorkScheduler {
         WorkManager
             .getInstance(context)
             .enqueueUniquePeriodicWork(
-                AgentConfig.HEARTBEAT_WORK_NAME,
+                AgentConfig
+                    .HEARTBEAT_WORK_NAME,
+
                 ExistingPeriodicWorkPolicy.UPDATE,
+
+                request
+            )
+    }
+
+    private fun scheduleCommands(
+        context: Context
+    ) {
+
+        val request =
+            PeriodicWorkRequestBuilder<
+                    CommandWorker
+                    >(
+                AgentConfig
+                    .COMMAND_POLL_INTERVAL_MINUTES,
+
+                TimeUnit.MINUTES
+            )
+                .setConstraints(
+                    networkConstraints()
+                )
+                .setBackoffCriteria(
+                    BackoffPolicy.EXPONENTIAL,
+                    30,
+                    TimeUnit.SECONDS
+                )
+                .build()
+
+        WorkManager
+            .getInstance(context)
+            .enqueueUniquePeriodicWork(
+                AgentConfig
+                    .COMMAND_WORK_NAME,
+
+                ExistingPeriodicWorkPolicy.UPDATE,
+
                 request
             )
     }

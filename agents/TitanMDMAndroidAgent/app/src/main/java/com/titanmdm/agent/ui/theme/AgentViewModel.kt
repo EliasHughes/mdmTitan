@@ -3,6 +3,8 @@ package com.titanmdm.agent.ui
 import android.app.Application
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import com.titanmdm.agent.commands.CommandPollingResult
+import com.titanmdm.agent.commands.CommandRepository
 import com.titanmdm.agent.core.config.AgentConfig
 import com.titanmdm.agent.core.storage.AgentIdentity
 import com.titanmdm.agent.core.storage.AgentIdentityStore
@@ -21,8 +23,11 @@ data class AgentUiState(
     val registering: Boolean = false,
     val synchronizing: Boolean = false,
     val enrolled: Boolean = false,
+
     val enrollmentToken: String = "",
+
     val identity: AgentIdentity? = null,
+
     val deviceName: String = "",
     val manufacturer: String = "",
     val model: String = "",
@@ -31,8 +36,18 @@ data class AgentUiState(
     val serialNumber: String = "",
     val batteryLevel: Int? = null,
     val ipAddress: String? = null,
-    val agentVersion: String = AgentConfig.AGENT_VERSION,
-    val lastHeartbeatStatus: String = "Sin sincronizar",
+
+    val agentVersion: String =
+        AgentConfig.AGENT_VERSION,
+
+    val lastHeartbeatStatus: String =
+        "Sin sincronizar",
+
+    val lastCommandStatus: String =
+        "Sin consultar",
+
+    val lastProcessedCommands: Int = 0,
+
     val message: String? = null,
     val error: String? = null
 )
@@ -44,8 +59,20 @@ class AgentViewModel(
     private val appContext =
         application.applicationContext
 
+    /*
+     * ========================================================
+     * STORAGE
+     * ========================================================
+     */
+
     private val identityStore =
         AgentIdentityStore(appContext)
+
+    /*
+     * ========================================================
+     * REPOSITORIES
+     * ========================================================
+     */
 
     private val registrationRepository =
         RegistrationRepository(appContext)
@@ -53,11 +80,28 @@ class AgentViewModel(
     private val heartbeatRepository =
         HeartbeatRepository(appContext)
 
+    private val commandRepository =
+        CommandRepository(appContext)
+
+    /*
+     * ========================================================
+     * DEVICE INVENTORY
+     * ========================================================
+     */
+
     private val inventoryProvider =
         DeviceInventoryProvider(appContext)
 
+    /*
+     * ========================================================
+     * UI STATE
+     * ========================================================
+     */
+
     private val _uiState =
-        MutableStateFlow(AgentUiState())
+        MutableStateFlow(
+            AgentUiState()
+        )
 
     val uiState: StateFlow<AgentUiState> =
         _uiState.asStateFlow()
@@ -66,7 +110,16 @@ class AgentViewModel(
         loadState()
     }
 
-    fun updateEnrollmentToken(value: String) {
+    /*
+     * ========================================================
+     * ENROLLMENT TOKEN
+     * ========================================================
+     */
+
+    fun updateEnrollmentToken(
+        value: String
+    ) {
+
         _uiState.value =
             _uiState.value.copy(
                 enrollmentToken = value,
@@ -75,7 +128,14 @@ class AgentViewModel(
             )
     }
 
+    /*
+     * ========================================================
+     * LOAD LOCAL AGENT STATE
+     * ========================================================
+     */
+
     fun loadState() {
+
         viewModelScope.launch {
 
             _uiState.value =
@@ -85,6 +145,7 @@ class AgentViewModel(
                 )
 
             try {
+
                 val inventory =
                     inventoryProvider.collect()
 
@@ -94,23 +155,35 @@ class AgentViewModel(
                 _uiState.value =
                     _uiState.value.copy(
                         loading = false,
-                        enrolled = identity != null,
-                        identity = identity,
+
+                        enrolled =
+                            identity != null,
+
+                        identity =
+                            identity,
+
                         deviceName =
                             identity?.deviceName
                                 ?: inventory.deviceName,
+
                         manufacturer =
                             inventory.manufacturer,
+
                         model =
                             inventory.model,
+
                         androidVersion =
                             inventory.operatingSystemVersion,
+
                         apiLevel =
                             inventory.apiLevel,
+
                         serialNumber =
                             inventory.serialNumber,
+
                         batteryLevel =
                             inventory.batteryLevel,
+
                         ipAddress =
                             inventory.ipAddress
                     )
@@ -120,6 +193,7 @@ class AgentViewModel(
                 _uiState.value =
                     _uiState.value.copy(
                         loading = false,
+
                         error =
                             exception.message
                                 ?: "No fue posible cargar el estado del agente."
@@ -128,17 +202,27 @@ class AgentViewModel(
         }
     }
 
+    /*
+     * ========================================================
+     * DEVICE REGISTRATION
+     * ========================================================
+     */
+
     fun register() {
 
         val token =
-            _uiState.value.enrollmentToken.trim()
+            _uiState.value
+                .enrollmentToken
+                .trim()
 
         if (token.isBlank()) {
+
             _uiState.value =
                 _uiState.value.copy(
                     error =
                         "Introduce un token de inscripción."
                 )
+
             return
         }
 
@@ -157,7 +241,8 @@ class AgentViewModel(
 
             when (
                 val result =
-                    registrationRepository.register(token)
+                    registrationRepository
+                        .register(token)
             ) {
 
                 is RegistrationResult.Success -> {
@@ -165,17 +250,24 @@ class AgentViewModel(
                     _uiState.value =
                         _uiState.value.copy(
                             registering = false,
+
                             enrolled = true,
+
                             enrollmentToken = "",
-                            identity = result.identity,
+
+                            identity =
+                                result.identity,
+
                             deviceName =
                                 result.identity.deviceName,
+
                             message =
                                 "Dispositivo inscrito correctamente en TitanMDM.",
+
                             error = null
                         )
 
-                    sendHeartbeat()
+                    synchronize()
                 }
 
                 is RegistrationResult.Failure -> {
@@ -190,9 +282,40 @@ class AgentViewModel(
         }
     }
 
-    fun sendHeartbeat() {
+    /*
+     * ========================================================
+     * MANUAL TITANMDM SYNCHRONIZATION
+     * ========================================================
+     *
+     * Esta operación ejecuta:
+     *
+     * 1. Heartbeat.
+     * 2. Consulta de comandos.
+     * 3. Delivered.
+     * 4. Executing.
+     * 5. Handler local.
+     * 6. Success / Failed.
+     *
+     * De esta manera el botón "Sincronizar con TitanMDM"
+     * permite ejecutar comandos inmediatamente sin esperar
+     * el intervalo periódico de WorkManager.
+     * ========================================================
+     */
+
+    fun synchronize() {
 
         if (_uiState.value.synchronizing) {
+            return
+        }
+
+        if (!_uiState.value.enrolled) {
+
+            _uiState.value =
+                _uiState.value.copy(
+                    error =
+                        "El dispositivo todavía no está inscrito."
+                )
+
             return
         }
 
@@ -205,8 +328,15 @@ class AgentViewModel(
                     message = null
                 )
 
+            /*
+             * ------------------------------------------------
+             * STEP 1
+             * HEARTBEAT
+             * ------------------------------------------------
+             */
+
             when (
-                val result =
+                val heartbeatResult =
                     heartbeatRepository.send()
             ) {
 
@@ -214,11 +344,8 @@ class AgentViewModel(
 
                     _uiState.value =
                         _uiState.value.copy(
-                            synchronizing = false,
                             lastHeartbeatStatus =
-                                "Sincronizado correctamente",
-                            message =
-                                "TitanMDM recibió el heartbeat del dispositivo."
+                                "Sincronizado correctamente"
                         )
                 }
 
@@ -227,13 +354,22 @@ class AgentViewModel(
                     _uiState.value =
                         _uiState.value.copy(
                             synchronizing = false,
+
                             enrolled = false,
+
                             identity = null,
+
                             lastHeartbeatStatus =
                                 "Dispositivo no inscrito",
+
+                            lastCommandStatus =
+                                "No disponible",
+
                             error =
-                                "El dispositivo todavía no está inscrito."
+                                "TitanMDM no reconoce la inscripción del dispositivo."
                         )
+
+                    return@launch
                 }
 
                 is HeartbeatResult.Failure -> {
@@ -241,14 +377,127 @@ class AgentViewModel(
                     _uiState.value =
                         _uiState.value.copy(
                             synchronizing = false,
+
                             lastHeartbeatStatus =
                                 "Error de sincronización",
-                            error = result.message
+
+                            error =
+                                heartbeatResult.message
+                        )
+
+                    return@launch
+                }
+            }
+
+            /*
+             * ------------------------------------------------
+             * STEP 2
+             * COMMAND ENGINE
+             * ------------------------------------------------
+             */
+
+            when (
+                val commandResult =
+                    commandRepository
+                        .pollAndExecute()
+            ) {
+
+                is CommandPollingResult.Success -> {
+
+                    val processed =
+                        commandResult
+                            .processedCommands
+
+                    _uiState.value =
+                        _uiState.value.copy(
+                            synchronizing = false,
+
+                            lastCommandStatus =
+                                if (processed > 0) {
+                                    "$processed comando(s) procesado(s)"
+                                } else {
+                                    "Sin comandos pendientes"
+                                },
+
+                            lastProcessedCommands =
+                                processed,
+
+                            message =
+                                if (processed > 0) {
+
+                                    "TitanMDM sincronizado. " +
+                                            "$processed comando(s) procesado(s)."
+
+                                } else {
+
+                                    "TitanMDM sincronizado correctamente. " +
+                                            "No hay comandos pendientes."
+                                },
+
+                            error = null
+                        )
+                }
+
+                CommandPollingResult.NotEnrolled -> {
+
+                    _uiState.value =
+                        _uiState.value.copy(
+                            synchronizing = false,
+
+                            enrolled = false,
+
+                            identity = null,
+
+                            lastCommandStatus =
+                                "Dispositivo no inscrito",
+
+                            error =
+                                "No fue posible consultar comandos porque el dispositivo no está inscrito."
+                        )
+                }
+
+                is CommandPollingResult.Failure -> {
+
+                    _uiState.value =
+                        _uiState.value.copy(
+                            synchronizing = false,
+
+                            lastCommandStatus =
+                                "Error consultando comandos",
+
+                            error =
+                                commandResult.message
                         )
                 }
             }
         }
     }
+
+    /*
+     * ========================================================
+     * BACKWARD COMPATIBILITY
+     * ========================================================
+     *
+     * AgentScreen actualmente puede estar llamando
+     * sendHeartbeat().
+     *
+     * Conservamos esta función para no romper la UI existente.
+     *
+     * Desde K3 una sincronización manual significa:
+     *
+     * Heartbeat + Command Engine
+     * ========================================================
+     */
+
+    fun sendHeartbeat() {
+        synchronize()
+    }
+
+    /*
+     * ========================================================
+     * REFRESH LOCAL STATE
+     * ========================================================
+     */
 
     fun refresh() {
         loadState()
