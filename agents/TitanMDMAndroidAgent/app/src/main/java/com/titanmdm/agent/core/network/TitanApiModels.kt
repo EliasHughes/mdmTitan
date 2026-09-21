@@ -9,11 +9,10 @@ import kotlinx.serialization.Serializable
  * API CONTRACT MODELS
  * ============================================================
  *
- * Estos modelos reflejan los contratos actuales del backend
- * TitanMDM.
+ * Estos modelos reflejan los contratos reales del backend.
  *
- * IMPORTANTE:
- * - Nunca registrar deviceSecret en logs.
+ * SEGURIDAD:
+ * - Nunca registrar deviceSecret.
  * - Nunca persistir enrollmentToken después del registro.
  * ============================================================
  */
@@ -21,8 +20,6 @@ import kotlinx.serialization.Serializable
 
 /* ============================================================
  * DEVICE REGISTRATION
- *
- * Backend:
  * POST /api/enrollment/register
  * ============================================================ */
 
@@ -98,8 +95,6 @@ data class RegisterDeviceResponse(
 
 /* ============================================================
  * HEARTBEAT
- *
- * Backend:
  * POST /api/device/heartbeat
  * ============================================================ */
 
@@ -148,31 +143,35 @@ data class HeartbeatResponse(
 
 /* ============================================================
  * DEVICE COMMANDS
+ *
+ * Backend:
+ *
+ * AgentCommandDto(
+ *     Guid CommandId,
+ *     string CommandType,
+ *     string PayloadJson,
+ *     DateTime CreatedAtUtc,
+ *     DateTime ExpiresAtUtc
+ * )
  * ============================================================ */
 
 @Serializable
 data class DeviceCommandDto(
 
-    @SerialName("id")
-    val id: String,
+    @SerialName("commandId")
+    val commandId: String,
 
     @SerialName("commandType")
     val commandType: String,
 
-    @SerialName("payload")
-    val payload: String? = null,
-
-    @SerialName("status")
-    val status: String? = null,
+    @SerialName("payloadJson")
+    val payloadJson: String = "{}",
 
     @SerialName("createdAtUtc")
-    val createdAtUtc: String? = null,
+    val createdAtUtc: String,
 
     @SerialName("expiresAtUtc")
-    val expiresAtUtc: String? = null,
-
-    @SerialName("priority")
-    val priority: Int? = null
+    val expiresAtUtc: String
 )
 
 
