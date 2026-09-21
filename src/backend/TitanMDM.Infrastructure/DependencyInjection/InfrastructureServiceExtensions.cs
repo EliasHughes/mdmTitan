@@ -194,6 +194,10 @@ services.AddScoped<
     IAndroidPolicyPublisher,
     AndroidPolicyPublisher>();
 
+services.AddScoped<
+    IAndroidPolicyAssignmentService,
+    AndroidPolicyAssignmentService>();
+    
 services.AddScoped<TitanMdmSeeder>();
 
 

@@ -1,14 +1,19 @@
 namespace TitanMDM.Application.Android.Policies;
 
 public sealed record AndroidPolicyAssignmentDto(
+    Guid AssignmentId,
     Guid PolicyId,
     Guid DeviceId,
     Guid AndroidDeviceId,
+    int PolicyVersion,
     string GoogleDeviceName,
     string GooglePolicyName,
-    int PolicyVersion,
-    string Status,
+    string AssignmentStatus,
     DateTime AssignedAtUtc,
-    DateTime? VerifiedAtUtc,
+    DateTime UpdatedAtUtc,
+    DateTime? AppliedAtUtc,
     string? AppliedPolicyName,
-    string? AppliedPolicyState);
+    long? AppliedPolicyVersion,
+    string? AppliedPolicyState,
+    DateTime? LastPolicySyncTimeUtc,
+    string? ErrorMessage);

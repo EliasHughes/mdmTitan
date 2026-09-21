@@ -737,14 +737,123 @@ var lastSync =
             enrollmentTime,
             lastStatusReportTime,
             lastPolicySyncTime);
-        
-        
+
+        await ReconcilePolicyAssignmentAsync(
+            organizationId,
+            device.Id,
+            appliedPolicyName,
+            appliedPolicyVersion,
+            appliedPolicyState,
+            cancellationToken);
 
         await _dbContext.SaveChangesAsync(
             cancellationToken);
 
         return created;
+        
+        
     }
+
+    private async Task ReconcilePolicyAssignmentAsync(
+    Guid organizationId,
+    Guid deviceId,
+    string? appliedPolicyName,
+    long? appliedPolicyVersion,
+    string? appliedPolicyState,
+    CancellationToken cancellationToken)
+{
+    if (string.IsNullOrWhiteSpace(
+            appliedPolicyName))
+    {
+        return;
+    }
+
+    var publication =
+        await _dbContext
+            .AndroidPolicyPublications
+            .AsNoTracking()
+            .Where(
+                x =>
+                    x.OrganizationId ==
+                    organizationId &&
+                    x.GooglePolicyName ==
+                    appliedPolicyName)
+            .OrderByDescending(
+                x => x.PolicyVersion)
+            .FirstOrDefaultAsync(
+                cancellationToken);
+
+    if (publication is null)
+    {
+        return;
+    }
+
+    var assignment =
+        await _dbContext
+            .DevicePolicyAssignments
+            .SingleOrDefaultAsync(
+                x =>
+                    x.OrganizationId ==
+                    organizationId &&
+                    x.DeviceId ==
+                    deviceId &&
+                    x.PolicyId ==
+                    publication.PolicyId &&
+                    x.PolicyVersion ==
+                    publication.PolicyVersion,
+                cancellationToken);
+
+    if (assignment is null)
+    {
+        return;
+    }
+
+    /*
+     * appliedPolicyName confirma que Google reporta
+     * esta política sobre el dispositivo.
+     *
+     * appliedPolicyVersion, cuando está disponible,
+     * se utiliza además para evitar confirmar una
+     * versión diferente.
+     */
+    if (
+        appliedPolicyVersion.HasValue &&
+        appliedPolicyVersion.Value > 0 &&
+        appliedPolicyVersion.Value !=
+            publication.PolicyVersion)
+    {
+        return;
+    }
+
+    var state =
+        appliedPolicyState?.Trim();
+
+    var successfullyApplied =
+        string.Equals(
+            state,
+            "APPLIED",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            state,
+            "APPLIED_STATE_APPLIED",
+            StringComparison.OrdinalIgnoreCase) ||
+        string.Equals(
+            state,
+            "SUCCESS",
+            StringComparison.OrdinalIgnoreCase);
+
+    /*
+     * Algunos payloads de AMAPI pueden proporcionar
+     * appliedPolicyName sin un estado explícito.
+     * No declaramos Applied en ese caso.
+     */
+    if (!successfullyApplied)
+    {
+        return;
+    }
+
+    assignment.MarkApplied();
+}
 
     private static string
         BuildFriendlyDeviceName(

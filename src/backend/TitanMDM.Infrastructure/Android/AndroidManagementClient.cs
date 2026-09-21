@@ -1019,6 +1019,14 @@ public sealed class AndroidManagementClient
 // API EXCEPTION
 // ================================================================
 
+// ================================================================
+// API EXCEPTION
+// ================================================================
+
+// ================================================================
+// API EXCEPTION
+// ================================================================
+
 public sealed class AndroidManagementApiException : Exception
 {
     public AndroidManagementApiException(
@@ -1035,122 +1043,5 @@ public sealed class AndroidManagementApiException : Exception
     public HttpStatusCode StatusCode { get; }
 
     public string? ResponseBody { get; }
-
-public async Task<JsonDocument> GetDeviceAsync(
-    string deviceName,
-    CancellationToken cancellationToken = default)
-{
-    if (string.IsNullOrWhiteSpace(deviceName))
-    {
-        throw new ArgumentException(
-            "El nombre del dispositivo de Google es obligatorio.",
-            nameof(deviceName));
-    }
-
-    var accessToken =
-        await _accessTokenProvider
-            .GetAccessTokenAsync(cancellationToken);
-
-    using var request = new HttpRequestMessage(
-        HttpMethod.Get,
-        $"{_options.BaseUrl.TrimEnd('/')}/{deviceName}");
-
-    request.Headers.Authorization =
-        new AuthenticationHeaderValue(
-            "Bearer",
-            accessToken);
-
-    using var response =
-        await _httpClient.SendAsync(
-            request,
-            cancellationToken);
-
-    var content =
-        await response.Content.ReadAsStringAsync(
-            cancellationToken);
-
-    if (!response.IsSuccessStatusCode)
-    {
-        throw new InvalidOperationException(
-            $"Google Android Management rechazó la consulta " +
-            $"del dispositivo. HTTP {(int)response.StatusCode}: {content}");
-    }
-
-    return JsonDocument.Parse(content);
-}
-
-public async Task<JsonDocument> AssignPolicyToDeviceAsync(
-    string deviceName,
-    string googlePolicyName,
-    CancellationToken cancellationToken = default)
-{
-    if (string.IsNullOrWhiteSpace(deviceName))
-    {
-        throw new ArgumentException(
-            "El nombre del dispositivo de Google es obligatorio.",
-            nameof(deviceName));
-    }
-
-    if (string.IsNullOrWhiteSpace(googlePolicyName))
-    {
-        throw new ArgumentException(
-            "El nombre de la política de Google es obligatorio.",
-            nameof(googlePolicyName));
-    }
-
-    var accessToken =
-        await _accessTokenProvider
-            .GetAccessTokenAsync(cancellationToken);
-
-    var requestBody =
-        JsonSerializer.Serialize(
-            new
-            {
-                policyName = googlePolicyName,
-            });
-
-    var separator =
-        deviceName.Contains('?')
-            ? "&"
-            : "?";
-
-    var url =
-        $"{_options.BaseUrl.TrimEnd('/')}/{deviceName}" +
-        $"{separator}updateMask=policyName";
-
-    using var request =
-        new HttpRequestMessage(
-            HttpMethod.Patch,
-            url);
-
-    request.Headers.Authorization =
-        new AuthenticationHeaderValue(
-            "Bearer",
-            accessToken);
-
-    request.Content =
-        new StringContent(
-            requestBody,
-            Encoding.UTF8,
-            "application/json");
-
-    using var response =
-        await _httpClient.SendAsync(
-            request,
-            cancellationToken);
-
-    var content =
-        await response.Content.ReadAsStringAsync(
-            cancellationToken);
-
-    if (!response.IsSuccessStatusCode)
-    {
-        throw new InvalidOperationException(
-            $"Google Android Management rechazó la asignación " +
-            $"de política. HTTP {(int)response.StatusCode}: {content}");
-    }
-
-    return JsonDocument.Parse(content);
-}
 }
 
