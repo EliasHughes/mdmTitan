@@ -36,6 +36,12 @@ using TitanMDM.Infrastructure.Persistence.Seed;
 using TitanMDM.Infrastructure.Policies;
 using TitanMDM.Application.Security;
 using TitanMDM.Infrastructure.Security;
+using TitanMDM.Application.Groups;
+using TitanMDM.Infrastructure.Groups;
+
+
+
+
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceExtensions
@@ -265,6 +271,15 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             ISecurityPostureService,
             SecurityPostureService>();
+
+        
+        // ============================================================
+        // DEVICE GROUPS / FLEET MANAGEMENT
+        // ============================================================
+
+        services.AddScoped<
+            IDeviceGroupService,
+            DeviceGroupService>();
 
         // ============================================================
         // DATABASE SEED
