@@ -6,8 +6,10 @@ import com.titanmdm.agent.commands.CommandExecutionResult
 import com.titanmdm.agent.core.network.DeviceCommandDto
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
-import kotlinx.serialization.json.buildJsonObject
-import kotlinx.serialization.json.put
+import kotlinx.serialization.json.JsonArray
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
+import kotlinx.serialization.json.encodeToJsonElement
 
 class AppInventoryCommandHandler(
     context: Context
@@ -47,39 +49,38 @@ class AppInventoryCommandHandler(
             val applications =
                 inventoryProvider.collect()
 
-            val applicationsJson =
-                json.encodeToString(
+            val applicationsElement =
+                json.encodeToJsonElement(
                     applications
                 )
 
             val result =
-                buildJsonObject {
+                JsonObject(
+                    mapOf(
+                        "commandId" to
+                                JsonPrimitive(
+                                    command.commandId
+                                ),
 
-                    put(
-                        "commandId",
-                        command.commandId
-                    )
+                        "commandType" to
+                                JsonPrimitive(
+                                    command.commandType
+                                ),
 
-                    put(
-                        "commandType",
-                        command.commandType
-                    )
+                        "platform" to
+                                JsonPrimitive(
+                                    "Android"
+                                ),
 
-                    put(
-                        "platform",
-                        "Android"
-                    )
+                        "applicationCount" to
+                                JsonPrimitive(
+                                    applications.size
+                                ),
 
-                    put(
-                        "applicationCount",
-                        applications.size
+                        "applications" to
+                                applicationsElement
                     )
-
-                    put(
-                        "applications",
-                        applicationsJson
-                    )
-                }
+                )
 
             CommandExecutionResult.Success(
                 resultJson =

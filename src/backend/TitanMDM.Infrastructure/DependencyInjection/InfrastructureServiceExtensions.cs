@@ -1,33 +1,39 @@
 using System.Text;
+
 using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.IdentityModel.Tokens;
+
+using TitanMDM.Application.Android.Policies;
+using TitanMDM.Application.AndroidEnterprise;
+using TitanMDM.Application.Applications;
+using TitanMDM.Application.Commands;
+using TitanMDM.Application.Commands.Agent;
+using TitanMDM.Application.Dashboard.Interfaces;
+using TitanMDM.Application.Devices;
+using TitanMDM.Application.Devices.Agent;
+using TitanMDM.Application.Enrollment;
+using TitanMDM.Application.Enrollment.DeviceRegistration;
 using TitanMDM.Application.Interfaces;
+using TitanMDM.Application.Policies;
+
 using TitanMDM.Domain.Entities;
+
+using TitanMDM.Infrastructure.Android;
+using TitanMDM.Infrastructure.Android.Policies;
+using TitanMDM.Infrastructure.Applications;
 using TitanMDM.Infrastructure.Authentication;
+using TitanMDM.Infrastructure.Commands;
+using TitanMDM.Infrastructure.Dashboard;
+using TitanMDM.Infrastructure.Devices;
+using TitanMDM.Infrastructure.Devices.Agent;
+using TitanMDM.Infrastructure.Enrollment;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Seed;
-using TitanMDM.Application.Dashboard.Interfaces;
-using TitanMDM.Infrastructure.Dashboard;
-using TitanMDM.Application.Devices;
-using TitanMDM.Infrastructure.Devices;
-using TitanMDM.Application.Enrollment;
-using TitanMDM.Infrastructure.Enrollment;
-using TitanMDM.Application.Enrollment.DeviceRegistration;
-using TitanMDM.Application.Devices.Agent;
-using TitanMDM.Infrastructure.Devices.Agent;
-using TitanMDM.Application.Commands;
-using TitanMDM.Infrastructure.Commands;
-using TitanMDM.Application.Commands.Agent;
-using TitanMDM.Application.Policies;
 using TitanMDM.Infrastructure.Policies;
-using TitanMDM.Application.AndroidEnterprise;
-using TitanMDM.Infrastructure.Android;
-using TitanMDM.Application.Android.Policies;
-using TitanMDM.Infrastructure.Android.Policies;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
@@ -37,6 +43,10 @@ public static class InfrastructureServiceExtensions
         this IServiceCollection services,
         IConfiguration configuration)
     {
+        // ============================================================
+        // DATABASE
+        // ============================================================
+
         var connectionString =
             configuration.GetConnectionString(
                 "TitanMdmDatabase");
@@ -62,13 +72,18 @@ public static class InfrastructureServiceExtensions
                     });
             });
 
+        // ============================================================
+        // JWT / AUTHENTICATION
+        // ============================================================
+
         services.Configure<JwtOptions>(
             configuration.GetSection(
                 JwtOptions.SectionName));
 
         var jwtOptions =
             configuration
-                .GetSection(JwtOptions.SectionName)
+                .GetSection(
+                    JwtOptions.SectionName)
                 .Get<JwtOptions>()
             ?? throw new InvalidOperationException(
                 "JWT configuration was not found.");
@@ -91,14 +106,18 @@ public static class InfrastructureServiceExtensions
                         new TokenValidationParameters
                         {
                             ValidateIssuer = true,
+
                             ValidIssuer =
                                 jwtOptions.Issuer,
 
                             ValidateAudience = true,
+
                             ValidAudience =
                                 jwtOptions.Audience,
 
-                            ValidateIssuerSigningKey = true,
+                            ValidateIssuerSigningKey =
+                                true,
+
                             IssuerSigningKey =
                                 new SymmetricSecurityKey(
                                     Encoding.UTF8.GetBytes(
@@ -113,6 +132,10 @@ public static class InfrastructureServiceExtensions
 
         services.AddAuthorization();
 
+        // ============================================================
+        // IDENTITY / AUTH
+        // ============================================================
+
         services.AddScoped<
             IPasswordHasher<User>,
             PasswordHasher<User>>();
@@ -122,86 +145,125 @@ public static class InfrastructureServiceExtensions
             JwtTokenService>();
 
         services.AddScoped<
-    IAuthenticationService,
-    AuthenticationService>();
+            IAuthenticationService,
+            AuthenticationService>();
 
-    services.AddScoped<
-    IDashboardService,
-    DashboardService>();
+        // ============================================================
+        // DASHBOARD
+        // ============================================================
 
-    services.AddScoped<
-    IEnrollmentService,
-    EnrollmentService>();
+        services.AddScoped<
+            IDashboardService,
+            DashboardService>();
 
-    services.AddScoped<
-    IDeviceRegistrationService,
-    DeviceRegistrationService>();
+        // ============================================================
+        // ENROLLMENT
+        // ============================================================
 
-    services.AddScoped<
-    IDeviceCommandService,
-    DeviceCommandService>();
+        services.AddScoped<
+            IEnrollmentService,
+            EnrollmentService>();
 
-    services.AddScoped<
-    IDeviceCommandAgentService,
-    DeviceCommandAgentService>();
+        services.AddScoped<
+            IDeviceRegistrationService,
+            DeviceRegistrationService>();
 
-    services.AddScoped<
-    IDeviceAuthenticator,
-    DeviceAuthenticator>();
+        // ============================================================
+        // DEVICES
+        // ============================================================
 
-    services.AddScoped<IDeviceAgentService, DeviceAgentService>();
+        services.AddScoped<
+            IDeviceAuthenticator,
+            DeviceAuthenticator>();
 
-    services.AddScoped<IDeviceQueryService, DeviceQueryService>();
+        services.AddScoped<
+            IDeviceAgentService,
+            DeviceAgentService>();
 
-    services.AddScoped<
-    IPolicyService,
-    PolicyService>();
+        services.AddScoped<
+            IDeviceQueryService,
+            DeviceQueryService>();
 
- services
-    .AddOptions<AndroidManagementOptions>()
-    .Bind(
-        configuration.GetSection(
-            AndroidManagementOptions.SectionName));
+        // ============================================================
+        // COMMAND ENGINE
+        // ============================================================
 
-services.AddSingleton<
-    IGoogleAndroidAccessTokenProvider,
-    GoogleAndroidAccessTokenProvider>();
+        services.AddScoped<
+            IDeviceCommandService,
+            DeviceCommandService>();
 
-services.AddHttpClient<
-    AndroidManagementClient>();
+        services.AddScoped<
+            IDeviceCommandAgentService,
+            DeviceCommandAgentService>();
 
-// ============================================================
-// ANDROID ENTERPRISE
-// ============================================================
+        // ============================================================
+        // APPLICATION INVENTORY
+        // ============================================================
 
-services.AddScoped<
-    IAndroidEnterpriseService,
-    AndroidEnterpriseService>();
+        services.AddScoped<
+            IApplicationInventoryService,
+            ApplicationInventoryService>();
 
-services.AddScoped<
-    IAndroidDeviceSyncService,
-    AndroidDeviceSyncService>();
+        // ============================================================
+        // POLICY ENGINE
+        // ============================================================
 
-// ============================================================
-// ANDROID POLICY ENGINE
-// ============================================================
+        services.AddScoped<
+            IPolicyService,
+            PolicyService>();
 
-services.AddScoped<
-    IAndroidPolicyCompiler,
-    AndroidPolicyCompiler>();
+        // ============================================================
+        // GOOGLE ANDROID MANAGEMENT
+        // ============================================================
 
-services.AddScoped<
-    IAndroidPolicyPublisher,
-    AndroidPolicyPublisher>();
+        services
+            .AddOptions<AndroidManagementOptions>()
+            .Bind(
+                configuration.GetSection(
+                    AndroidManagementOptions.SectionName));
 
-services.AddScoped<
-    IAndroidPolicyAssignmentService,
-    AndroidPolicyAssignmentService>();
-    
-services.AddScoped<TitanMdmSeeder>();
+        services.AddSingleton<
+            IGoogleAndroidAccessTokenProvider,
+            GoogleAndroidAccessTokenProvider>();
 
+        services.AddHttpClient<
+            AndroidManagementClient>();
 
+        // ============================================================
+        // ANDROID ENTERPRISE
+        // ============================================================
 
-return services;
+        services.AddScoped<
+            IAndroidEnterpriseService,
+            AndroidEnterpriseService>();
+
+        services.AddScoped<
+            IAndroidDeviceSyncService,
+            AndroidDeviceSyncService>();
+
+        // ============================================================
+        // ANDROID POLICY ENGINE
+        // ============================================================
+
+        services.AddScoped<
+            IAndroidPolicyCompiler,
+            AndroidPolicyCompiler>();
+
+        services.AddScoped<
+            IAndroidPolicyPublisher,
+            AndroidPolicyPublisher>();
+
+        services.AddScoped<
+            IAndroidPolicyAssignmentService,
+            AndroidPolicyAssignmentService>();
+
+        // ============================================================
+        // DATABASE SEED
+        // ============================================================
+
+        services.AddScoped<
+            TitanMdmSeeder>();
+
+        return services;
     }
 }

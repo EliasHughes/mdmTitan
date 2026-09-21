@@ -15,8 +15,8 @@ public sealed class TitanMdmDbContext : DbContext
         Set<Organization>();
 
     public DbSet<AndroidPolicyPublication>
-    AndroidPolicyPublications =>
-    Set<AndroidPolicyPublication>();
+        AndroidPolicyPublications =>
+            Set<AndroidPolicyPublication>();
 
     public DbSet<Department> Departments =>
         Set<Department>();
@@ -48,6 +48,9 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<DeviceCommand> DeviceCommands =>
         Set<DeviceCommand>();
 
+    public DbSet<DeviceApplication> DeviceApplications =>
+        Set<DeviceApplication>();
+
     public DbSet<EnrollmentToken> EnrollmentTokens =>
         Set<EnrollmentToken>();
 
@@ -73,10 +76,6 @@ public sealed class TitanMdmDbContext : DbContext
         AndroidEnrollments =>
             Set<AndroidEnrollment>();
 
-    /*
-     * Extensión Android Enterprise 1:1
-     * del inventario general Devices.
-     */
     public DbSet<AndroidDevice>
         AndroidDevices =>
             Set<AndroidDevice>();
@@ -84,7 +83,8 @@ public sealed class TitanMdmDbContext : DbContext
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
-        base.OnModelCreating(modelBuilder);
+        base.OnModelCreating(
+            modelBuilder);
 
         modelBuilder.ApplyConfigurationsFromAssembly(
             typeof(TitanMdmDbContext).Assembly);
