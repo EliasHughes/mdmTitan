@@ -1,6 +1,7 @@
 package com.titanmdm.agent.commands
 
 import android.content.Context
+import com.titanmdm.agent.commands.handlers.AppInventoryCommandHandler
 import com.titanmdm.agent.commands.handlers.CommandHandler
 import com.titanmdm.agent.commands.handlers.DeviceInfoCommandHandler
 import com.titanmdm.agent.commands.handlers.PingCommandHandler
@@ -10,12 +11,20 @@ class CommandDispatcher(
     context: Context
 ) {
 
+    private val applicationContext =
+        context.applicationContext
+
     private val handlers:
             List<CommandHandler> =
         listOf(
             PingCommandHandler(),
+
             DeviceInfoCommandHandler(
-                context.applicationContext
+                applicationContext
+            ),
+
+            AppInventoryCommandHandler(
+                applicationContext
             )
         )
 
@@ -58,7 +67,9 @@ class CommandDispatcher(
 
         return try {
 
-            handler.execute(command)
+            handler.execute(
+                command
+            )
 
         } catch (exception: Exception) {
 
