@@ -91,6 +91,20 @@ public sealed class TitanMdmDbContext : DbContext
         DeviceGroupMembers =>
         Set<DeviceGroupMember>();
 
+    public DbSet<DeviceLocation> DeviceLocations =>
+    Set<DeviceLocation>();
+
+    public DbSet<Geofence> Geofences =>
+        Set<Geofence>();
+
+    public DbSet<GeofenceDeviceAssignment>
+        GeofenceDeviceAssignments =>
+            Set<GeofenceDeviceAssignment>();
+
+    public DbSet<LostModeSession>
+        LostModeSessions =>
+            Set<LostModeSession>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

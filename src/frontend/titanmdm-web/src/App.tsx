@@ -26,6 +26,7 @@ import { RolesPage } from './pages/roles/RolesPage'
 import { SettingsPage } from './pages/settings/SettingsPage'
 import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
 import { PolicyEditorPage } from './pages/policies/PolicyEditorPage'
+import { DeviceGroupsPage } from './pages/groups/DeviceGroupsPage'
 
 
 
@@ -88,6 +89,11 @@ function App() {
         <Route
           path="policies/:policyId"
           element={<PolicyEditorPage />}
+        />
+
+        <Route
+          path="groups"
+          element={<DeviceGroupsPage />}
         />
 
         <Route
