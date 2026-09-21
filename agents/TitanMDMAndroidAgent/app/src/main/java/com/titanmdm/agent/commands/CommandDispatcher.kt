@@ -3,8 +3,10 @@ package com.titanmdm.agent.commands
 import android.content.Context
 import com.titanmdm.agent.commands.handlers.AppInventoryCommandHandler
 import com.titanmdm.agent.commands.handlers.CommandHandler
+import com.titanmdm.agent.commands.handlers.ComplianceCheckCommandHandler
 import com.titanmdm.agent.commands.handlers.DeviceInfoCommandHandler
 import com.titanmdm.agent.commands.handlers.PingCommandHandler
+import com.titanmdm.agent.commands.handlers.SecurityStatusCommandHandler
 import com.titanmdm.agent.core.network.DeviceCommandDto
 
 class CommandDispatcher(
@@ -24,6 +26,14 @@ class CommandDispatcher(
             ),
 
             AppInventoryCommandHandler(
+                applicationContext
+            ),
+
+            SecurityStatusCommandHandler(
+                applicationContext
+            ),
+
+            ComplianceCheckCommandHandler(
                 applicationContext
             )
         )
