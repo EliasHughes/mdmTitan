@@ -5,6 +5,12 @@
     <!-- Internet / API -->
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- K8/K9 Location / Lost Device -->
+    <uses-permission
+        android:name="android.permission.ACCESS_COARSE_LOCATION" />
+
+    <uses-permission
+        android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Estado del dispositivo -->
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />

@@ -8,6 +8,7 @@ using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 
 using TitanMDM.Infrastructure.Persistence;
+using TitanMDM.Application.Location;
 
 namespace TitanMDM.Infrastructure.Commands;
 
@@ -24,19 +25,19 @@ public sealed class DeviceCommandAgentService
         _securityPostureService;
 
     public DeviceCommandAgentService(
-        TitanMdmDbContext dbContext,
-        IApplicationInventoryService applicationInventoryService,
-        ISecurityPostureService securityPostureService)
-    {
-        _dbContext =
-            dbContext;
-
-        _applicationInventoryService =
-            applicationInventoryService;
-
-        _securityPostureService =
-            securityPostureService;
-    }
+    TitanMdmDbContext dbContext,
+    IApplicationInventoryService applicationInventoryService,
+    ISecurityPostureService securityPostureService,
+    IDeviceLocationService deviceLocationService)
+{
+    _dbContext = dbContext;
+    _applicationInventoryService =
+        applicationInventoryService;
+    _securityPostureService =
+        securityPostureService;
+    _deviceLocationService =
+        deviceLocationService;
+}
 
     public async Task<IReadOnlyCollection<AgentCommandDto>>
         GetPendingCommandsAsync(
@@ -217,6 +218,22 @@ public sealed class DeviceCommandAgentService
 
             await _securityPostureService
                 .ProcessComplianceAsync(
+                    deviceId,
+                    resultJson!,
+                    cancellationToken);
+        }
+
+        if (
+            command.CommandType.Equals(
+                "LOCATION_REQUEST",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            RequireResult(
+                resultJson,
+                "LOCATION_REQUEST");
+
+            await _deviceLocationService
+                .ProcessLocationAsync(
                     deviceId,
                     resultJson!,
                     cancellationToken);

@@ -14,6 +14,7 @@ import {
   Smartphone,
   UserCog,
   Users,
+  Network,
 } from 'lucide-react'
 
 export interface NavigationItem {
@@ -35,6 +36,12 @@ export const navigationItems: NavigationItem[] = [
     path: '/devices',
     permission: 'devices.view',
     icon: MonitorSmartphone,
+  },
+  {
+  label: 'Grupos y Flota',
+  path: '/groups',
+  permission: 'devices.view',
+  icon: Network,
   },
   {
     label: 'Inscripción',
