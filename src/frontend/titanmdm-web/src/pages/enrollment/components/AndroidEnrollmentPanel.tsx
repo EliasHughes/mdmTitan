@@ -1,4 +1,5 @@
 import {
+  useEffect,
   useState,
 } from 'react'
 
@@ -49,73 +50,122 @@ export default function AndroidEnrollmentPanel({
   canCreateAgent = true,
   canRevokeAgent = true,
 }: AndroidEnrollmentPanelProps) {
-  const defaultTechnology:
-    AndroidEnrollmentTechnology =
-      canViewEnterprise
-        ? 'enterprise'
-        : 'agent'
-
   const [
     activeTechnology,
     setActiveTechnology,
   ] =
     useState<AndroidEnrollmentTechnology>(
-      defaultTechnology,
+      canViewEnterprise
+        ? 'enterprise'
+        : 'agent',
     )
+
+  useEffect(() => {
+    if (
+      activeTechnology ===
+        'enterprise' &&
+      !canViewEnterprise &&
+      canViewAgent
+    ) {
+      setActiveTechnology('agent')
+      return
+    }
+
+    if (
+      activeTechnology === 'agent' &&
+      !canViewAgent &&
+      canViewEnterprise
+    ) {
+      setActiveTechnology(
+        'enterprise',
+      )
+    }
+  }, [
+    activeTechnology,
+    canViewEnterprise,
+    canViewAgent,
+  ])
+
+  if (
+    !canViewEnterprise &&
+    !canViewAgent
+  ) {
+    return (
+      <section className="enrollment-panel">
+        <div className="enrollment-empty-table">
+          No tienes permisos para consultar
+          métodos de inscripción Android.
+        </div>
+      </section>
+    )
+  }
 
   return (
     <div className="android-enrollment-panel">
-      <div className="android-technology-tabs">
-        {canViewEnterprise && (
-          <button
-            type="button"
-            className={
-              activeTechnology ===
-              'enterprise'
-                ? 'android-technology-tab android-technology-tab-active'
-                : 'android-technology-tab'
-            }
-            onClick={() =>
-              setActiveTechnology(
-                'enterprise',
-              )
-            }
+      {canViewEnterprise &&
+        canViewAgent && (
+          <div
+            className="android-technology-tabs"
+            role="tablist"
+            aria-label="Tecnología de inscripción Android"
           >
-            <strong>
-              Android Enterprise
-            </strong>
+            <button
+              type="button"
+              role="tab"
+              aria-selected={
+                activeTechnology ===
+                'enterprise'
+              }
+              className={
+                activeTechnology ===
+                'enterprise'
+                  ? 'android-technology-tab android-technology-tab-active'
+                  : 'android-technology-tab'
+              }
+              onClick={() =>
+                setActiveTechnology(
+                  'enterprise',
+                )
+              }
+            >
+              <strong>
+                Android Enterprise
+              </strong>
 
-            <small>
-              Google AMAPI
-            </small>
-          </button>
+              <small>
+                Google AMAPI
+              </small>
+            </button>
+
+            <button
+              type="button"
+              role="tab"
+              aria-selected={
+                activeTechnology ===
+                'agent'
+              }
+              className={
+                activeTechnology ===
+                'agent'
+                  ? 'android-technology-tab android-technology-tab-active'
+                  : 'android-technology-tab'
+              }
+              onClick={() =>
+                setActiveTechnology(
+                  'agent',
+                )
+              }
+            >
+              <strong>
+                TitanMDM Agent
+              </strong>
+
+              <small>
+                Agente Kotlin
+              </small>
+            </button>
+          </div>
         )}
-
-        {canViewAgent && (
-          <button
-            type="button"
-            className={
-              activeTechnology ===
-              'agent'
-                ? 'android-technology-tab android-technology-tab-active'
-                : 'android-technology-tab'
-            }
-            onClick={() =>
-              setActiveTechnology(
-                'agent',
-              )
-            }
-          >
-            <strong>
-              TitanMDM Agent
-            </strong>
-
-            <small>
-              Agente Kotlin
-            </small>
-          </button>
-        )}
-      </div>
 
       {activeTechnology ===
         'enterprise' &&
@@ -139,8 +189,12 @@ export default function AndroidEnrollmentPanel({
         canViewAgent && (
           <AndroidAgentEnrollment
             controller={agent}
-            canCreate={canCreateAgent}
-            canRevoke={canRevokeAgent}
+            canCreate={
+              canCreateAgent
+            }
+            canRevoke={
+              canRevokeAgent
+            }
           />
         )}
     </div>
