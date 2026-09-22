@@ -8,14 +8,19 @@ namespace TitanMDM.WindowsAgent.Services;
 
 public sealed class RemoteDesktopHostLauncher
 {
-    private readonly ActiveSessionProcessLauncher
+    private readonly
+        ActiveSessionProcessLauncher
         _activeSessionLauncher;
 
-    private readonly ILogger<RemoteDesktopHostLauncher>
+    private readonly
+        ILogger<RemoteDesktopHostLauncher>
         _logger;
 
     private readonly object
         _syncRoot = new();
+
+    private Guid?
+        _remoteSessionId;
 
     private int?
         _hostProcessId;
@@ -23,12 +28,11 @@ public sealed class RemoteDesktopHostLauncher
     private int?
         _windowsSessionId;
 
-    private Guid?
-        _remoteSessionId;
-
     public RemoteDesktopHostLauncher(
-        ActiveSessionProcessLauncher activeSessionLauncher,
-        ILogger<RemoteDesktopHostLauncher> logger)
+        ActiveSessionProcessLauncher
+            activeSessionLauncher,
+        ILogger<RemoteDesktopHostLauncher>
+            logger)
     {
         _activeSessionLauncher =
             activeSessionLauncher;
@@ -56,9 +60,11 @@ public sealed class RemoteDesktopHostLauncher
         {
             lock (_syncRoot)
             {
-                if (!_remoteSessionId.HasValue ||
+                if (
+                    !_remoteSessionId.HasValue ||
                     !_hostProcessId.HasValue ||
-                    !_windowsSessionId.HasValue)
+                    !_windowsSessionId.HasValue
+                )
                 {
                     return null;
                 }
@@ -87,7 +93,8 @@ public sealed class RemoteDesktopHostLauncher
 
     public Task StartAsync(
         RemoteDesktopStartRequest request,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken =
+            default)
     {
         cancellationToken
             .ThrowIfCancellationRequested();
@@ -97,14 +104,16 @@ public sealed class RemoteDesktopHostLauncher
             if (IsProcessRunning(
                     _hostProcessId))
             {
-                if (_remoteSessionId ==
-                    request.SessionId)
+                if (
+                    _remoteSessionId ==
+                    request.SessionId
+                )
                 {
                     return Task.CompletedTask;
                 }
 
                 throw new InvalidOperationException(
-                    "Ya existe una sesión RemoteHost activa en este dispositivo.");
+                    "Ya existe un TitanMDM RemoteHost activo.");
             }
 
             ResetState();
@@ -124,27 +133,27 @@ public sealed class RemoteDesktopHostLauncher
             var arguments =
                 $"--session \"{encodedPayload}\"";
 
-            var launchResult =
+            var result =
                 _activeSessionLauncher.Launch(
                     executablePath,
                     arguments,
                     Path.GetDirectoryName(
                         executablePath));
 
-            _hostProcessId =
-                launchResult.ProcessId;
-
-            _windowsSessionId =
-                launchResult.WindowsSessionId;
-
             _remoteSessionId =
                 request.SessionId;
 
+            _hostProcessId =
+                result.ProcessId;
+
+            _windowsSessionId =
+                result.WindowsSessionId;
+
             _logger.LogInformation(
-                "TitanMDM RemoteHost iniciado en sesión interactiva. RemoteSession={RemoteSessionId}, PID={ProcessId}, WindowsSession={WindowsSessionId}.",
+                "TitanMDM RemoteHost iniciado. RemoteSession={RemoteSessionId}, PID={ProcessId}, WindowsSession={WindowsSessionId}.",
                 request.SessionId,
-                launchResult.ProcessId,
-                launchResult.WindowsSessionId);
+                result.ProcessId,
+                result.WindowsSessionId);
         }
 
         return Task.CompletedTask;
@@ -152,14 +161,17 @@ public sealed class RemoteDesktopHostLauncher
 
     public async Task StopAsync(
         Guid sessionId,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken =
+            default)
     {
         int? processId;
 
         lock (_syncRoot)
         {
-            if (_remoteSessionId !=
-                sessionId)
+            if (
+                _remoteSessionId !=
+                sessionId
+            )
             {
                 return;
             }
@@ -177,7 +189,7 @@ public sealed class RemoteDesktopHostLauncher
 
         try
         {
-            Process? process = null;
+            Process process;
 
             try
             {
@@ -185,11 +197,8 @@ public sealed class RemoteDesktopHostLauncher
                     Process.GetProcessById(
                         processId.Value);
             }
-            catch (
-                ArgumentException)
+            catch (ArgumentException)
             {
-                ResetState();
-
                 return;
             }
 
@@ -211,7 +220,8 @@ public sealed class RemoteDesktopHostLauncher
                 }
                 catch
                 {
-                    // RemoteHost puede no aceptar WM_CLOSE.
+                    // El host puede no responder
+                    // a WM_CLOSE.
                 }
 
                 using var timeout =
@@ -224,12 +234,15 @@ public sealed class RemoteDesktopHostLauncher
 
                 try
                 {
-                    await process.WaitForExitAsync(
-                        timeout.Token);
+                    await process
+                        .WaitForExitAsync(
+                            timeout.Token);
                 }
-                catch (OperationCanceledException)
-                    when (!cancellationToken
-                        .IsCancellationRequested)
+                catch (
+                    OperationCanceledException)
+                    when (
+                        !cancellationToken
+                            .IsCancellationRequested)
                 {
                     if (!process.HasExited)
                     {
@@ -256,43 +269,43 @@ public sealed class RemoteDesktopHostLauncher
         var agentDirectory =
             AppContext.BaseDirectory;
 
-        var candidates =
-            new[]
-            {
+        var deployed =
+            Path.Combine(
+                agentDirectory,
+                "TitanMDM.RemoteHost.exe");
+
+        if (File.Exists(deployed))
+        {
+            return deployed;
+        }
+
+        var development =
+            Path.GetFullPath(
                 Path.Combine(
                     agentDirectory,
-                    "TitanMDM.RemoteHost.exe"),
+                    "..",
+                    "..",
+                    "..",
+                    "..",
+                    "TitanMDM.RemoteHost",
+                    "bin",
+                    "Debug",
+                    "net10.0-windows",
+                    "TitanMDM.RemoteHost.exe"));
 
-                Path.GetFullPath(
-                    Path.Combine(
-                        agentDirectory,
-                        "..",
-                        "..",
-                        "..",
-                        "..",
-                        "TitanMDM.RemoteHost",
-                        "bin",
-                        "Debug",
-                        "net10.0-windows",
-                        "TitanMDM.RemoteHost.exe"))
-            };
-
-        foreach (var candidate in
-                 candidates)
+        if (File.Exists(development))
         {
-            if (File.Exists(candidate))
-            {
-                return candidate;
-            }
+            return development;
         }
 
         throw new FileNotFoundException(
-            "TitanMDM.RemoteHost.exe no está desplegado junto al Windows Agent ni fue encontrado en la ruta de desarrollo.",
-            candidates[0]);
+            "TitanMDM.RemoteHost.exe no está desplegado junto al Windows Agent ni fue encontrado en la salida de desarrollo.",
+            deployed);
     }
 
-    private static bool IsProcessRunning(
-        int? processId)
+    private static bool
+        IsProcessRunning(
+            int? processId)
     {
         if (!processId.HasValue)
         {
@@ -317,13 +330,13 @@ public sealed class RemoteDesktopHostLauncher
     {
         lock (_syncRoot)
         {
+            _remoteSessionId =
+                null;
+
             _hostProcessId =
                 null;
 
             _windowsSessionId =
-                null;
-
-            _remoteSessionId =
                 null;
         }
     }
