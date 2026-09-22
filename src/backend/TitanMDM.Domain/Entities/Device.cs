@@ -212,6 +212,23 @@ public sealed class Device
         UpdatedAtUtc = DateTime.UtcNow;
     }
 
+    public void MarkOffline()
+{
+    if (
+        Status == DeviceStatus.Wiped ||
+        Status == DeviceStatus.Retired ||
+        Status == DeviceStatus.Quarantined)
+    {
+        return;
+    }
+
+    Status =
+        DeviceStatus.Offline;
+
+    UpdatedAtUtc =
+        DateTime.UtcNow;
+}
+
     public void MarkAndroidMissing()
     {
         if (Platform != DevicePlatform.Android)

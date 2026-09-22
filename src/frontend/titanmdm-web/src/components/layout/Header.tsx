@@ -128,6 +128,7 @@ export function Header() {
           <button
             type="button"
             className="header-icon-button"
+            data-titan-anchor="header.notifications"
             aria-label="Notificaciones"
             aria-expanded={notificationsOpen}
             onClick={() => {
@@ -184,6 +185,7 @@ export function Header() {
           <button
             type="button"
             className="user-menu-trigger"
+            data-titan-anchor="header.user"
             aria-expanded={menuOpen}
             onClick={() => {
               setMenuOpen(
