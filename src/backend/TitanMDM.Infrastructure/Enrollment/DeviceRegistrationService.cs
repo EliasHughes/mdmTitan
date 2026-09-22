@@ -5,6 +5,7 @@ using TitanMDM.Application.Enrollment.DeviceRegistration;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
+using TitanMDM.Application.Automation;
 
 namespace TitanMDM.Infrastructure.Enrollment;
 
@@ -13,10 +14,15 @@ public sealed class DeviceRegistrationService
 {
     private readonly TitanMdmDbContext _dbContext;
 
+    private readonly IAutomationEventDispatcher
+        _automation;
+
     public DeviceRegistrationService(
-        TitanMdmDbContext dbContext)
+        TitanMdmDbContext dbContext,
+        IAutomationEventDispatcher automation)
     {
         _dbContext = dbContext;
+        _automation = automation;
     }
 
    public async Task<RegisterDeviceResultDto> RegisterAsync(
@@ -123,6 +129,42 @@ public sealed class DeviceRegistrationService
 
                 await transaction.CommitAsync(
                     cancellationToken);
+
+                await _automation.DispatchAsync(
+    device.OrganizationId,
+    device.Id,
+    "DeviceEnrolled",
+    new
+    {
+        platform =
+            device.Platform.ToString(),
+
+        deviceName =
+            device.DeviceName,
+
+        serialNumber =
+            device.SerialNumber,
+
+        manufacturer =
+            device.Manufacturer,
+
+        model =
+            device.Model,
+
+        operatingSystem =
+            device.OperatingSystem,
+
+        operatingSystemVersion =
+            device.OperatingSystemVersion,
+
+        agentVersion =
+            device.AgentVersion,
+
+        enrolledAtUtc =
+            device.EnrolledAtUtc
+    },
+    cancellationToken:
+        cancellationToken);
 
                 return new RegisterDeviceResultDto(
                             device.Id,

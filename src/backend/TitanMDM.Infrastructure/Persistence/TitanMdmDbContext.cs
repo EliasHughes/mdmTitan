@@ -113,6 +113,14 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<LostModeSession>
         LostModeSessions =>
             Set<LostModeSession>();
+        
+    public DbSet<GeofenceDeviceState>
+    GeofenceDeviceStates =>
+        Set<GeofenceDeviceState>();
+
+    public DbSet<GeofenceEvent>
+    GeofenceEvents =>
+        Set<GeofenceEvent>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)

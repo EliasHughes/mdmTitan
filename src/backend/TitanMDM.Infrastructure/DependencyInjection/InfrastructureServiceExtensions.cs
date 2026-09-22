@@ -48,6 +48,7 @@ using TitanMDM.Infrastructure.Automation;
 
 
 
+
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceExtensions
@@ -310,6 +311,9 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IAutomationEventDispatcher,
             AutomationEventDispatcher>();
+
+        services.AddHostedService<
+            DeviceOfflineMonitor>();
 
         // ============================================================
         // DATABASE SEED
