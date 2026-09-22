@@ -122,6 +122,14 @@ public sealed class TitanMdmDbContext : DbContext
     GeofenceEvents =>
         Set<GeofenceEvent>();
 
+    public DbSet<RemoteSession>
+    RemoteSessions =>
+        Set<RemoteSession>();
+
+    public DbSet<RemoteSessionEvent>
+    RemoteSessionEvents =>
+        Set<RemoteSessionEvent>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
