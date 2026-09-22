@@ -3,88 +3,64 @@ import {
   HubConnectionBuilder,
   HubConnectionState,
   LogLevel,
-} from "@microsoft/signalr";
+} from '@microsoft/signalr'
+
+import { tokenStorage } from '../auth/tokenStorage'
 
 export interface RemoteFrame {
-  sessionId: string;
-  sequence: number;
-  width: number;
-  height: number;
-  mimeType: string;
-  base64Data: string;
-  capturedAtUtc: string;
+  sessionId: string
+  sequence: number
+  width: number
+  height: number
+  mimeType: string
+  base64Data: string
+  capturedAtUtc: string
 }
 
-export interface RemoteSessionUpdate {
-  sessionId: string;
-  status: string;
-  connectedAtUtc?: string | null;
+export interface RemoteSessionChanged {
+  sessionId: string
+  status: string
+  deviceId?: string
+  failureReason?: string | null
+  terminationReason?: string | null
 }
 
-export interface RemoteSupportHandlers {
-  onFrame?: (frame: RemoteFrame) => void;
-  onSessionUpdated?: (update: RemoteSessionUpdate) => void;
-  onReconnecting?: () => void;
-  onReconnected?: () => void;
-  onDisconnected?: (error?: Error) => void;
-}
+export interface RemoteSupportCallbacks {
+  onFrame?: (frame: RemoteFrame) => void
 
-function getApiBaseUrl(): string {
-  const configured =
-    import.meta.env.VITE_API_URL?.trim();
+  onSessionChanged?: (
+    update: RemoteSessionChanged,
+  ) => void
 
-  if (configured) {
-    return configured.replace(/\/api\/?$/, "");
-  }
-
-  return "http://localhost:8020";
-}
-
-function getAccessToken(): string {
-  const candidates = [
-    localStorage.getItem("accessToken"),
-    localStorage.getItem("token"),
-    sessionStorage.getItem("accessToken"),
-    sessionStorage.getItem("token"),
-  ];
-
-  const token =
-    candidates.find(
-      (value) =>
-        typeof value === "string" &&
-        value.trim().length > 0,
-    ) ?? "";
-
-  return token.replace(/^Bearer\s+/i, "");
+  onReconnecting?: () => void
+  onReconnected?: () => void
+  onClosed?: (error?: Error) => void
 }
 
 export class RemoteSupportSignalRClient {
-  private connection: HubConnection | null = null;
+  private connection: HubConnection | null = null
 
-  private currentSessionId: string | null = null;
+  private callbacks: RemoteSupportCallbacks = {}
 
-  public get state(): HubConnectionState {
-    return (
-      this.connection?.state ??
-      HubConnectionState.Disconnected
-    );
-  }
-
-  public async connect(
-    sessionId: string,
-    handlers: RemoteSupportHandlers,
+  async connect(
+    callbacks: RemoteSupportCallbacks = {},
   ): Promise<void> {
-    await this.disconnect();
+    this.callbacks = callbacks
 
-    this.currentSessionId = sessionId;
+    if (
+      this.connection?.state ===
+      HubConnectionState.Connected
+    ) {
+      return
+    }
 
     const connection =
       new HubConnectionBuilder()
         .withUrl(
-          `${getApiBaseUrl()}/hubs/remote-support`,
+          '/hubs/remote-support',
           {
             accessTokenFactory: () =>
-              getAccessToken(),
+              tokenStorage.getAccessToken() ?? '',
           },
         )
         .withAutomaticReconnect([
@@ -92,222 +68,168 @@ export class RemoteSupportSignalRClient {
           2000,
           5000,
           10000,
+          30000,
         ])
         .configureLogging(
           LogLevel.Warning,
         )
-        .build();
+        .build()
 
     connection.on(
-      "RemoteFrame",
+      'RemoteFrame',
       (frame: RemoteFrame) => {
-        if (
-          frame.sessionId ===
-          this.currentSessionId
-        ) {
-          handlers.onFrame?.(
-            frame,
-          );
-        }
+        this.callbacks.onFrame?.(frame)
       },
-    );
+    )
 
     connection.on(
-      "RemoteSessionUpdated",
-      (update: RemoteSessionUpdate) => {
-        if (
-          update.sessionId ===
-          this.currentSessionId
-        ) {
-          handlers.onSessionUpdated?.(
-            update,
-          );
-        }
+      'RemoteSessionUpdated',
+      (update: RemoteSessionChanged) => {
+        this.callbacks.onSessionChanged?.(
+          update,
+        )
       },
-    );
+    )
 
-    connection.onreconnecting(
-      () => {
-        handlers.onReconnecting?.();
+    connection.on(
+      'RemoteSessionChanged',
+      (update: RemoteSessionChanged) => {
+        this.callbacks.onSessionChanged?.(
+          update,
+        )
       },
-    );
+    )
 
-    connection.onreconnected(
-      async () => {
-        handlers.onReconnected?.();
+    connection.onreconnecting(() => {
+      this.callbacks.onReconnecting?.()
+    })
 
-        if (this.currentSessionId) {
-          await connection.invoke(
-            "JoinSession",
-            this.currentSessionId,
-          );
-        }
-      },
-    );
+    connection.onreconnected(() => {
+      this.callbacks.onReconnected?.()
+    })
 
-    connection.onclose(
-      (error) => {
-        handlers.onDisconnected?.(
-          error,
-        );
-      },
-    );
+    connection.onclose((error) => {
+      this.callbacks.onClosed?.(
+        error ?? undefined,
+      )
+    })
 
-    await connection.start();
+    await connection.start()
 
-    await connection.invoke(
-      "JoinSession",
+    this.connection = connection
+  }
+
+  async joinSession(
+    sessionId: string,
+  ): Promise<void> {
+    this.ensureConnected()
+
+    await this.connection!.invoke(
+      'JoinSession',
       sessionId,
-    );
-
-    this.connection =
-      connection;
+    )
   }
 
-  public async disconnect(): Promise<void> {
-    const connection =
-      this.connection;
-
-    const sessionId =
-      this.currentSessionId;
-
-    this.connection =
-      null;
-
-    this.currentSessionId =
-      null;
-
-    if (!connection) {
-      return;
-    }
-
-    try {
-      if (
-        sessionId &&
-        connection.state ===
-          HubConnectionState.Connected
-      ) {
-        await connection.invoke(
-          "LeaveSession",
-          sessionId,
-        );
-      }
-    } catch {
-      // La sesión puede haber terminado ya.
-    }
-
-    try {
-      await connection.stop();
-    } catch {
-      // No bloqueamos el desmontaje de la UI.
-    }
-  }
-
-  private requireConnection(): {
-    connection: HubConnection;
-    sessionId: string;
-  } {
+  async leaveSession(
+    sessionId: string,
+  ): Promise<void> {
     if (
       !this.connection ||
       this.connection.state !==
-        HubConnectionState.Connected ||
-      !this.currentSessionId
+        HubConnectionState.Connected
     ) {
-      throw new Error(
-        "El canal de soporte remoto no está conectado.",
-      );
+      return
     }
 
-    return {
-      connection:
-        this.connection,
-
-      sessionId:
-        this.currentSessionId,
-    };
+    await this.connection.invoke(
+      'LeaveSession',
+      sessionId,
+    )
   }
 
-  public async pointerMove(
-    normalizedX: number,
-    normalizedY: number,
+  async pointerMove(
+    sessionId: string,
+    x: number,
+    y: number,
   ): Promise<void> {
-    const {
-      connection,
-      sessionId,
-    } =
-      this.requireConnection();
+    this.ensureConnected()
 
-    await connection.invoke(
-      "PointerMove",
+    await this.connection!.invoke(
+      'PointerMove',
       sessionId,
-      Math.max(
-        0,
-        Math.min(
-          1,
-          normalizedX,
-        ),
-      ),
-      Math.max(
-        0,
-        Math.min(
-          1,
-          normalizedY,
-        ),
-      ),
-    );
+      x,
+      y,
+    )
   }
 
-  public async pointerButton(
-    action:
-      | "left-down"
-      | "left-up"
-      | "right-down"
-      | "right-up",
+  async pointerButton(
+    sessionId: string,
+    action: string,
   ): Promise<void> {
-    const {
-      connection,
-      sessionId,
-    } =
-      this.requireConnection();
+    this.ensureConnected()
 
-    await connection.invoke(
-      "PointerButton",
+    await this.connection!.invoke(
+      'PointerButton',
       sessionId,
       action,
-    );
+    )
   }
 
-  public async pointerWheel(
+  async pointerWheel(
+    sessionId: string,
     delta: number,
   ): Promise<void> {
-    const {
-      connection,
-      sessionId,
-    } =
-      this.requireConnection();
+    this.ensureConnected()
 
-    await connection.invoke(
-      "PointerWheel",
+    await this.connection!.invoke(
+      'PointerWheel',
       sessionId,
       delta,
-    );
+    )
   }
 
-  public async keyboard(
+  async keyboard(
+    sessionId: string,
     virtualKey: number,
     keyDown: boolean,
   ): Promise<void> {
-    const {
-      connection,
-      sessionId,
-    } =
-      this.requireConnection();
+    this.ensureConnected()
 
-    await connection.invoke(
-      "Keyboard",
+    await this.connection!.invoke(
+      'Keyboard',
       sessionId,
       virtualKey,
       keyDown,
-    );
+    )
+  }
+
+  async disconnect(): Promise<void> {
+    const connection =
+      this.connection
+
+    this.connection = null
+
+    if (!connection) {
+      return
+    }
+
+    if (
+      connection.state !==
+      HubConnectionState.Disconnected
+    ) {
+      await connection.stop()
+    }
+  }
+
+  private ensureConnected(): void {
+    if (
+      !this.connection ||
+      this.connection.state !==
+        HubConnectionState.Connected
+    ) {
+      throw new Error(
+        'El canal de soporte remoto no está conectado.',
+      )
+    }
   }
 }
