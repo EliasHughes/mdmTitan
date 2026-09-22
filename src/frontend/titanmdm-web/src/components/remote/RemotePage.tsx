@@ -1081,29 +1081,45 @@ export function RemotePage() {
                 session.id,
               )
           } catch (
-            joinError
-          ) {
-            console.error(
-              'Sesión creada, pero JoinSession falló.',
-              joinError,
-            )
+                joinError
+              ) {
+                console.error(
+                  'Sesión creada, pero JoinSession falló.',
+                  joinError,
+                )
 
-            setError(
-              'La sesión fue creada, pero el canal SignalR no pudo unirse a ella. Revisa autenticación y permisos remote.view.',
-            )
-          }
+                const message =
+                  joinError instanceof Error
+                    ? joinError.message
+                    : String(
+                        joinError,
+                      )
+
+                setError(
+                  `La sesión fue creada, pero JoinSession falló. ${message}`,
+                )
+              }
         }
-      } catch (
-        requestError
-      ) {
-        console.error(
-          requestError,
+     } 
+               catch (
+  joinError
+) {
+  console.error(
+    'No fue posible unirse a la sesión SignalR seleccionada.',
+    joinError,
+  )
+
+  const message =
+    joinError instanceof Error
+      ? joinError.message
+      : String(
+          joinError,
         )
 
-        setError(
-          'No fue posible crear la sesión remota. Verifica que el dispositivo esté administrado y que no tenga otra sesión activa.',
-        )
-      } finally {
+  setError(
+    `El canal SignalR está conectado, pero JoinSession falló. ${message}`,
+  )
+}finally {
         setCreating(
           false,
         )
