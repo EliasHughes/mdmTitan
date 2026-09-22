@@ -169,7 +169,17 @@ public sealed class RemoteSupportAgentController
         return Ok(active);
     }
 
-  [HttpPost("{sessionId:guid}/connecting")]
+     [HttpPost("{sessionId:guid}/connecting")]
+    public async Task<IActionResult> Connecting(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        return await ChangeStateAsync(
+            sessionId,
+            RemoteAgentTransition.Connecting,
+            null,
+            cancellationToken);
+    }
 
     [HttpPost("{sessionId:guid}/connected")]
     public async Task<IActionResult> Connected(
