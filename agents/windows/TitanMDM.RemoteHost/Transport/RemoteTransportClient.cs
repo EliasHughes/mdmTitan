@@ -211,16 +211,14 @@ public sealed class RemoteTransportClient
             });
 
         connection.On(
-            "TerminateRemoteSession",
-            () =>
-            {
-                _streamCancellation?
-                    .Cancel();
+    "TerminateRemoteSession",
+    () =>
+    {
+        _streamCancellation?
+            .Cancel();
 
-                Application.Exit();
-
-                return Task.CompletedTask;
-            });
+        Application.Exit();
+    });
     }
 
     private void StartStreaming()

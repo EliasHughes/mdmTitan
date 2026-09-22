@@ -35,13 +35,8 @@ public sealed class RemoteInputController
     private const uint MouseVirtualDesk =
         0x4000;
 
-    public void KeyUp(
-    ushort virtualKey)
-{
-    SendKeyboard(
-        virtualKey,
-        KeyboardKeyUp);
-}
+    private const uint KeyboardKeyUp =
+        0x0002;
 
     public void MovePointer(
         double normalizedX,
@@ -132,7 +127,7 @@ public sealed class RemoteInputController
     {
         SendKeyboard(
             virtualKey,
-            KeyUp);
+            KeyboardKeyUp);
     }
 
     private static void SendMouse(
@@ -153,12 +148,23 @@ public sealed class RemoteInputController
                         Mouse =
                             new MouseInput
                             {
-                                Dx = dx,
-                                Dy = dy,
+                                Dx =
+                                    dx,
+
+                                Dy =
+                                    dy,
+
                                 MouseData =
                                     mouseData,
+
                                 Flags =
-                                    flags
+                                    flags,
+
+                                Time =
+                                    0,
+
+                                ExtraInfo =
+                                    IntPtr.Zero
                             }
                     }
             };
@@ -186,8 +192,17 @@ public sealed class RemoteInputController
                                 VirtualKey =
                                     virtualKey,
 
+                                ScanCode =
+                                    0,
+
                                 Flags =
-                                    flags
+                                    flags,
+
+                                Time =
+                                    0,
+
+                                ExtraInfo =
+                                    IntPtr.Zero
                             }
                     }
             };
