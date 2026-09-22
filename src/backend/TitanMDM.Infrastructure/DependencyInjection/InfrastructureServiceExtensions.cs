@@ -111,38 +111,70 @@ public static class InfrastructureServiceExtensions
         }
 
         services
-            .AddAuthentication(
-                JwtBearerDefaults.AuthenticationScheme)
-            .AddJwtBearer(
-                options =>
+    .AddAuthentication(
+        JwtBearerDefaults.AuthenticationScheme)
+    .AddJwtBearer(
+        options =>
+        {
+            options.TokenValidationParameters =
+                new TokenValidationParameters
                 {
-                    options.TokenValidationParameters =
-                        new TokenValidationParameters
+                    ValidateIssuer = true,
+
+                    ValidIssuer =
+                        jwtOptions.Issuer,
+
+                    ValidateAudience = true,
+
+                    ValidAudience =
+                        jwtOptions.Audience,
+
+                    ValidateIssuerSigningKey =
+                        true,
+
+                    IssuerSigningKey =
+                        new SymmetricSecurityKey(
+                            Encoding.UTF8.GetBytes(
+                                jwtOptions.SigningKey)),
+
+                    ValidateLifetime = true,
+
+                    ClockSkew =
+                        TimeSpan.FromSeconds(30)
+                };
+
+            options.Events =
+                new JwtBearerEvents
+                {
+                    OnMessageReceived =
+                        context =>
                         {
-                            ValidateIssuer = true,
+                            var accessToken =
+                                context.Request
+                                    .Query[
+                                        "access_token"]
+                                    .FirstOrDefault();
 
-                            ValidIssuer =
-                                jwtOptions.Issuer,
+                            var path =
+                                context.HttpContext
+                                    .Request
+                                    .Path;
 
-                            ValidateAudience = true,
+                            if (
+                                !string.IsNullOrWhiteSpace(
+                                    accessToken)
+                                &&
+                                path.StartsWithSegments(
+                                    "/hubs/remote-support"))
+                            {
+                                context.Token =
+                                    accessToken;
+                            }
 
-                            ValidAudience =
-                                jwtOptions.Audience,
-
-                            ValidateIssuerSigningKey =
-                                true,
-
-                            IssuerSigningKey =
-                                new SymmetricSecurityKey(
-                                    Encoding.UTF8.GetBytes(
-                                        jwtOptions.SigningKey)),
-
-                            ValidateLifetime = true,
-
-                            ClockSkew =
-                                TimeSpan.FromSeconds(30)
-                        };
-                });
+                            return Task.CompletedTask;
+                        }
+                };
+        });
 
         services.AddAuthorization();
 
