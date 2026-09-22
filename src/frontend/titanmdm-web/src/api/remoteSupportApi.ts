@@ -10,26 +10,39 @@ export type RemoteSessionStatus =
   | 'Expired'
   | 'Cancelled'
 
+export interface RemoteSessionEvent {
+  id: string
+  eventType: string
+  description: string
+  userId?: string | null
+  metadataJson?: string | null
+  occurredAtUtc: string
+}
+
 export interface RemoteSession {
   id: string
-  organizationId: string
+  organizationId?: string
   deviceId: string
-  requestedByUserId: string
+  requestedByUserId?: string
   technicianName: string
   reason: string
   status: RemoteSessionStatus
+
   allowKeyboard: boolean
   allowMouse: boolean
   allowClipboard: boolean
   allowFileTransfer: boolean
+
   requestedAtUtc: string
   expiresAtUtc: string
   connectedAtUtc?: string | null
   disconnectedAtUtc?: string | null
-  updatedAtUtc?: string | null
+
   failureReason?: string | null
   terminationReason?: string | null
   terminatedBy?: string | null
+
+  events?: RemoteSessionEvent[]
 }
 
 export interface CreateRemoteSessionRequest {
@@ -42,11 +55,17 @@ export interface CreateRemoteSessionRequest {
   maximumDurationMinutes: number
 }
 
-export async function listRemoteSessions():
-  Promise<RemoteSession[]> {
+export async function listRemoteSessions(
+  take = 100,
+): Promise<RemoteSession[]> {
   const response =
     await apiClient.get<RemoteSession[]>(
       '/remote-sessions',
+      {
+        params: {
+          take,
+        },
+      },
     )
 
   return response.data
@@ -79,9 +98,14 @@ export async function terminateRemoteSession(
   sessionId: string,
   reason =
     'Sesión finalizada por el técnico.',
-): Promise<void> {
-  await apiClient.post(
-    `/remote-sessions/${sessionId}/terminate`,
-    { reason },
-  )
+): Promise<RemoteSession> {
+  const response =
+    await apiClient.post<RemoteSession>(
+      `/remote-sessions/${sessionId}/terminate`,
+      {
+        reason,
+      },
+    )
+
+  return response.data
 }

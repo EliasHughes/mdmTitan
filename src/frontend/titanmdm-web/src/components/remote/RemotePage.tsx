@@ -8,18 +8,21 @@ import {
 
 import {
   CircleStop,
+  Clock3,
   Keyboard,
   Maximize2,
   Monitor,
   MousePointer2,
+  Play,
   RadioTower,
   RefreshCw,
   ShieldCheck,
 } from 'lucide-react'
 
-import RemoteDesktopViewer from '../../components/remote/RemoteDesktopViewer'
+import { devicesApi } from '../../api/devicesApi'
 
 import {
+  createRemoteSession,
   getRemoteSession,
   listRemoteSessions,
   terminateRemoteSession,
@@ -37,6 +40,12 @@ import type {
   RemoteFrame,
   RemoteSessionChanged,
 } from '../../api/remoteSupportSignalR'
+
+import RemoteDesktopViewer from '../../components/remote/RemoteDesktopViewer'
+
+import type {
+  DeviceListItem,
+} from '../../types/device'
 
 function formatDate(
   value?: string | null,
@@ -60,7 +69,7 @@ function statusLabel(
       return 'Conectando'
 
     case 'Connected':
-      return 'Conectado'
+      return 'Conectada'
 
     case 'Disconnecting':
       return 'Desconectando'
@@ -82,6 +91,17 @@ function statusLabel(
   }
 }
 
+function isTerminal(
+  status: string,
+): boolean {
+  return [
+    'Completed',
+    'Failed',
+    'Expired',
+    'Cancelled',
+  ].includes(status)
+}
+
 export function RemotePage() {
   const signalRRef =
     useRef<RemoteSupportSignalRClient | null>(
@@ -94,16 +114,16 @@ export function RemotePage() {
     )
 
   const [
+    devices,
+    setDevices,
+  ] =
+    useState<DeviceListItem[]>([])
+
+  const [
     sessions,
     setSessions,
   ] =
     useState<RemoteSession[]>([])
-
-  const [
-    selectedSessionId,
-    setSelectedSessionId,
-  ] =
-    useState<string>('')
 
   const [
     activeSession,
@@ -112,6 +132,54 @@ export function RemotePage() {
     useState<RemoteSession | null>(
       null,
     )
+
+  const [
+    selectedSessionId,
+    setSelectedSessionId,
+  ] =
+    useState('')
+
+  const [
+    selectedDeviceId,
+    setSelectedDeviceId,
+  ] =
+    useState('')
+
+  const [
+    reason,
+    setReason,
+  ] =
+    useState('Soporte técnico remoto')
+
+  const [
+    maximumDurationMinutes,
+    setMaximumDurationMinutes,
+  ] =
+    useState(120)
+
+  const [
+    allowMouse,
+    setAllowMouse,
+  ] =
+    useState(true)
+
+  const [
+    allowKeyboard,
+    setAllowKeyboard,
+  ] =
+    useState(true)
+
+  const [
+    allowClipboard,
+    setAllowClipboard,
+  ] =
+    useState(false)
+
+  const [
+    allowFileTransfer,
+    setAllowFileTransfer,
+  ] =
+    useState(false)
 
   const [
     frame,
@@ -126,6 +194,18 @@ export function RemotePage() {
     setLoading,
   ] =
     useState(true)
+
+  const [
+    creating,
+    setCreating,
+  ] =
+    useState(false)
+
+  const [
+    terminating,
+    setTerminating,
+  ] =
+    useState(false)
 
   const [
     channelConnected,
@@ -153,63 +233,152 @@ export function RemotePage() {
       )
     }, [frame])
 
-  const refreshSessions =
+  const windowsDevices =
+    useMemo(
+      () =>
+        devices.filter(
+          (device) =>
+            device.platform ===
+              'Windows' &&
+            device.isManaged,
+        ),
+      [devices],
+    )
+
+  const activeSessions =
+    useMemo(
+      () =>
+        sessions.filter(
+          (session) =>
+            !isTerminal(
+              session.status,
+            ),
+        ),
+      [sessions],
+    )
+
+  const selectedDevice =
+    useMemo(
+      () =>
+        windowsDevices.find(
+          (device) =>
+            device.id ===
+            selectedDeviceId,
+        ) ?? null,
+      [
+        windowsDevices,
+        selectedDeviceId,
+      ],
+    )
+
+  const loadData =
     useCallback(async () => {
       try {
         setError(null)
 
-        const result =
-          await listRemoteSessions()
+        const [
+          deviceResult,
+          sessionResult,
+        ] =
+          await Promise.all([
+            devicesApi.getDevices({
+              platform: 'Windows',
+              page: 1,
+              pageSize: 200,
+            }),
 
-        setSessions(result)
+            listRemoteSessions(
+              200,
+            ),
+          ])
 
-        if (
-          selectedSessionId
-        ) {
-          const selected =
-            result.find(
-              (item) =>
-                item.id ===
-                selectedSessionId,
-            )
+        setDevices(
+          deviceResult.items,
+        )
 
-          if (selected) {
-            setActiveSession(
-              selected,
-            )
-          }
-        }
+        setSessions(
+          sessionResult,
+        )
       } catch (requestError) {
         console.error(
           requestError,
         )
 
         setError(
-          'No fue posible obtener las sesiones remotas.',
+          'No fue posible cargar los dispositivos o las sesiones remotas.',
         )
       } finally {
         setLoading(false)
       }
-    }, [selectedSessionId])
+    }, [])
 
   useEffect(() => {
-    void refreshSessions()
-  }, [refreshSessions])
+    void loadData()
+  }, [loadData])
 
   useEffect(() => {
-    const interval =
+    const timer =
       window.setInterval(
         () => {
-          void refreshSessions()
+          void loadData()
         },
-        10000,
+        15000,
       )
 
     return () =>
       window.clearInterval(
-        interval,
+        timer,
       )
-  }, [refreshSessions])
+  }, [loadData])
+
+  const refreshActiveSession =
+    useCallback(
+      async (
+        sessionId: string,
+      ) => {
+        try {
+          const updated =
+            await getRemoteSession(
+              sessionId,
+            )
+
+          setActiveSession(
+            updated,
+          )
+
+          setSessions(
+            (current) => {
+              const exists =
+                current.some(
+                  (item) =>
+                    item.id ===
+                    updated.id,
+                )
+
+              if (!exists) {
+                return [
+                  updated,
+                  ...current,
+                ]
+              }
+
+              return current.map(
+                (item) =>
+                  item.id ===
+                  updated.id
+                    ? updated
+                    : item,
+              )
+            },
+          )
+        } catch (requestError) {
+          console.error(
+            requestError,
+          )
+        }
+      },
+      [],
+    )
 
   useEffect(() => {
     const client =
@@ -218,60 +387,38 @@ export function RemotePage() {
     signalRRef.current =
       client
 
-    const onSessionChanged =
-      async (
-        update:
-          RemoteSessionChanged,
-      ) => {
-        if (
-          update.sessionId !==
-          selectedSessionId
-        ) {
-          return
-        }
-
-        try {
-          const updated =
-            await getRemoteSession(
-              update.sessionId,
-            )
-
-          setActiveSession(
-            updated,
-          )
-
-          setSessions(
-            (current) =>
-              current.map(
-                (item) =>
-                  item.id ===
-                  updated.id
-                    ? updated
-                    : item,
-              ),
-          )
-        } catch (requestError) {
-          console.error(
-            requestError,
-          )
-        }
-      }
-
     void client
       .connect({
         onFrame:
           (nextFrame) => {
+            setFrame(
+              (current) => {
+                if (
+                  nextFrame.sessionId !==
+                  selectedSessionId
+                ) {
+                  return current
+                }
+
+                return nextFrame
+              },
+            )
+          },
+
+        onSessionChanged:
+          (
+            update:
+              RemoteSessionChanged,
+          ) => {
             if (
-              nextFrame.sessionId ===
+              update.sessionId ===
               selectedSessionId
             ) {
-              setFrame(
-                nextFrame,
+              void refreshActiveSession(
+                update.sessionId,
               )
             }
           },
-
-        onSessionChanged,
 
         onReconnecting:
           () => {
@@ -302,10 +449,18 @@ export function RemotePage() {
             )
           },
       })
-      .then(() => {
+      .then(async () => {
         setChannelConnected(
           true,
         )
+
+        if (
+          selectedSessionId
+        ) {
+          await client.joinSession(
+            selectedSessionId,
+          )
+        }
       })
       .catch(
         (connectionError) => {
@@ -322,7 +477,10 @@ export function RemotePage() {
     return () => {
       void client.disconnect()
     }
-  }, [selectedSessionId])
+  }, [
+    selectedSessionId,
+    refreshActiveSession,
+  ])
 
   const selectSession =
     async (
@@ -332,16 +490,13 @@ export function RemotePage() {
         setError(null)
         setFrame(null)
 
-        const previousId =
-          selectedSessionId
-
         if (
-          previousId &&
+          selectedSessionId &&
           signalRRef.current
         ) {
           await signalRRef.current
             .leaveSession(
-              previousId,
+              selectedSessionId,
             )
         }
 
@@ -366,8 +521,13 @@ export function RemotePage() {
           session,
         )
 
+        setSelectedDeviceId(
+          session.deviceId,
+        )
+
         if (
-          signalRRef.current
+          signalRRef.current &&
+          channelConnected
         ) {
           await signalRRef.current
             .joinSession(
@@ -380,18 +540,108 @@ export function RemotePage() {
         )
 
         setError(
-          'No fue posible abrir la sesión remota.',
+          'No fue posible abrir la sesión seleccionada.',
         )
       }
     }
 
-  const terminate =
+  const startSession =
+    async () => {
+      if (!selectedDeviceId) {
+        setError(
+          'Selecciona un equipo Windows.',
+        )
+
+        return
+      }
+
+      if (
+        reason.trim().length <
+        3
+      ) {
+        setError(
+          'Indica el motivo de la conexión remota.',
+        )
+
+        return
+      }
+
+      try {
+        setCreating(true)
+        setError(null)
+        setFrame(null)
+
+        const session =
+          await createRemoteSession({
+            deviceId:
+              selectedDeviceId,
+
+            reason:
+              reason.trim(),
+
+            allowKeyboard,
+
+            allowMouse,
+
+            allowClipboard,
+
+            allowFileTransfer,
+
+            maximumDurationMinutes,
+          })
+
+        setSessions(
+          (current) => [
+            session,
+            ...current.filter(
+              (item) =>
+                item.id !==
+                session.id,
+            ),
+          ],
+        )
+
+        setSelectedSessionId(
+          session.id,
+        )
+
+        setActiveSession(
+          session,
+        )
+
+        if (
+          signalRRef.current &&
+          channelConnected
+        ) {
+          await signalRRef.current
+            .joinSession(
+              session.id,
+            )
+        }
+      } catch (requestError) {
+        console.error(
+          requestError,
+        )
+
+        setError(
+          'No fue posible crear la sesión remota. Verifica que el dispositivo esté administrado y que no tenga otra sesión activa.',
+        )
+      } finally {
+        setCreating(false)
+      }
+    }
+
+  const endSession =
     async () => {
       if (!activeSession) {
         return
       }
 
       try {
+        setTerminating(
+          true,
+        )
+
         setError(null)
 
         await terminateRemoteSession(
@@ -400,23 +650,22 @@ export function RemotePage() {
 
         setFrame(null)
 
-        await refreshSessions()
-
-        const updated =
-          await getRemoteSession(
-            activeSession.id,
-          )
-
-        setActiveSession(
-          updated,
+        await refreshActiveSession(
+          activeSession.id,
         )
+
+        await loadData()
       } catch (requestError) {
         console.error(
           requestError,
         )
 
         setError(
-          'No fue posible finalizar la sesión.',
+          'No fue posible finalizar la sesión remota.',
+        )
+      } finally {
+        setTerminating(
+          false,
         )
       }
     }
@@ -513,12 +762,12 @@ export function RemotePage() {
       [activeSession],
     )
 
-  const fullscreen =
+  const toggleFullscreen =
     async () => {
-      if (
-        !viewerContainerRef
-          .current
-      ) {
+      const element =
+        viewerContainerRef.current
+
+      if (!element) {
         return
       }
 
@@ -531,8 +780,7 @@ export function RemotePage() {
         return
       }
 
-      await viewerContainerRef
-        .current
+      await element
         .requestFullscreen()
     }
 
@@ -540,24 +788,11 @@ export function RemotePage() {
     activeSession?.status ===
     'Connected'
 
-  const activeSessions =
-    sessions.filter(
-      (session) =>
-        ![
-          'Completed',
-          'Failed',
-          'Expired',
-          'Cancelled',
-        ].includes(
-          session.status,
-        ),
-    )
-
   return (
     <div
       style={{
         display: 'grid',
-        gap: 18,
+        gap: 20,
       }}
     >
       <header>
@@ -569,7 +804,7 @@ export function RemotePage() {
           }}
         >
           <RadioTower
-            size={28}
+            size={30}
           />
 
           <div>
@@ -583,13 +818,14 @@ export function RemotePage() {
 
             <div
               style={{
-                opacity: 0.7,
-                marginTop: 4,
+                marginTop: 5,
+                opacity: 0.72,
               }}
             >
-              Consola de asistencia
-              remota para endpoints
-              Windows administrados.
+              Control remoto de
+              endpoints Windows
+              administrados por
+              TitanMDM.
             </div>
           </div>
         </div>
@@ -598,12 +834,12 @@ export function RemotePage() {
       {error && (
         <div
           style={{
-            padding: 12,
-            borderRadius: 10,
-            background:
-              'rgba(220,38,38,.12)',
+            padding: 14,
+            borderRadius: 12,
             border:
-              '1px solid rgba(220,38,38,.3)',
+              '1px solid rgba(239,68,68,.35)',
+            background:
+              'rgba(239,68,68,.10)',
           }}
         >
           {error}
@@ -614,214 +850,366 @@ export function RemotePage() {
         style={{
           display: 'grid',
           gridTemplateColumns:
-            'minmax(250px, 320px) minmax(0, 1fr)',
+            '320px minmax(0, 1fr)',
           gap: 18,
         }}
       >
         <aside
           style={{
-            border:
-              '1px solid rgba(148,163,184,.2)',
-            borderRadius: 14,
-            padding: 16,
+            display: 'grid',
+            alignContent: 'start',
+            gap: 16,
           }}
         >
           <div
             style={{
-              display: 'flex',
-              justifyContent:
-                'space-between',
-              alignItems: 'center',
-              gap: 10,
+              padding: 16,
+              borderRadius: 14,
+              border:
+                '1px solid rgba(148,163,184,.2)',
             }}
           >
             <strong>
-              Sesiones
+              Nueva conexión
             </strong>
 
-            <button
-              type="button"
-              onClick={() =>
-                void refreshSessions()
-              }
-              style={{
-                cursor: 'pointer',
-              }}
-            >
-              <RefreshCw
-                size={15}
-              />
-            </button>
-          </div>
-
-          <select
-            value={
-              selectedSessionId
-            }
-            disabled={loading}
-            onChange={(event) =>
-              void selectSession(
-                event.target.value,
-              )
-            }
-            style={{
-              width: '100%',
-              marginTop: 14,
-              padding: 10,
-            }}
-          >
-            <option value="">
-              Seleccionar sesión
-            </option>
-
-            {activeSessions.map(
-              (session) => (
-                <option
-                  key={
-                    session.id
-                  }
-                  value={
-                    session.id
-                  }
-                >
-                  {session.technicianName}
-                  {' · '}
-                  {statusLabel(
-                    session.status,
-                  )}
-                </option>
-              ),
-            )}
-          </select>
-
-          {activeSession && (
             <div
               style={{
-                marginTop: 18,
                 display: 'grid',
                 gap: 12,
-                fontSize: 13,
+                marginTop: 14,
               }}
             >
-              <div>
-                <strong>
-                  Estado
-                </strong>
+              <label>
+                Equipo Windows
 
-                <div>
-                  {statusLabel(
-                    activeSession.status,
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <strong>
-                  Técnico
-                </strong>
-
-                <div>
-                  {
-                    activeSession
-                      .technicianName
+                <select
+                  value={
+                    selectedDeviceId
                   }
-                </div>
-              </div>
-
-              <div>
-                <strong>
-                  Motivo
-                </strong>
-
-                <div>
-                  {
-                    activeSession
-                      .reason
+                  disabled={
+                    creating ||
+                    connected
                   }
-                </div>
-              </div>
-
-              <div>
-                <strong>
-                  Solicitada
-                </strong>
-
-                <div>
-                  {formatDate(
-                    activeSession
-                      .requestedAtUtc,
-                  )}
-                </div>
-              </div>
-
-              <div>
-                <strong>
-                  Expira
-                </strong>
-
-                <div>
-                  {formatDate(
-                    activeSession
-                      .expiresAtUtc,
-                  )}
-                </div>
-              </div>
-
-              <div
-                style={{
-                  display: 'flex',
-                  gap: 8,
-                  flexWrap: 'wrap',
-                }}
-              >
-                <span>
-                  <MousePointer2
-                    size={14}
-                  />{' '}
-                  {activeSession
-                    .allowMouse
-                    ? 'Mouse'
-                    : 'Sin mouse'}
-                </span>
-
-                <span>
-                  <Keyboard
-                    size={14}
-                  />{' '}
-                  {activeSession
-                    .allowKeyboard
-                    ? 'Teclado'
-                    : 'Sin teclado'}
-                </span>
-              </div>
-
-              {![
-                'Completed',
-                'Failed',
-                'Expired',
-                'Cancelled',
-              ].includes(
-                activeSession.status,
-              ) && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    void terminate()
+                  onChange={(
+                    event,
+                  ) =>
+                    setSelectedDeviceId(
+                      event.target
+                        .value,
+                    )
                   }
                   style={{
-                    padding: 10,
-                    cursor:
-                      'pointer',
+                    width: '100%',
+                    marginTop: 6,
+                    padding: 9,
                   }}
                 >
-                  <CircleStop
-                    size={15}
-                  />{' '}
-                  Finalizar sesión
-                </button>
+                  <option value="">
+                    Seleccionar
+                  </option>
+
+                  {windowsDevices.map(
+                    (device) => (
+                      <option
+                        key={
+                          device.id
+                        }
+                        value={
+                          device.id
+                        }
+                      >
+                        {
+                          device.deviceName
+                        }
+                        {' · '}
+                        {
+                          device.status
+                        }
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+
+              {selectedDevice && (
+                <div
+                  style={{
+                    fontSize: 12,
+                    opacity: 0.72,
+                  }}
+                >
+                  {selectedDevice
+                    .manufacturer ??
+                    'Windows'}
+                  {' '}
+                  {selectedDevice
+                    .model ?? ''}
+                  <br />
+
+                  Último contacto:{' '}
+                  {formatDate(
+                    selectedDevice
+                      .lastSeenAtUtc,
+                  )}
+                </div>
               )}
+
+              <label>
+                Motivo
+
+                <textarea
+                  value={reason}
+                  disabled={
+                    creating ||
+                    connected
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setReason(
+                      event.target
+                        .value,
+                    )
+                  }
+                  rows={3}
+                  style={{
+                    width: '100%',
+                    marginTop: 6,
+                    padding: 9,
+                    resize:
+                      'vertical',
+                  }}
+                />
+              </label>
+
+              <label>
+                Duración máxima
+
+                <select
+                  value={
+                    maximumDurationMinutes
+                  }
+                  disabled={
+                    creating ||
+                    connected
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setMaximumDurationMinutes(
+                      Number(
+                        event.target
+                          .value,
+                      ),
+                    )
+                  }
+                  style={{
+                    width: '100%',
+                    marginTop: 6,
+                    padding: 9,
+                  }}
+                >
+                  <option value={30}>
+                    30 minutos
+                  </option>
+
+                  <option value={60}>
+                    1 hora
+                  </option>
+
+                  <option value={120}>
+                    2 horas
+                  </option>
+
+                  <option value={240}>
+                    4 horas
+                  </option>
+
+                  <option value={480}>
+                    8 horas
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={
+                    allowMouse
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setAllowMouse(
+                      event.target
+                        .checked,
+                    )
+                  }
+                />{' '}
+                Control de mouse
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={
+                    allowKeyboard
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setAllowKeyboard(
+                      event.target
+                        .checked,
+                    )
+                  }
+                />{' '}
+                Control de teclado
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={
+                    allowClipboard
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setAllowClipboard(
+                      event.target
+                        .checked,
+                    )
+                  }
+                />{' '}
+                Portapapeles
+              </label>
+
+              <label>
+                <input
+                  type="checkbox"
+                  checked={
+                    allowFileTransfer
+                  }
+                  onChange={(
+                    event,
+                  ) =>
+                    setAllowFileTransfer(
+                      event.target
+                        .checked,
+                    )
+                  }
+                />{' '}
+                Transferencia de
+                archivos
+              </label>
+
+              <button
+                type="button"
+                disabled={
+                  creating ||
+                  !selectedDeviceId ||
+                  connected
+                }
+                onClick={() =>
+                  void startSession()
+                }
+                style={{
+                  padding: 11,
+                  cursor:
+                    creating
+                      ? 'wait'
+                      : 'pointer',
+                }}
+              >
+                <Play size={15} />{' '}
+                {creating
+                  ? 'Creando...'
+                  : 'Iniciar soporte remoto'}
+              </button>
             </div>
-          )}
+          </div>
+
+          <div
+            style={{
+              padding: 16,
+              borderRadius: 14,
+              border:
+                '1px solid rgba(148,163,184,.2)',
+            }}
+          >
+            <div
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent:
+                  'space-between',
+              }}
+            >
+              <strong>
+                Sesiones activas
+              </strong>
+
+              <button
+                type="button"
+                onClick={() =>
+                  void loadData()
+                }
+              >
+                <RefreshCw
+                  size={15}
+                />
+              </button>
+            </div>
+
+            <select
+              value={
+                selectedSessionId
+              }
+              disabled={loading}
+              onChange={(
+                event,
+              ) =>
+                void selectSession(
+                  event.target
+                    .value,
+                )
+              }
+              style={{
+                width: '100%',
+                marginTop: 12,
+                padding: 9,
+              }}
+            >
+              <option value="">
+                Seleccionar sesión
+              </option>
+
+              {activeSessions.map(
+                (session) => (
+                  <option
+                    key={
+                      session.id
+                    }
+                    value={
+                      session.id
+                    }
+                  >
+                    {
+                      statusLabel(
+                        session.status,
+                      )
+                    }
+                    {' · '}
+                    {
+                      session.technicianName
+                    }
+                  </option>
+                ),
+              )}
+            </select>
+          </div>
         </aside>
 
         <main
@@ -831,86 +1219,174 @@ export function RemotePage() {
         >
           <div
             style={{
+              padding: 14,
+              borderRadius: 14,
+              border:
+                '1px solid rgba(148,163,184,.2)',
+              marginBottom: 12,
               display: 'flex',
               justifyContent:
                 'space-between',
-              alignItems: 'center',
-              gap: 12,
-              marginBottom: 10,
+              gap: 16,
+              flexWrap: 'wrap',
             }}
           >
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                gap: 10,
+                gap: 16,
+                flexWrap: 'wrap',
               }}
             >
-              <Monitor
-                size={18}
-              />
-
-              <strong>
-                Escritorio remoto
-              </strong>
-
-              <span
-                style={{
-                  fontSize: 12,
-                  opacity: 0.75,
-                }}
-              >
-                {channelConnected
-                  ? '● Canal SignalR conectado'
-                  : '○ Canal desconectado'}
+              <span>
+                <Monitor
+                  size={16}
+                />{' '}
+                {selectedDevice
+                  ?.deviceName ??
+                  'Sin equipo'}
               </span>
 
-              {connected && (
-                <span
-                  style={{
-                    fontSize: 12,
-                  }}
-                >
-                  <ShieldCheck
-                    size={14}
-                  />{' '}
-                  Sesión activa
-                </span>
-              )}
+              <span>
+                <ShieldCheck
+                  size={16}
+                />{' '}
+                {statusLabel(
+                  activeSession
+                    ?.status,
+                )}
+              </span>
+
+              <span>
+                <RadioTower
+                  size={16}
+                />{' '}
+                {channelConnected
+                  ? 'SignalR conectado'
+                  : 'SignalR desconectado'}
+              </span>
+
+              <span>
+                <MousePointer2
+                  size={16}
+                />{' '}
+                {activeSession
+                  ?.allowMouse
+                  ? 'Mouse'
+                  : 'Mouse deshabilitado'}
+              </span>
+
+              <span>
+                <Keyboard
+                  size={16}
+                />{' '}
+                {activeSession
+                  ?.allowKeyboard
+                  ? 'Teclado'
+                  : 'Teclado deshabilitado'}
+              </span>
             </div>
 
-            <button
-              type="button"
-              onClick={() =>
-                void fullscreen()
-              }
-              disabled={
-                !activeSession
-              }
+            <div
               style={{
-                cursor:
-                  activeSession
-                    ? 'pointer'
-                    : 'not-allowed',
+                display: 'flex',
+                gap: 8,
               }}
             >
-              <Maximize2
-                size={15}
-              />{' '}
-              Pantalla completa
-            </button>
+              <button
+                type="button"
+                disabled={
+                  !activeSession
+                }
+                onClick={() =>
+                  void toggleFullscreen()
+                }
+              >
+                <Maximize2
+                  size={15}
+                />{' '}
+                Pantalla completa
+              </button>
+
+              <button
+                type="button"
+                disabled={
+                  !activeSession ||
+                  isTerminal(
+                    activeSession
+                      .status,
+                  ) ||
+                  terminating
+                }
+                onClick={() =>
+                  void endSession()
+                }
+              >
+                <CircleStop
+                  size={15}
+                />{' '}
+                {terminating
+                  ? 'Finalizando...'
+                  : 'Finalizar'}
+              </button>
+            </div>
           </div>
+
+          {activeSession && (
+            <div
+              style={{
+                display: 'flex',
+                gap: 18,
+                flexWrap: 'wrap',
+                marginBottom: 12,
+                fontSize: 13,
+                opacity: 0.8,
+              }}
+            >
+              <span>
+                Técnico:{' '}
+                {
+                  activeSession
+                    .technicianName
+                }
+              </span>
+
+              <span>
+                <Clock3
+                  size={14}
+                />{' '}
+                Inicio:{' '}
+                {formatDate(
+                  activeSession
+                    .connectedAtUtc ??
+                  activeSession
+                    .requestedAtUtc,
+                )}
+              </span>
+
+              <span>
+                Motivo:{' '}
+                {
+                  activeSession
+                    .reason
+                }
+              </span>
+            </div>
+          )}
 
           <div
             ref={
               viewerContainerRef
             }
             style={{
-              minHeight: 520,
+              minHeight: 560,
             }}
           >
             <RemoteDesktopViewer
-              frameUrl={frameUrl}
+              frameUrl={
+                frameUrl
+              }
               width={
                 frame?.width
               }
@@ -936,7 +1412,9 @@ export function RemotePage() {
               onPointerButton={
                 pointerButton
               }
-              onWheel={wheel}
+              onWheel={
+                wheel
+              }
               onKeyboard={
                 keyboard
               }
