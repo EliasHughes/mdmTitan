@@ -68,12 +68,6 @@ builder.Services.AddSingleton<
     ActiveSessionProcessLauncher>();
 
 builder.Services.AddSingleton<
-    ActiveSessionProcessLauncher>();
-
-builder.Services.AddSingleton<
-    RemoteDesktopHostLauncher>();
-
-builder.Services.AddSingleton<
     ICommandExecutor,
     CommandExecutor>();
 

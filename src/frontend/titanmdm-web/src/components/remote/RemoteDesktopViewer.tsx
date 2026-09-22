@@ -1,10 +1,13 @@
 import {
+  useCallback,
+  useRef,
+} from 'react'
+
+import type {
   KeyboardEvent,
   MouseEvent,
   WheelEvent,
-  useCallback,
-  useRef,
-} from "react";
+} from 'react'
 
 interface RemoteDesktopViewerProps {
   frameUrl: string | null;
