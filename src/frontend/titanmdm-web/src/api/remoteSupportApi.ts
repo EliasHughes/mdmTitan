@@ -18,19 +18,15 @@ export interface RemoteSession {
   technicianName: string
   reason: string
   status: RemoteSessionStatus
-
   allowKeyboard: boolean
   allowMouse: boolean
   allowClipboard: boolean
   allowFileTransfer: boolean
-
   requestedAtUtc: string
   expiresAtUtc: string
-
   connectedAtUtc?: string | null
   disconnectedAtUtc?: string | null
   updatedAtUtc?: string | null
-
   failureReason?: string | null
   terminationReason?: string | null
   terminatedBy?: string | null
@@ -39,12 +35,10 @@ export interface RemoteSession {
 export interface CreateRemoteSessionRequest {
   deviceId: string
   reason: string
-
   allowKeyboard: boolean
   allowMouse: boolean
   allowClipboard: boolean
   allowFileTransfer: boolean
-
   maximumDurationMinutes: number
 }
 
@@ -88,8 +82,6 @@ export async function terminateRemoteSession(
 ): Promise<void> {
   await apiClient.post(
     `/remote-sessions/${sessionId}/terminate`,
-    {
-      reason,
-    },
+    { reason },
   )
 }
