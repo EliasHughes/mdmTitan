@@ -33,6 +33,9 @@ builder.Services.AddSingleton<
     WindowsDeviceInfoProvider>();
 
 builder.Services.AddSingleton<
+    WindowsInventoryProvider>();
+
+builder.Services.AddSingleton<
     ICommandExecutor,
     CommandExecutor>();
 
@@ -52,7 +55,8 @@ builder.Services.AddHttpClient<
 
             client.Timeout =
                 TimeSpan.FromSeconds(
-                    options.RequestTimeoutSeconds);
+                    options
+                        .RequestTimeoutSeconds);
         });
 
 builder.Services.AddHttpClient<
@@ -71,10 +75,12 @@ builder.Services.AddHttpClient<
 
             client.Timeout =
                 TimeSpan.FromSeconds(
-                    options.RequestTimeoutSeconds);
+                    options
+                        .RequestTimeoutSeconds);
         });
 
-builder.Services.AddHostedService<Worker>();
+builder.Services.AddHostedService<
+    Worker>();
 
 builder.Services.AddHostedService<
     HeartbeatBackgroundService>();

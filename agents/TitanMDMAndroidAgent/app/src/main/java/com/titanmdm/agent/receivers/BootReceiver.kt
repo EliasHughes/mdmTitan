@@ -11,16 +11,19 @@ class BootReceiver : BroadcastReceiver() {
         context: Context,
         intent: Intent
     ) {
+        val action =
+            intent.action ?: return
 
-        when (intent.action) {
+        when (action) {
 
             Intent.ACTION_BOOT_COMPLETED,
             Intent.ACTION_LOCKED_BOOT_COMPLETED,
             Intent.ACTION_MY_PACKAGE_REPLACED -> {
 
-                AgentWorkScheduler.schedule(
-                    context.applicationContext
-                )
+                AgentWorkScheduler
+                    .scheduleAndSyncNow(
+                        context.applicationContext
+                    )
             }
         }
     }
