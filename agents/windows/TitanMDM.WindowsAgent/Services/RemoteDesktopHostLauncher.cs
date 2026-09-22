@@ -91,12 +91,16 @@ public sealed class RemoteDesktopHostLauncher
             _windowsSessionId = launchResult.WindowsSessionId;
             _remoteSessionId = request.SessionId;
 
-            _logger.LogInformation(
+           _logger.LogInformation(
                 "TitanMDM RemoteHost iniciado correctamente. " +
-                "RemoteSession={RemoteSessionId}, PID={Pid}, WindowsSession={WindowsSessionId}.",
+                "RemoteSession={RemoteSessionId}, " +
+                "PID={Pid}, " +
+                "WindowsSession={WindowsSessionId}, " +
+                "LaunchMode={LaunchMode}.",
                 request.SessionId,
                 launchResult.ProcessId,
-                launchResult.WindowsSessionId);
+                launchResult.WindowsSessionId,
+                launchResult.LaunchMode);
         }
 
         return Task.CompletedTask;
