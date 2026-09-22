@@ -11,12 +11,16 @@ public sealed class RemoteSupportBackgroundService
     private readonly RemoteSupportSessionManager
         _sessionManager;
 
+    private readonly RemoteDesktopHostLauncher
+        _hostLauncher;
+
     private readonly ILogger<
         RemoteSupportBackgroundService> _logger;
 
     public RemoteSupportBackgroundService(
         RemoteSupportApiClient apiClient,
         RemoteSupportSessionManager sessionManager,
+        RemoteDesktopHostLauncher hostLauncher,
         ILogger<RemoteSupportBackgroundService> logger)
     {
         _apiClient =
@@ -24,6 +28,9 @@ public sealed class RemoteSupportBackgroundService
 
         _sessionManager =
             sessionManager;
+
+        _hostLauncher =
+            hostLauncher;
 
         _logger =
             logger;
@@ -76,16 +83,27 @@ public sealed class RemoteSupportBackgroundService
 
         if (current is not null)
         {
-            var stillExists =
-                pending.Any(
+            var serverSession =
+                pending.FirstOrDefault(
                     x =>
                         x.SessionId ==
                         current.SessionId);
 
-            if (!stillExists)
+            if (serverSession is null)
             {
-                _sessionManager.End(
-                    current.SessionId);
+                await StopCurrentSessionAsync(
+                    current.SessionId,
+                    cancellationToken);
+
+                return;
+            }
+
+            if (serverSession.ExpiresAtUtc <=
+                DateTime.UtcNow)
+            {
+                await StopCurrentSessionAsync(
+                    current.SessionId,
+                    cancellationToken);
             }
 
             return;
@@ -93,18 +111,16 @@ public sealed class RemoteSupportBackgroundService
 
         var request =
             pending
+                .Where(
+                    x =>
+                        x.ExpiresAtUtc >
+                        DateTime.UtcNow)
                 .OrderBy(
                     x =>
                         x.RequestedAtUtc)
                 .FirstOrDefault();
 
         if (request is null)
-        {
-            return;
-        }
-
-        if (request.ExpiresAtUtc <=
-            DateTime.UtcNow)
         {
             return;
         }
@@ -127,34 +143,86 @@ public sealed class RemoteSupportBackgroundService
 
         try
         {
+            _logger.LogInformation(
+                "Preparing remote support session {SessionId}.",
+                request.SessionId);
+
             await _apiClient
                 .MarkConnectingAsync(
                     request.SessionId,
                     cancellationToken);
-            
+
             var bootstrap =
                 await _apiClient
                     .CreateHostBootstrapAsync(
                         request.SessionId,
                         cancellationToken);
 
+            var startRequest =
+                new RemoteDesktopStartRequest(
+                    SessionId:
+                        request.SessionId,
+
+                    TechnicianName:
+                        request.TechnicianDisplayName,
+
+                    Reason:
+                        request.Reason,
+
+                    AllowKeyboard:
+                        request.AllowKeyboard,
+
+                    AllowMouse:
+                        request.AllowMouse,
+
+                    AllowClipboard:
+                        request.AllowClipboard,
+
+                    AllowFileTransfer:
+                        request.AllowFileTransfer,
+
+                    ExpiresAtUtc:
+                        request.ExpiresAtUtc,
+
+                    ServerUrl:
+                        bootstrap.ServerUrl,
+
+                    AccessToken:
+                        bootstrap.AccessToken);
+
+            await _hostLauncher
+                .StartAsync(
+                    startRequest,
+                    cancellationToken);
+
             /*
-             * El siguiente bloque RS-5 conectará aquí:
+             * NO se llama MarkConnectedAsync aquí.
              *
-             * 1. Remote desktop host.
-             * 2. Captura de escritorio.
-             * 3. Transporte WebRTC.
-             * 4. Keyboard/mouse.
-             * 5. Session indicator visible.
-             *
-             * NO marcamos Connected todavía porque
-             * todavía no existe un canal de escritorio real.
+             * La sesión solamente pasa a Connected cuando
+             * TitanMDM.RemoteHost consigue establecer
+             * realmente su conexión SignalR y ejecuta
+             * RegisterRemoteHost en RemoteSupportHub.
              */
+
+            _logger.LogInformation(
+                "RemoteHost launched for session {SessionId}. Waiting for SignalR registration.",
+                request.SessionId);
         }
         catch (Exception ex)
         {
             _sessionManager.End(
                 request.SessionId);
+
+            try
+            {
+                await _hostLauncher
+                    .StopAsync(
+                        request.SessionId,
+                        CancellationToken.None);
+            }
+            catch
+            {
+            }
 
             try
             {
@@ -168,7 +236,34 @@ public sealed class RemoteSupportBackgroundService
             {
             }
 
+            _logger.LogError(
+                ex,
+                "Unable to start remote support session {SessionId}.",
+                request.SessionId);
+
             throw;
         }
+    }
+
+    private async Task StopCurrentSessionAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _hostLauncher
+                .StopAsync(
+                    sessionId,
+                    cancellationToken);
+        }
+        finally
+        {
+            _sessionManager.End(
+                sessionId);
+        }
+
+        _logger.LogInformation(
+            "Remote support session {SessionId} stopped locally.",
+            sessionId);
     }
 }
