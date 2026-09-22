@@ -6,7 +6,8 @@ using TitanMDM.WindowsAgent.Services;
 using TitanMDM.WindowsAgent.Storage;
 
 var builder =
-    Host.CreateApplicationBuilder(args);
+    Host.CreateApplicationBuilder(
+        args);
 
 builder.Services.AddWindowsService(
     options =>
@@ -42,7 +43,22 @@ builder.Services.AddSingleton<
     WindowsComplianceProvider>();
 
 builder.Services.AddSingleton<
+    WindowsUpdateProvider>();
+
+builder.Services.AddSingleton<
     WindowsActionExecutor>();
+
+builder.Services.AddSingleton<
+    WindowsServiceManager>();
+
+builder.Services.AddSingleton<
+    WindowsScriptExecutor>();
+
+builder.Services.AddSingleton<
+    WindowsSoftwareManager>();
+
+builder.Services.AddSingleton<
+    RemoteSupportSessionManager>();
 
 builder.Services.AddSingleton<
     ICommandExecutor,
@@ -86,11 +102,33 @@ builder.Services.AddHttpClient<
                     options.RequestTimeoutSeconds);
         });
 
+builder.Services.AddHttpClient<
+    RemoteSupportApiClient>(
+        (serviceProvider, client) =>
+        {
+            var options =
+                serviceProvider
+                    .GetRequiredService<
+                        IOptions<AgentOptions>>()
+                    .Value;
+
+            client.BaseAddress =
+                new Uri(
+                    options.ServerUrl);
+
+            client.Timeout =
+                TimeSpan.FromSeconds(
+                    options.RequestTimeoutSeconds);
+        });
+
 builder.Services.AddHostedService<
     Worker>();
 
 builder.Services.AddHostedService<
     HeartbeatBackgroundService>();
+
+builder.Services.AddHostedService<
+    RemoteSupportBackgroundService>();
 
 var host =
     builder.Build();
