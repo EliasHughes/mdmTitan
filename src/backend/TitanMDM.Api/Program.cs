@@ -3,6 +3,7 @@ using TitanMDM.Api.Services;
 using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence.Seed;
 
+
 var builder =
     WebApplication.CreateBuilder(args);
 
