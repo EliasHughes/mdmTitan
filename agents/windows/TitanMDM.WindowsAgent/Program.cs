@@ -4,6 +4,7 @@ using TitanMDM.WindowsAgent.Configuration;
 using TitanMDM.WindowsAgent.Execution;
 using TitanMDM.WindowsAgent.Services;
 using TitanMDM.WindowsAgent.Storage;
+using TitanMDM.WindowsAgent.Interop;
 
 var builder =
     Host.CreateApplicationBuilder(
@@ -59,6 +60,15 @@ builder.Services.AddSingleton<
 
 builder.Services.AddSingleton<
     RemoteSupportSessionManager>();
+
+builder.Services.AddSingleton<
+    RemoteDesktopHostLauncher>();
+
+builder.Services.AddSingleton<
+    ActiveSessionProcessLauncher>();
+
+builder.Services.AddSingleton<
+    ActiveSessionProcessLauncher>();
 
 builder.Services.AddSingleton<
     RemoteDesktopHostLauncher>();
