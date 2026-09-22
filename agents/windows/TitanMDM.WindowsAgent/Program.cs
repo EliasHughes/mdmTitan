@@ -36,6 +36,15 @@ builder.Services.AddSingleton<
     WindowsInventoryProvider>();
 
 builder.Services.AddSingleton<
+    WindowsSecurityProvider>();
+
+builder.Services.AddSingleton<
+    WindowsComplianceProvider>();
+
+builder.Services.AddSingleton<
+    WindowsActionExecutor>();
+
+builder.Services.AddSingleton<
     ICommandExecutor,
     CommandExecutor>();
 
@@ -55,8 +64,7 @@ builder.Services.AddHttpClient<
 
             client.Timeout =
                 TimeSpan.FromSeconds(
-                    options
-                        .RequestTimeoutSeconds);
+                    options.RequestTimeoutSeconds);
         });
 
 builder.Services.AddHttpClient<
@@ -75,8 +83,7 @@ builder.Services.AddHttpClient<
 
             client.Timeout =
                 TimeSpan.FromSeconds(
-                    options
-                        .RequestTimeoutSeconds);
+                    options.RequestTimeoutSeconds);
         });
 
 builder.Services.AddHostedService<
