@@ -61,6 +61,9 @@ builder.Services.AddSingleton<
     RemoteSupportSessionManager>();
 
 builder.Services.AddSingleton<
+    RemoteDesktopHostLauncher>();
+
+builder.Services.AddSingleton<
     ICommandExecutor,
     CommandExecutor>();
 
