@@ -1,9 +1,12 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Api.Services;
 using TitanMDM.Domain.Entities;
+using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Hubs;
@@ -20,8 +23,8 @@ public sealed class RemoteSupportHub : Hub
     private readonly RemoteHostTokenService
         _tokenService;
 
-    private readonly ILogger<
-        RemoteSupportHub> _logger;
+    private readonly ILogger<RemoteSupportHub>
+        _logger;
 
     public RemoteSupportHub(
         TitanMdmDbContext dbContext,
@@ -38,6 +41,12 @@ public sealed class RemoteSupportHub : Hub
             logger;
     }
 
+    /*
+     * ============================================================
+     * CONNECTION
+     * ============================================================
+     */
+
     public override async Task OnConnectedAsync()
     {
         if (IsHumanConnection())
@@ -45,14 +54,60 @@ public sealed class RemoteSupportHub : Hub
             var organizationId =
                 GetHumanOrganizationId();
 
-            await Groups.AddToGroupAsync(
+            await Groups
+                .AddToGroupAsync(
+                    Context.ConnectionId,
+                    OrganizationGroup(
+                        organizationId));
+
+            _logger.LogInformation(
+                "TitanMDM Remote Support technician connected. " +
+                "ConnectionId={ConnectionId}, OrganizationId={OrganizationId}, User={User}.",
                 Context.ConnectionId,
-                OrganizationGroup(
-                    organizationId));
+                organizationId,
+                Context.User?.Identity?.Name);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "TitanMDM Remote Support non-human connection established. " +
+                "ConnectionId={ConnectionId}.",
+                Context.ConnectionId);
         }
 
-        await base.OnConnectedAsync();
+        await base
+            .OnConnectedAsync();
     }
+
+    public override async Task OnDisconnectedAsync(
+        Exception? exception)
+    {
+        if (exception is null)
+        {
+            _logger.LogInformation(
+                "TitanMDM Remote Support connection closed. " +
+                "ConnectionId={ConnectionId}.",
+                Context.ConnectionId);
+        }
+        else
+        {
+            _logger.LogWarning(
+                exception,
+                "TitanMDM Remote Support connection closed with error. " +
+                "ConnectionId={ConnectionId}.",
+                Context.ConnectionId);
+        }
+
+        await base
+            .OnDisconnectedAsync(
+                exception);
+    }
+
+    /*
+     * ============================================================
+     * TECHNICIAN SESSION
+     * ============================================================
+     */
 
     public async Task JoinSession(
         Guid sessionId)
@@ -60,34 +115,117 @@ public sealed class RemoteSupportHub : Hub
         RequireHumanPermission(
             "remote.view");
 
+        if (sessionId == Guid.Empty)
+        {
+            throw new HubException(
+                "SessionId no válido.");
+        }
+
         var organizationId =
             GetHumanOrganizationId();
 
-        var exists =
+        /*
+         * IMPORTANTE:
+         *
+         * No utilizar:
+         *
+         *     !x.IsTerminal
+         *
+         * dentro de una consulta de Entity Framework.
+         *
+         * IsTerminal es una propiedad calculada del dominio y
+         * no puede traducirse directamente a SQL.
+         *
+         * Consultamos Status, que sí está almacenado en SQL.
+         */
+        var session =
             await _dbContext
                 .RemoteSessions
                 .AsNoTracking()
-                .AnyAsync(
+                .FirstOrDefaultAsync(
                     x =>
-                        x.Id == sessionId
+                        x.Id ==
+                            sessionId
                         &&
                         x.OrganizationId ==
                             organizationId
                         &&
-                        !x.IsTerminal);
+                        x.Status !=
+                            RemoteSessionStatus.Completed
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Failed
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Expired
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Cancelled);
 
-        if (!exists)
+        if (session is null)
         {
+            _logger.LogWarning(
+                "JoinSession rejected. " +
+                "SessionId={SessionId}, OrganizationId={OrganizationId}, User={User}.",
+                sessionId,
+                organizationId,
+                Context.User?.Identity?.Name);
+
             throw new HubException(
-                "La sesión remota no existe o finalizó.");
+                "La sesión remota no existe, pertenece a otra organización o ya finalizó.");
         }
 
-        await Groups.AddToGroupAsync(
+        await Groups
+            .AddToGroupAsync(
+                Context.ConnectionId,
+                TechnicianGroup(
+                    organizationId,
+                    sessionId));
+
+        _logger.LogInformation(
+            "Technician joined remote session. " +
+            "SessionId={SessionId}, ConnectionId={ConnectionId}, OrganizationId={OrganizationId}, User={User}.",
+            sessionId,
             Context.ConnectionId,
-            TechnicianGroup(
-                organizationId,
-                sessionId));
+            organizationId,
+            Context.User?.Identity?.Name);
     }
+
+    public async Task LeaveSession(
+        Guid sessionId)
+    {
+        if (!IsHumanConnection())
+        {
+            return;
+        }
+
+        if (sessionId == Guid.Empty)
+        {
+            return;
+        }
+
+        var organizationId =
+            GetHumanOrganizationId();
+
+        await Groups
+            .RemoveFromGroupAsync(
+                Context.ConnectionId,
+                TechnicianGroup(
+                    organizationId,
+                    sessionId));
+
+        _logger.LogInformation(
+            "Technician left remote session. " +
+            "SessionId={SessionId}, ConnectionId={ConnectionId}.",
+            sessionId,
+            Context.ConnectionId);
+    }
+
+    /*
+     * ============================================================
+     * REMOTE HOST REGISTRATION
+     * ============================================================
+     */
 
     public async Task RegisterRemoteHost(
         Guid sessionId)
@@ -96,12 +234,17 @@ public sealed class RemoteSupportHub : Hub
             ValidateRemoteHost(
                 sessionId);
 
+        /*
+         * Igual que JoinSession:
+         * consultar Status directamente.
+         */
         var session =
             await _dbContext
                 .RemoteSessions
                 .FirstOrDefaultAsync(
                     x =>
-                        x.Id == sessionId
+                        x.Id ==
+                            sessionId
                         &&
                         x.DeviceId ==
                             remoteHost.DeviceId
@@ -109,31 +252,73 @@ public sealed class RemoteSupportHub : Hub
                         x.OrganizationId ==
                             remoteHost.OrganizationId
                         &&
-                        !x.IsTerminal);
+                        x.Status !=
+                            RemoteSessionStatus.Completed
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Failed
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Expired
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Cancelled);
 
         if (session is null)
         {
+            _logger.LogWarning(
+                "RemoteHost registration rejected. " +
+                "SessionId={SessionId}, DeviceId={DeviceId}, OrganizationId={OrganizationId}.",
+                sessionId,
+                remoteHost.DeviceId,
+                remoteHost.OrganizationId);
+
             throw new HubException(
                 "La sesión remota no está disponible.");
         }
 
-        session.MarkConnected();
+        /*
+         * Si la sesión todavía está Requested o Connecting,
+         * el RemoteHost acaba de demostrar que el canal
+         * interactivo está disponible.
+         */
+        if (
+            session.Status ==
+                RemoteSessionStatus.Requested
+            ||
+            session.Status ==
+                RemoteSessionStatus.Connecting)
+        {
+            session.MarkConnected();
+        }
 
-        _dbContext.RemoteSessionEvents.Add(
-            new RemoteSessionEvent(
-                session.OrganizationId,
-                session.Id,
-                "REMOTE_HOST_CONNECTED",
-                "TitanMDM Remote Host estableció el canal interactivo."));
+        _dbContext
+            .RemoteSessionEvents
+            .Add(
+                new RemoteSessionEvent(
+                    session.OrganizationId,
+                    session.Id,
+                    "REMOTE_HOST_CONNECTED",
+                    "TitanMDM Remote Host estableció el canal interactivo."));
+        
+        await _dbContext
+            .SaveChangesAsync();
 
-        await _dbContext.SaveChangesAsync();
+        /*
+         * El RemoteHost entra en su grupo separado.
+         *
+         * Los comandos de mouse/teclado se envían a este grupo.
+         */
+        await Groups
+            .AddToGroupAsync(
+                Context.ConnectionId,
+                HostGroup(
+                    session.OrganizationId,
+                    session.Id));
 
-        await Groups.AddToGroupAsync(
-            Context.ConnectionId,
-            HostGroup(
-                session.OrganizationId,
-                session.Id));
-
+        /*
+         * Avisar al técnico de que la sesión pasó a Connected.
+         */
         await Clients
             .Group(
                 TechnicianGroup(
@@ -154,9 +339,18 @@ public sealed class RemoteSupportHub : Hub
                 });
 
         _logger.LogInformation(
-            "RemoteHost connected for session {SessionId}.",
-            sessionId);
+            "RemoteHost registered successfully. " +
+            "SessionId={SessionId}, DeviceId={DeviceId}, ConnectionId={ConnectionId}.",
+            sessionId,
+            remoteHost.DeviceId,
+            Context.ConnectionId);
     }
+
+    /*
+     * ============================================================
+     * VIDEO
+     * ============================================================
+     */
 
     public async Task PublishFrame(
         Guid sessionId,
@@ -171,7 +365,35 @@ public sealed class RemoteSupportHub : Hub
             ValidateRemoteHost(
                 sessionId);
 
-        if (base64Data.Length >
+        if (
+            width <= 0
+            ||
+            height <= 0)
+        {
+            throw new HubException(
+                "Dimensiones de frame no válidas.");
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(
+                mimeType))
+        {
+            throw new HubException(
+                "MimeType del frame no válido.");
+        }
+
+        if (
+            string.IsNullOrWhiteSpace(
+                base64Data))
+        {
+            return;
+        }
+
+        /*
+         * Protección básica contra frames excesivamente grandes.
+         */
+        if (
+            base64Data.Length >
             4_000_000)
         {
             throw new HubException(
@@ -197,6 +419,12 @@ public sealed class RemoteSupportHub : Hub
                 });
     }
 
+    /*
+     * ============================================================
+     * MOUSE
+     * ============================================================
+     */
+
     public async Task PointerMove(
         Guid sessionId,
         double x,
@@ -219,8 +447,14 @@ public sealed class RemoteSupportHub : Hub
                     session.Id))
             .SendAsync(
                 "PointerMove",
-                Math.Clamp(x, 0, 1),
-                Math.Clamp(y, 0, 1));
+                Math.Clamp(
+                    x,
+                    0,
+                    1),
+                Math.Clamp(
+                    y,
+                    0,
+                    1));
     }
 
     public async Task PointerButton(
@@ -290,6 +524,12 @@ public sealed class RemoteSupportHub : Hub
                 delta);
     }
 
+    /*
+     * ============================================================
+     * KEYBOARD
+     * ============================================================
+     */
+
     public async Task Keyboard(
         Guid sessionId,
         int virtualKey,
@@ -305,7 +545,10 @@ public sealed class RemoteSupportHub : Hub
             return;
         }
 
-        if (virtualKey is < 1 or > 255)
+        if (
+            virtualKey is
+                < 1
+                or > 255)
         {
             return;
         }
@@ -321,23 +564,11 @@ public sealed class RemoteSupportHub : Hub
                 keyDown);
     }
 
-    public async Task LeaveSession(
-        Guid sessionId)
-    {
-        if (!IsHumanConnection())
-        {
-            return;
-        }
-
-        var organizationId =
-            GetHumanOrganizationId();
-
-        await Groups.RemoveFromGroupAsync(
-            Context.ConnectionId,
-            TechnicianGroup(
-                organizationId,
-                sessionId));
-    }
+    /*
+     * ============================================================
+     * HUMAN SESSION VALIDATION
+     * ============================================================
+     */
 
     private async Task<RemoteSession>
         GetHumanSessionAsync(
@@ -347,25 +578,55 @@ public sealed class RemoteSupportHub : Hub
         RequireHumanPermission(
             permission);
 
+        if (sessionId == Guid.Empty)
+        {
+            throw new HubException(
+                "SessionId no válido.");
+        }
+
         var organizationId =
             GetHumanOrganizationId();
 
+        /*
+         * No utilizar x.IsTerminal dentro de LINQ-to-SQL.
+         */
         var session =
             await _dbContext
                 .RemoteSessions
                 .FirstOrDefaultAsync(
                     x =>
-                        x.Id == sessionId
+                        x.Id ==
+                            sessionId
                         &&
                         x.OrganizationId ==
                             organizationId
                         &&
-                        !x.IsTerminal);
+                        x.Status !=
+                            RemoteSessionStatus.Completed
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Failed
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Expired
+                        &&
+                        x.Status !=
+                            RemoteSessionStatus.Cancelled);
 
-        return session
-            ?? throw new HubException(
+        if (session is null)
+        {
+            throw new HubException(
                 "La sesión remota no está disponible.");
+        }
+
+        return session;
     }
+
+    /*
+     * ============================================================
+     * REMOTE HOST VALIDATION
+     * ============================================================
+     */
 
     private RemoteHostTokenEntry
         ValidateRemoteHost(
@@ -373,33 +634,43 @@ public sealed class RemoteSupportHub : Hub
     {
         var httpContext =
             Context.GetHttpContext()
-            ?? throw new HubException(
+            ??
+            throw new HubException(
                 "HTTP context no disponible.");
 
         var token =
-            httpContext.Request.Headers[
+            httpContext
+                .Request
+                .Headers[
                     "X-Titan-Remote-Token"]
                 .FirstOrDefault();
 
         var sessionHeader =
-            httpContext.Request.Headers[
+            httpContext
+                .Request
+                .Headers[
                     "X-Titan-Remote-Session"]
                 .FirstOrDefault();
 
-        if (!Guid.TryParse(
+        if (
+            !Guid.TryParse(
                 sessionHeader,
                 out var headerSessionId)
             ||
-            headerSessionId != sessionId)
+            headerSessionId !=
+                sessionId)
         {
             throw new HubException(
                 "Identidad RemoteHost no válida.");
         }
 
-        if (!_tokenService.TryValidate(
-                token ?? string.Empty,
-                sessionId,
-                out var entry))
+        if (
+            !_tokenService
+                .TryValidate(
+                    token ??
+                    string.Empty,
+                    sessionId,
+                    out var entry))
         {
             throw new HubException(
                 "Token RemoteHost inválido o expirado.");
@@ -408,10 +679,19 @@ public sealed class RemoteSupportHub : Hub
         return entry;
     }
 
+    /*
+     * ============================================================
+     * HUMAN AUTHENTICATION
+     * ============================================================
+     */
+
     private bool IsHumanConnection()
     {
-        return Context.User?.Identity?
-            .IsAuthenticated == true;
+        return
+            Context.User
+                ?.Identity
+                ?.IsAuthenticated ==
+            true;
     }
 
     private void RequireHumanPermission(
@@ -419,27 +699,48 @@ public sealed class RemoteSupportHub : Hub
     {
         if (!IsHumanConnection())
         {
+            _logger.LogWarning(
+                "Remote Support human authentication required. " +
+                "ConnectionId={ConnectionId}.",
+                Context.ConnectionId);
+
             throw new HubException(
                 "Autenticación humana requerida.");
         }
 
         var allowed =
-            Context.User!.Claims.Any(
-                x =>
-                    x.Type ==
-                        "permission"
-                    &&
-                    string.Equals(
-                        x.Value,
-                        permission,
-                        StringComparison.OrdinalIgnoreCase));
+            Context.User!
+                .Claims
+                .Any(
+                    claim =>
+                        claim.Type ==
+                            "permission"
+                        &&
+                        string.Equals(
+                            claim.Value,
+                            permission,
+                            StringComparison
+                                .OrdinalIgnoreCase));
 
         if (!allowed)
         {
+            _logger.LogWarning(
+                "Remote Support permission denied. " +
+                "Permission={Permission}, User={User}, ConnectionId={ConnectionId}.",
+                permission,
+                Context.User?.Identity?.Name,
+                Context.ConnectionId);
+
             throw new HubException(
-                "No posee permisos para esta operación.");
+                $"El usuario no posee el permiso '{permission}'.");
         }
     }
+
+    /*
+     * ============================================================
+     * ORGANIZATION
+     * ============================================================
+     */
 
     private Guid GetHumanOrganizationId()
     {
@@ -448,10 +749,20 @@ public sealed class RemoteSupportHub : Hub
                 .FindFirstValue(
                     "organization_id");
 
-        if (!Guid.TryParse(
+        if (
+            !Guid.TryParse(
                 value,
-                out var organizationId))
+                out var organizationId)
+            ||
+            organizationId ==
+                Guid.Empty)
         {
+            _logger.LogWarning(
+                "Remote Support OrganizationId claim missing. " +
+                "User={User}, ConnectionId={ConnectionId}.",
+                Context.User?.Identity?.Name,
+                Context.ConnectionId);
+
             throw new HubException(
                 "OrganizationId no disponible.");
         }
@@ -459,24 +770,41 @@ public sealed class RemoteSupportHub : Hub
         return organizationId;
     }
 
+    /*
+     * ============================================================
+     * SIGNALR GROUP NAMES
+     * ============================================================
+     */
+
     public static string OrganizationGroup(
-        Guid organizationId) =>
-        $"organization:{organizationId:N}";
+        Guid organizationId)
+    {
+        return
+            $"organization:{organizationId:N}";
+    }
 
     public static string TechnicianGroup(
         Guid organizationId,
-        Guid sessionId) =>
-        $"organization:{organizationId:N}:remote:{sessionId:N}:technicians";
+        Guid sessionId)
+    {
+        return
+            $"organization:{organizationId:N}:remote:{sessionId:N}:technicians";
+    }
 
     public static string HostGroup(
         Guid organizationId,
-        Guid sessionId) =>
-        $"organization:{organizationId:N}:remote:{sessionId:N}:host";
+        Guid sessionId)
+    {
+        return
+            $"organization:{organizationId:N}:remote:{sessionId:N}:host";
+    }
 
     public static string SessionGroup(
         Guid organizationId,
-        Guid sessionId) =>
-        TechnicianGroup(
+        Guid sessionId)
+    {
+        return TechnicianGroup(
             organizationId,
             sessionId);
+    }
 }

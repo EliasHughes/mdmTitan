@@ -1,11 +1,9 @@
-import {
-  HubConnection,
-  HubConnectionBuilder,
-  HubConnectionState,
-  LogLevel,
-} from '@microsoft/signalr'
+import * as signalR
+  from '@microsoft/signalr'
 
-import { tokenStorage } from '../auth/tokenStorage'
+import {
+  tokenStorage,
+} from '../auth/tokenStorage'
 
 export interface RemoteFrame {
   sessionId: string
@@ -20,216 +18,544 @@ export interface RemoteFrame {
 export interface RemoteSessionChanged {
   sessionId: string
   status: string
-  deviceId?: string
-  failureReason?: string | null
-  terminationReason?: string | null
+  connectedAtUtc?: string | null
 }
 
-export interface RemoteSupportCallbacks {
-  onFrame?: (frame: RemoteFrame) => void
+export interface RemoteSupportSignalRHandlers {
+  onFrame?: (
+    frame: RemoteFrame,
+  ) => void
 
   onSessionChanged?: (
     update: RemoteSessionChanged,
   ) => void
 
-  onReconnecting?: () => void
-  onReconnected?: () => void
-  onClosed?: (error?: Error) => void
+  onReconnecting?: (
+    error?: Error,
+  ) => void
+
+  onReconnected?: (
+    connectionId?: string,
+  ) => void
+
+  onClosed?: (
+    error?: Error,
+  ) => void
+}
+
+function extractSignalRError(
+  error: unknown,
+): string {
+  if (
+    error instanceof Error
+  ) {
+    return error.message
+  }
+
+  if (
+    typeof error ===
+    'string'
+  ) {
+    return error
+  }
+
+  try {
+    return JSON.stringify(
+      error,
+    )
+  } catch {
+    return (
+      'Error SignalR desconocido.'
+    )
+  }
 }
 
 export class RemoteSupportSignalRClient {
-  private connection: HubConnection | null = null
+  private connection:
+    signalR.HubConnection | null =
+      null
 
-  private callbacks: RemoteSupportCallbacks = {}
-
-  async connect(
-    callbacks: RemoteSupportCallbacks = {},
-  ): Promise<void> {
-    this.callbacks = callbacks
-
-    if (
+  public get isConnected():
+    boolean {
+    return (
       this.connection?.state ===
-      HubConnectionState.Connected
+      signalR.HubConnectionState
+        .Connected
+    )
+  }
+
+  public get state():
+    signalR.HubConnectionState |
+    null {
+    return (
+      this.connection?.state ??
+      null
+    )
+  }
+
+  public async connect(
+    handlers:
+      RemoteSupportSignalRHandlers =
+        {},
+  ): Promise<void> {
+    /*
+     * Evitar crear más de una
+     * conexión simultánea.
+     */
+    if (
+      this.connection
     ) {
-      return
+      if (
+        this.connection.state ===
+        signalR.HubConnectionState
+          .Connected
+      ) {
+        return
+      }
+
+      if (
+        this.connection.state ===
+        signalR.HubConnectionState
+          .Connecting
+      ) {
+        return
+      }
     }
 
     const connection =
-      new HubConnectionBuilder()
+      new signalR.HubConnectionBuilder()
         .withUrl(
           '/hubs/remote-support',
           {
-            accessTokenFactory: () =>
-              tokenStorage.getAccessToken() ?? '',
+            accessTokenFactory:
+              () =>
+                tokenStorage
+                  .getAccessToken()
+                ??
+                '',
           },
         )
-        .withAutomaticReconnect([
-          0,
-          2000,
-          5000,
-          10000,
-          30000,
-        ])
+        .withAutomaticReconnect(
+          [
+            0,
+            2000,
+            5000,
+            10000,
+          ],
+        )
         .configureLogging(
-          LogLevel.Warning,
+          signalR.LogLevel
+            .Information,
         )
         .build()
 
+    this.connection =
+      connection
+
+    /*
+     * ============================================================
+     * SERVER EVENTS
+     * ============================================================
+     */
+
     connection.on(
       'RemoteFrame',
-      (frame: RemoteFrame) => {
-        this.callbacks.onFrame?.(frame)
+      (
+        frame:
+          RemoteFrame,
+      ) => {
+        handlers
+          .onFrame
+          ?.(
+            frame,
+          )
       },
     )
 
     connection.on(
       'RemoteSessionUpdated',
-      (update: RemoteSessionChanged) => {
-        this.callbacks.onSessionChanged?.(
-          update,
-        )
+      (
+        update:
+          RemoteSessionChanged,
+      ) => {
+        handlers
+          .onSessionChanged
+          ?.(
+            update,
+          )
       },
     )
 
-    connection.on(
-      'RemoteSessionChanged',
-      (update: RemoteSessionChanged) => {
-        this.callbacks.onSessionChanged?.(
-          update,
+    /*
+     * ============================================================
+     * CONNECTION EVENTS
+     * ============================================================
+     */
+
+    connection.onreconnecting(
+      (
+        error,
+      ) => {
+        console.warn(
+          '[TitanMDM SignalR] Reconectando...',
+          error,
         )
+
+        handlers
+          .onReconnecting
+          ?.(
+            error ??
+            undefined,
+          )
       },
     )
 
-    connection.onreconnecting(() => {
-      this.callbacks.onReconnecting?.()
-    })
+    connection.onreconnected(
+      (
+        connectionId,
+      ) => {
+        console.info(
+          '[TitanMDM SignalR] Reconectado.',
+          {
+            connectionId,
+          },
+        )
 
-    connection.onreconnected(() => {
-      this.callbacks.onReconnected?.()
-    })
+        handlers
+          .onReconnected
+          ?.(
+            connectionId ??
+            undefined,
+          )
+      },
+    )
 
-    connection.onclose((error) => {
-      this.callbacks.onClosed?.(
-        error ?? undefined,
+    connection.onclose(
+      (
+        error,
+      ) => {
+        console.warn(
+          '[TitanMDM SignalR] Cerrado.',
+          error,
+        )
+
+        handlers
+          .onClosed
+          ?.(
+            error ??
+            undefined,
+          )
+      },
+    )
+
+    /*
+     * ============================================================
+     * START CONNECTION
+     * ============================================================
+     */
+
+    try {
+      await connection
+        .start()
+
+      console.info(
+        '[TitanMDM SignalR] Conectado.',
+        {
+          connectionId:
+            connection.connectionId,
+          state:
+            connection.state,
+        },
       )
-    })
+    } catch (
+      error
+    ) {
+      const message =
+        extractSignalRError(
+          error,
+        )
 
-    await connection.start()
+      console.error(
+        '[TitanMDM SignalR] Error iniciando conexión:',
+        message,
+        error,
+      )
 
-    this.connection = connection
+      this.connection =
+        null
+
+      throw new Error(
+        `No fue posible conectar SignalR: ${message}`,
+      )
+    }
   }
 
-  async joinSession(
+  /*
+   * ============================================================
+   * JOIN SESSION
+   * ============================================================
+   */
+
+  public async joinSession(
     sessionId: string,
   ): Promise<void> {
-    this.ensureConnected()
+    const connection =
+      this.requireConnection()
 
-    await this.connection!.invoke(
-      'JoinSession',
-      sessionId,
-    )
-  }
-
-  async leaveSession(
-    sessionId: string,
-  ): Promise<void> {
     if (
-      !this.connection ||
-      this.connection.state !==
-        HubConnectionState.Connected
+      !sessionId
+    ) {
+      throw new Error(
+        'JoinSession requiere un SessionId.',
+      )
+    }
+
+    try {
+      console.info(
+        '[TitanMDM SignalR] JoinSession solicitado.',
+        {
+          sessionId,
+          connectionId:
+            connection.connectionId,
+          state:
+            connection.state,
+        },
+      )
+
+      await connection
+        .invoke(
+          'JoinSession',
+          sessionId,
+        )
+
+      console.info(
+        '[TitanMDM SignalR] JoinSession correcto.',
+        {
+          sessionId,
+        },
+      )
+    } catch (
+      error
+    ) {
+      const message =
+        extractSignalRError(
+          error,
+        )
+
+      console.error(
+        '[TitanMDM SignalR] JoinSession falló.',
+        {
+          sessionId,
+          message,
+          error,
+        },
+      )
+
+      throw new Error(
+        `JoinSession falló: ${message}`,
+      )
+    }
+  }
+
+  /*
+   * ============================================================
+   * LEAVE SESSION
+   * ============================================================
+   */
+
+  public async leaveSession(
+    sessionId: string,
+  ): Promise<void> {
+    const connection =
+      this.requireConnection()
+
+    if (
+      !sessionId
     ) {
       return
     }
 
-    await this.connection.invoke(
-      'LeaveSession',
-      sessionId,
-    )
+    try {
+      await connection
+        .invoke(
+          'LeaveSession',
+          sessionId,
+        )
+
+      console.info(
+        '[TitanMDM SignalR] LeaveSession correcto.',
+        {
+          sessionId,
+        },
+      )
+    } catch (
+      error
+    ) {
+      const message =
+        extractSignalRError(
+          error,
+        )
+
+      console.warn(
+        '[TitanMDM SignalR] LeaveSession falló.',
+        {
+          sessionId,
+          message,
+          error,
+        },
+      )
+
+      throw new Error(
+        `LeaveSession falló: ${message}`,
+      )
+    }
   }
 
-  async pointerMove(
+  /*
+   * ============================================================
+   * MOUSE
+   * ============================================================
+   */
+
+  public async pointerMove(
     sessionId: string,
     x: number,
     y: number,
   ): Promise<void> {
-    this.ensureConnected()
+    const connection =
+      this.requireConnection()
 
-    await this.connection!.invoke(
-      'PointerMove',
-      sessionId,
-      x,
-      y,
-    )
+    await connection
+      .invoke(
+        'PointerMove',
+        sessionId,
+        x,
+        y,
+      )
   }
 
-  async pointerButton(
+  public async pointerButton(
     sessionId: string,
-    action: string,
+    action:
+      | 'left-down'
+      | 'left-up'
+      | 'right-down'
+      | 'right-up',
   ): Promise<void> {
-    this.ensureConnected()
+    const connection =
+      this.requireConnection()
 
-    await this.connection!.invoke(
-      'PointerButton',
-      sessionId,
-      action,
-    )
+    await connection
+      .invoke(
+        'PointerButton',
+        sessionId,
+        action,
+      )
   }
 
-  async pointerWheel(
+  public async pointerWheel(
     sessionId: string,
     delta: number,
   ): Promise<void> {
-    this.ensureConnected()
+    const connection =
+      this.requireConnection()
 
-    await this.connection!.invoke(
-      'PointerWheel',
-      sessionId,
-      delta,
-    )
+    await connection
+      .invoke(
+        'PointerWheel',
+        sessionId,
+        delta,
+      )
   }
 
-  async keyboard(
+  /*
+   * ============================================================
+   * KEYBOARD
+   * ============================================================
+   */
+
+  public async keyboard(
     sessionId: string,
     virtualKey: number,
     keyDown: boolean,
   ): Promise<void> {
-    this.ensureConnected()
+    const connection =
+      this.requireConnection()
 
-    await this.connection!.invoke(
-      'Keyboard',
-      sessionId,
-      virtualKey,
-      keyDown,
-    )
+    await connection
+      .invoke(
+        'Keyboard',
+        sessionId,
+        virtualKey,
+        keyDown,
+      )
   }
 
-  async disconnect(): Promise<void> {
+  /*
+   * ============================================================
+   * DISCONNECT
+   * ============================================================
+   */
+
+  public async disconnect():
+    Promise<void> {
     const connection =
       this.connection
 
-    this.connection = null
+    this.connection =
+      null
 
-    if (!connection) {
+    if (
+      !connection
+    ) {
       return
     }
 
-    if (
-      connection.state !==
-      HubConnectionState.Disconnected
+    try {
+      if (
+        connection.state !==
+        signalR.HubConnectionState
+          .Disconnected
+      ) {
+        await connection
+          .stop()
+      }
+    } catch (
+      error
     ) {
-      await connection.stop()
+      console.warn(
+        '[TitanMDM SignalR] Error cerrando conexión.',
+        error,
+      )
     }
   }
 
-  private ensureConnected(): void {
+  /*
+   * ============================================================
+   * HELPERS
+   * ============================================================
+   */
+
+  private requireConnection():
+    signalR.HubConnection {
     if (
-      !this.connection ||
-      this.connection.state !==
-        HubConnectionState.Connected
+      !this.connection
     ) {
       throw new Error(
-        'El canal de soporte remoto no está conectado.',
+        'El cliente SignalR no está inicializado.',
       )
     }
+
+    if (
+      this.connection.state !==
+      signalR.HubConnectionState
+        .Connected
+    ) {
+      throw new Error(
+        `SignalR no está conectado. Estado actual: ${this.connection.state}.`,
+      )
+    }
+
+    return this.connection
   }
 }
