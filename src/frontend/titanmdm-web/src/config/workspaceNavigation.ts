@@ -360,6 +360,19 @@ const androidNavigation:
 const administrationNavigation:
   WorkspaceNavigationItem[] = [
     {
+  label:
+    'Dashboard general',
+
+  path:
+    '/dashboard?workspace=global',
+
+  permission:
+    'dashboard.global.view',
+
+  icon:
+    Gauge,
+},
+    {
       label:
         'Usuarios',
 

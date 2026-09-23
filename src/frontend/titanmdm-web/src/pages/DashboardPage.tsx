@@ -6,6 +6,11 @@ import {
 } from 'react'
 
 import {
+  useNavigate,
+  useSearchParams,
+} from 'react-router-dom'
+
+import {
   Activity,
   AlertTriangle,
   CheckCircle2,
@@ -36,12 +41,9 @@ import {
 } from 'recharts'
 
 import {
-  useNavigate,
-} from 'react-router-dom'
-
-import {
   dashboardApi,
   type DashboardSummary,
+  type DashboardWorkspace,
 } from '../api/dashboardApi'
 
 import {
@@ -116,10 +118,12 @@ const initialSummary:
 
 interface ChartTooltipProps {
   active?: boolean
+
   payload?: Array<{
     name?: string
     value?: number
   }>
+
   label?: string
 }
 
@@ -151,15 +155,17 @@ function ChartTooltip({
         ) => (
           <div
             key={
-              `${entry.name}-${index}`
+              `${entry.name ?? 'item'}-${index}`
             }
           >
             <span>
-              {entry.name}
+              {entry.name ??
+                'Valor'}
             </span>
 
             <strong>
-              {entry.value ?? 0}
+              {entry.value ??
+                0}
             </strong>
           </div>
         ),
@@ -178,11 +184,99 @@ export function DashboardPage() {
   const navigate =
     useNavigate()
 
+  const [
+    searchParams,
+  ] =
+    useSearchParams()
+
   const {
     activeWorkspaceId,
     activeModule,
   } =
     useWorkspace()
+
+  /*
+   * ==============================================================
+   * DASHBOARD WORKSPACE
+   * ==============================================================
+   *
+   * Prioridad:
+   *
+   * 1. Query string
+   * 2. WorkspaceContext
+   * 3. Global
+   *
+   * Esto evita ejecutar primero:
+   *
+   * /summary?workspace=global
+   *
+   * y después:
+   *
+   * /summary?workspace=android
+   * ==============================================================
+   */
+
+  const dashboardWorkspace =
+    useMemo<
+      DashboardWorkspace
+    >(
+      () => {
+        const requestedWorkspace =
+          searchParams
+            .get(
+              'workspace',
+            )
+            ?.trim()
+            .toLowerCase()
+
+        if (
+          requestedWorkspace ===
+          'windows'
+        ) {
+          return 'windows'
+        }
+
+        if (
+          requestedWorkspace ===
+          'android'
+        ) {
+          return 'android'
+        }
+
+        if (
+          requestedWorkspace ===
+          'global'
+        ) {
+          return 'global'
+        }
+
+        if (
+          activeWorkspaceId ===
+          'windows'
+        ) {
+          return 'windows'
+        }
+
+        if (
+          activeWorkspaceId ===
+          'android'
+        ) {
+          return 'android'
+        }
+
+        return 'global'
+      },
+      [
+        searchParams,
+        activeWorkspaceId,
+      ],
+    )
+
+  /*
+   * ==============================================================
+   * STATE
+   * ==============================================================
+   */
 
   const [
     summary,
@@ -208,6 +302,65 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
+   * ROUTES
+   * ==============================================================
+   */
+
+  const deviceQuery =
+    useMemo(
+      () => {
+        if (
+          dashboardWorkspace ===
+          'windows'
+        ) {
+          return (
+            'platform=Windows' +
+            '&workspace=windows'
+          )
+        }
+
+        if (
+          dashboardWorkspace ===
+          'android'
+        ) {
+          return (
+            'platform=Android' +
+            '&workspace=android'
+          )
+        }
+
+        return (
+          'workspace=global'
+        )
+      },
+      [
+        dashboardWorkspace,
+      ],
+    )
+
+  const devicesRoute =
+    `/devices?${deviceQuery}`
+
+  const onlineDevicesRoute =
+    `/devices?${deviceQuery}&status=online`
+
+  const offlineDevicesRoute =
+    `/devices?${deviceQuery}&status=offline`
+
+  const complianceRoute =
+    dashboardWorkspace ===
+      'global'
+      ? '/compliance?workspace=global'
+      : `/compliance?workspace=${dashboardWorkspace}`
+
+  const automationRoute =
+    dashboardWorkspace ===
+      'global'
+      ? '/automation?workspace=global'
+      : `/automation?workspace=${dashboardWorkspace}`
+
+  /*
+   * ==============================================================
    * DATA
    * ==============================================================
    */
@@ -224,20 +377,11 @@ export function DashboardPage() {
             null,
           )
 
-          const dashboardWorkspace =
-                activeWorkspaceId ===
-                  'windows'
-                  ? 'windows'
-                  : activeWorkspaceId ===
-                      'android'
-                    ? 'android'
-                    : 'global'
-
-              const data =
-                await dashboardApi
-                  .getSummary(
-                    dashboardWorkspace,
-                  )
+          const data =
+            await dashboardApi
+              .getSummary(
+                dashboardWorkspace,
+              )
 
           setSummary(
             data,
@@ -259,41 +403,59 @@ export function DashboardPage() {
           )
         }
       },
-      [ activeWorkspaceId,
-        
+      [
+        dashboardWorkspace,
       ],
     )
+
+  /*
+   * ==============================================================
+   * INITIAL LOAD / WORKSPACE CHANGE
+   * ==============================================================
+   */
 
   useEffect(
     () => {
       document.title =
-        'Dashboard | TitanMDM'
+        dashboardWorkspace ===
+          'windows'
+          ? 'Dashboard Windows | TitanMDM'
+          : dashboardWorkspace ===
+              'android'
+            ? 'Dashboard Android | TitanMDM'
+            : 'Dashboard General | TitanMDM'
 
       void loadDashboard()
     },
     [
+      dashboardWorkspace,
       loadDashboard,
     ],
   )
 
   /*
    * ==============================================================
-   * WORKSPACE
+   * WORKSPACE PRESENTATION
    * ==============================================================
    */
 
   const workspaceName =
-    activeModule?.shortTitle ??
-    'General'
+    dashboardWorkspace ===
+      'windows'
+      ? 'Windows'
+      : dashboardWorkspace ===
+          'android'
+        ? 'Android'
+        : 'General'
 
   const workspaceDescription =
-    activeWorkspaceId ===
+    dashboardWorkspace ===
       'windows'
       ? 'Estado operativo de la infraestructura Windows administrada por TitanMDM.'
-      : activeWorkspaceId ===
+      : dashboardWorkspace ===
           'android'
         ? 'Estado operativo de Android Enterprise y la flota móvil administrada.'
-        : 'Visión general de dispositivos, cumplimiento, comandos y servicios TitanMDM.'
+        : 'Visión consolidada de Windows, Android, cumplimiento, automatización y servicios TitanMDM.'
 
   /*
    * ==============================================================
@@ -351,7 +513,28 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * CHART DATA
+   * COLORS
+   * ==============================================================
+   */
+
+  const workspaceChartColor =
+    dashboardWorkspace ===
+      'windows'
+      ? '#2563eb'
+      : dashboardWorkspace ===
+          'android'
+        ? '#16a34a'
+        : (
+            activeModule
+              ?.theme
+              .primary
+            ??
+            '#4169e1'
+          )
+
+  /*
+   * ==============================================================
+   * CHART DATA — DEVICE STATUS
    * ==============================================================
    */
 
@@ -361,48 +544,68 @@ export function DashboardPage() {
         {
           name:
             'Online',
+
           value:
             summary.devices.online,
+
           color:
             '#22c55e',
         },
+
         {
           name:
             'Offline',
+
           value:
             summary.devices.offline,
+
           color:
             '#ef4444',
         },
+
         {
           name:
             'Pendientes',
+
           value:
             summary.devices.pending,
+
           color:
             '#f59e0b',
         },
+
         {
           name:
             'Inscribiendo',
+
           value:
             summary.devices.enrolling,
+
           color:
             '#3b82f6',
         },
+
         {
           name:
             'Cuarentena',
+
           value:
             summary.devices.quarantined,
+
           color:
             '#a855f7',
         },
       ],
       [
-        summary,
+        summary.devices,
       ],
     )
+
+  /*
+   * ==============================================================
+   * CHART DATA — PLATFORMS
+   * ==============================================================
+   */
 
   const platformData =
     useMemo(
@@ -410,24 +613,32 @@ export function DashboardPage() {
         {
           name:
             'Windows',
+
           value:
             summary.platforms.windows,
+
           color:
             '#2563eb',
         },
+
         {
           name:
             'Android',
+
           value:
             summary.platforms.android,
+
           color:
             '#16a34a',
         },
+
         {
           name:
             'Otros',
+
           value:
             summary.platforms.unknown,
+
           color:
             '#94a3b8',
         },
@@ -437,30 +648,43 @@ export function DashboardPage() {
       ],
     )
 
+  /*
+   * ==============================================================
+   * CHART DATA — COMPLIANCE
+   * ==============================================================
+   */
+
   const complianceData =
     useMemo(
       () => [
         {
           name:
             'Conformes',
+
           value:
             summary.compliance.compliant,
         },
+
         {
           name:
             'No conformes',
+
           value:
             summary.compliance.nonCompliant,
         },
+
         {
           name:
             'Evaluando',
+
           value:
             summary.compliance.evaluating,
         },
+
         {
           name:
             'Desconocidos',
+
           value:
             summary.compliance.unknown,
         },
@@ -470,37 +694,52 @@ export function DashboardPage() {
       ],
     )
 
+  /*
+   * ==============================================================
+   * CHART DATA — COMMAND ENGINE
+   * ==============================================================
+   */
+
   const commandData =
     useMemo(
       () => [
         {
           name:
             'Correctos',
+
           value:
             summary.commands.success,
         },
+
         {
           name:
             'Fallidos',
+
           value:
             summary.commands.failed,
         },
+
         {
           name:
             'Ejecutando',
+
           value:
             summary.commands.executing,
         },
+
         {
           name:
             'Pendientes',
+
           value:
             summary.commands.pending +
             summary.commands.queued,
         },
+
         {
           name:
             'Timeout',
+
           value:
             summary.commands.timeout,
         },
@@ -510,11 +749,28 @@ export function DashboardPage() {
       ],
     )
 
+  /*
+   * ==============================================================
+   * ATTENTION SCORE
+   * ==============================================================
+   */
+
   const attentionCount =
     summary.devices.offline +
     summary.devices.quarantined +
     summary.compliance.nonCompliant +
     summary.commands.problems
+
+  /*
+   * ==============================================================
+   * PLATFORM TOTAL
+   * ==============================================================
+   */
+
+  const platformTotal =
+    summary.platforms.windows +
+    summary.platforms.android +
+    summary.platforms.unknown
 
   /*
    * ==============================================================
@@ -531,7 +787,8 @@ export function DashboardPage() {
       <section className="dashboard-heading dashboard-heading--hero">
         <div>
           <span className="dashboard-heading__eyebrow">
-            TITAN OPERATIONS · {workspaceName.toUpperCase()}
+            TITAN OPERATIONS ·{' '}
+            {workspaceName.toUpperCase()}
           </span>
 
           <h1>
@@ -576,6 +833,10 @@ export function DashboardPage() {
         </div>
       </section>
 
+      {/* ========================================================
+          ERROR
+         ======================================================== */}
+
       {error && (
         <div className="dashboard-error">
           <ShieldAlert
@@ -608,18 +869,14 @@ export function DashboardPage() {
          ======================================================== */}
 
       <section className="dashboard-kpi-grid">
+        {/* Devices */}
+
         <button
           type="button"
           className="dashboard-kpi-card"
           onClick={() =>
             navigate(
-              activeWorkspaceId ===
-                'android'
-                ? '/devices?platform=Android&workspace=android'
-                : activeWorkspaceId ===
-                    'windows'
-                  ? '/devices?platform=Windows&workspace=windows'
-                  : '/devices',
+              devicesRoute,
             )
           }
         >
@@ -650,12 +907,14 @@ export function DashboardPage() {
           </div>
         </button>
 
+        {/* Online */}
+
         <button
           type="button"
           className="dashboard-kpi-card"
           onClick={() =>
             navigate(
-              '/devices?status=online',
+              onlineDevicesRoute,
             )
           }
         >
@@ -671,7 +930,9 @@ export function DashboardPage() {
             </span>
 
             <strong>
-              {summary.devices.online}
+              {isLoading
+                ? '...'
+                : summary.devices.online}
             </strong>
 
             <small>
@@ -684,12 +945,14 @@ export function DashboardPage() {
           </div>
         </button>
 
+        {/* Offline */}
+
         <button
           type="button"
           className="dashboard-kpi-card"
           onClick={() =>
             navigate(
-              '/devices?status=offline',
+              offlineDevicesRoute,
             )
           }
         >
@@ -705,7 +968,9 @@ export function DashboardPage() {
             </span>
 
             <strong>
-              {summary.devices.offline}
+              {isLoading
+                ? '...'
+                : summary.devices.offline}
             </strong>
 
             <small>
@@ -718,12 +983,14 @@ export function DashboardPage() {
           </div>
         </button>
 
+        {/* Compliance */}
+
         <button
           type="button"
           className="dashboard-kpi-card"
           onClick={() =>
             navigate(
-              '/compliance',
+              complianceRoute,
             )
           }
         >
@@ -739,7 +1006,8 @@ export function DashboardPage() {
             </span>
 
             <strong>
-              {summary.compliance
+              {summary
+                .compliance
                 .compliancePercentage ===
               null
                 ? 'N/D'
@@ -747,21 +1015,27 @@ export function DashboardPage() {
             </strong>
 
             <small>
-              {summary.compliance.compliant} conformes
+              {summary.compliance.compliant}{' '}
+              conformes
             </small>
           </div>
 
           <div className="dashboard-kpi-card__trend">
-            {summary.compliance.nonCompliant} alertas
+            {summary
+              .compliance
+              .nonCompliant}{' '}
+            alertas
           </div>
         </button>
+
+        {/* Commands */}
 
         <button
           type="button"
           className="dashboard-kpi-card"
           onClick={() =>
             navigate(
-              '/automation',
+              automationRoute,
             )
           }
         >
@@ -792,10 +1066,12 @@ export function DashboardPage() {
       </section>
 
       {/* ========================================================
-          MAIN CHARTS
+          DONUT CHARTS
          ======================================================== */}
 
       <section className="dashboard-chart-grid">
+        {/* DEVICE STATUS */}
+
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
             <div>
@@ -898,6 +1174,8 @@ export function DashboardPage() {
           </div>
         </article>
 
+        {/* PLATFORM */}
+
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
             <div>
@@ -910,7 +1188,13 @@ export function DashboardPage() {
               </h2>
 
               <p>
-                Equipos Windows y Android actualmente registrados.
+                {dashboardWorkspace ===
+                'windows'
+                  ? 'Distribución del inventario Windows.'
+                  : dashboardWorkspace ===
+                      'android'
+                    ? 'Distribución del inventario Android Enterprise.'
+                    : 'Equipos Windows y Android actualmente registrados.'}
               </p>
             </div>
 
@@ -961,9 +1245,7 @@ export function DashboardPage() {
 
               <div className="dashboard-donut-center">
                 <strong>
-                  {summary.platforms.windows +
-                    summary.platforms.android +
-                    summary.platforms.unknown}
+                  {platformTotal}
                 </strong>
 
                 <span>
@@ -1008,6 +1290,8 @@ export function DashboardPage() {
          ======================================================== */}
 
       <section className="dashboard-chart-grid">
+        {/* COMPLIANCE */}
+
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
             <div>
@@ -1081,8 +1365,7 @@ export function DashboardPage() {
                   dataKey="value"
                   name="Dispositivos"
                   fill={
-                    activeModule?.theme.primary ??
-                    '#4169e1'
+                    workspaceChartColor
                   }
                   radius={[
                     7,
@@ -1095,6 +1378,8 @@ export function DashboardPage() {
             </ResponsiveContainer>
           </div>
         </article>
+
+        {/* COMMAND ENGINE */}
 
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
@@ -1173,8 +1458,7 @@ export function DashboardPage() {
                   dataKey="value"
                   name="Comandos"
                   fill={
-                    activeModule?.theme.primary ??
-                    '#4169e1'
+                    workspaceChartColor
                   }
                   radius={[
                     0,
@@ -1194,6 +1478,8 @@ export function DashboardPage() {
          ======================================================== */}
 
       <section className="dashboard-operations-grid">
+        {/* ATTENTION */}
+
         <article className="dashboard-operation-card dashboard-operation-card--attention">
           <header>
             <div>
@@ -1234,7 +1520,9 @@ export function DashboardPage() {
               </span>
 
               <strong>
-                {summary.compliance.nonCompliant}
+                {summary
+                  .compliance
+                  .nonCompliant}
               </strong>
             </div>
 
@@ -1244,7 +1532,9 @@ export function DashboardPage() {
               </span>
 
               <strong>
-                {summary.devices.quarantined}
+                {summary
+                  .devices
+                  .quarantined}
               </strong>
             </div>
 
@@ -1254,11 +1544,15 @@ export function DashboardPage() {
               </span>
 
               <strong>
-                {summary.commands.problems}
+                {summary
+                  .commands
+                  .problems}
               </strong>
             </div>
           </div>
         </article>
+
+        {/* SYSTEM HEALTH */}
 
         <article className="dashboard-operation-card">
           <header>

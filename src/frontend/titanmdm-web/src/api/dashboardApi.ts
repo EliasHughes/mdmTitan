@@ -2,7 +2,7 @@ import apiClient from './apiClient'
 
 /*
  * ================================================================
- * WORKSPACE
+ * WORKSPACES
  * ================================================================
  */
 
@@ -13,7 +13,7 @@ export type DashboardWorkspace =
 
 /*
  * ================================================================
- * DEVICE SUMMARY
+ * DEVICES
  * ================================================================
  */
 
@@ -30,7 +30,7 @@ export interface DeviceSummary {
 
 /*
  * ================================================================
- * PLATFORM SUMMARY
+ * PLATFORMS
  * ================================================================
  */
 
@@ -42,7 +42,7 @@ export interface PlatformSummary {
 
 /*
  * ================================================================
- * COMPLIANCE SUMMARY
+ * COMPLIANCE
  * ================================================================
  */
 
@@ -58,7 +58,7 @@ export interface ComplianceSummary {
 
 /*
  * ================================================================
- * COMMAND SUMMARY
+ * COMMANDS
  * ================================================================
  */
 
@@ -80,7 +80,7 @@ export interface CommandSummary {
 
 /*
  * ================================================================
- * SYSTEM STATUS
+ * SYSTEM
  * ================================================================
  */
 
@@ -91,46 +91,88 @@ export interface SystemStatus {
 
 /*
  * ================================================================
- * DASHBOARD SUMMARY
+ * DASHBOARD
  * ================================================================
  */
 
 export interface DashboardSummary {
   devices: DeviceSummary
-
   platforms: PlatformSummary
-
   compliance: ComplianceSummary
-
   commands: CommandSummary
-
   system: SystemStatus
-
   generatedAtUtc: string
 }
 
 /*
  * ================================================================
- * DASHBOARD API
+ * REQUEST DEDUPLICATION
+ * ================================================================
+ *
+ * React StrictMode ejecuta determinados efectos dos veces durante
+ * desarrollo.
+ *
+ * Guardamos la solicitud activa por workspace para que dos renders
+ * simultáneos reutilicen la misma Promise en lugar de realizar
+ * dos peticiones HTTP.
+ * ================================================================
+ */
+
+const activeRequests =
+  new Map<
+    DashboardWorkspace,
+    Promise<DashboardSummary>
+  >()
+
+/*
+ * ================================================================
+ * API
  * ================================================================
  */
 
 export const dashboardApi = {
   async getSummary(
     workspace:
-      DashboardWorkspace =
-        'global',
+      DashboardWorkspace,
   ): Promise<DashboardSummary> {
-    const response =
-      await apiClient.get<DashboardSummary>(
-        '/dashboard/summary',
-        {
-          params: {
-            workspace,
-          },
-        },
+    const existingRequest =
+      activeRequests.get(
+        workspace,
       )
 
-    return response.data
+    if (
+      existingRequest
+    ) {
+      return existingRequest
+    }
+
+    const request =
+      apiClient
+        .get<DashboardSummary>(
+          '/dashboard/summary',
+          {
+            params: {
+              workspace,
+            },
+          },
+        )
+        .then(
+          response =>
+            response.data,
+        )
+        .finally(
+          () => {
+            activeRequests.delete(
+              workspace,
+            )
+          },
+        )
+
+    activeRequests.set(
+      workspace,
+      request,
+    )
+
+    return request
   },
 }
