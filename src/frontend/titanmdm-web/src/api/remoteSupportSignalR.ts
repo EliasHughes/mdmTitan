@@ -334,7 +334,7 @@ export class RemoteSupportSignalRClient {
 
     /*
      * ========================================================
-     * START
+     * START CONNECTION
      * ========================================================
      */
 
@@ -370,9 +370,11 @@ export class RemoteSupportSignalRClient {
         null
 
       throw new Error(
-        `No fue posible conectar SignalR: ${message}`, {
-    cause: error,
-  },)
+        `No fue posible conectar SignalR: ${message}`,
+        {
+          cause: error,
+        },
+      )
     }
   }
 
@@ -425,12 +427,13 @@ export class RemoteSupportSignalRClient {
         },
       )
 
-     throw new Error(
-  `JoinSession falló: ${message}`,
-  {
-    cause: error,
-  },
-)
+      throw new Error(
+        `JoinSession falló: ${message}`,
+        {
+          cause: error,
+        },
+      )
+    }
   }
 
   /*
@@ -481,11 +484,12 @@ export class RemoteSupportSignalRClient {
       )
 
       throw new Error(
-  `No fue posible conectar SignalR: ${message}`,
-  {
-    cause: error,
-  },
-)
+        `LeaveSession falló: ${message}`,
+        {
+          cause: error,
+        },
+      )
+    }
   }
 
   /*
@@ -646,7 +650,8 @@ export class RemoteSupportSignalRClient {
         signalR.HubConnectionState
           .Disconnected
       ) {
-        await connection.stop()
+        await connection
+          .stop()
       }
     } catch (
       error
