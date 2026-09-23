@@ -5,6 +5,12 @@ import {
   tokenStorage,
 } from '../auth/tokenStorage'
 
+/*
+ * ============================================================
+ * REMOTE FRAME
+ * ============================================================
+ */
+
 export interface RemoteFrame {
   sessionId: string
   sequence: number
@@ -13,13 +19,50 @@ export interface RemoteFrame {
   mimeType: string
   base64Data: string
   capturedAtUtc: string
+
+  displayIndex: number
+  displayCount: number
+  displayLabel: string
 }
+
+/*
+ * ============================================================
+ * SESSION
+ * ============================================================
+ */
 
 export interface RemoteSessionChanged {
   sessionId: string
   status: string
   connectedAtUtc?: string | null
 }
+
+/*
+ * ============================================================
+ * MONITORS
+ * ============================================================
+ */
+
+export interface RemoteMonitorInfo {
+  index: number
+  deviceName: string
+  width: number
+  height: number
+  isPrimary: boolean
+  label: string
+}
+
+export interface RemoteMonitorState {
+  sessionId: string
+  selectedMonitorIndex: number
+  monitors: RemoteMonitorInfo[]
+}
+
+/*
+ * ============================================================
+ * HANDLERS
+ * ============================================================
+ */
 
 export interface RemoteSupportSignalRHandlers {
   onFrame?: (
@@ -28,6 +71,10 @@ export interface RemoteSupportSignalRHandlers {
 
   onSessionChanged?: (
     update: RemoteSessionChanged,
+  ) => void
+
+  onMonitorState?: (
+    state: RemoteMonitorState,
   ) => void
 
   onReconnecting?: (
@@ -42,6 +89,12 @@ export interface RemoteSupportSignalRHandlers {
     error?: Error,
   ) => void
 }
+
+/*
+ * ============================================================
+ * ERROR HELPER
+ * ============================================================
+ */
 
 function extractSignalRError(
   error: unknown,
@@ -70,10 +123,22 @@ function extractSignalRError(
   }
 }
 
+/*
+ * ============================================================
+ * CLIENT
+ * ============================================================
+ */
+
 export class RemoteSupportSignalRClient {
   private connection:
     signalR.HubConnection | null =
       null
+
+  /*
+   * ==========================================================
+   * STATE
+   * ==========================================================
+   */
 
   public get isConnected():
     boolean {
@@ -93,14 +158,19 @@ export class RemoteSupportSignalRClient {
     )
   }
 
+  /*
+   * ==========================================================
+   * CONNECT
+   * ==========================================================
+   */
+
   public async connect(
     handlers:
       RemoteSupportSignalRHandlers =
         {},
   ): Promise<void> {
     /*
-     * Evitar crear más de una
-     * conexión simultánea.
+     * Evitar conexiones duplicadas.
      */
     if (
       this.connection
@@ -153,9 +223,9 @@ export class RemoteSupportSignalRClient {
       connection
 
     /*
-     * ============================================================
+     * ========================================================
      * SERVER EVENTS
-     * ============================================================
+     * ========================================================
      */
 
     connection.on(
@@ -186,10 +256,24 @@ export class RemoteSupportSignalRClient {
       },
     )
 
+    connection.on(
+      'RemoteMonitorState',
+      (
+        state:
+          RemoteMonitorState,
+      ) => {
+        handlers
+          .onMonitorState
+          ?.(
+            state,
+          )
+      },
+    )
+
     /*
-     * ============================================================
+     * ========================================================
      * CONNECTION EVENTS
-     * ============================================================
+     * ========================================================
      */
 
     connection.onreconnecting(
@@ -249,9 +333,9 @@ export class RemoteSupportSignalRClient {
     )
 
     /*
-     * ============================================================
-     * START CONNECTION
-     * ============================================================
+     * ========================================================
+     * START
+     * ========================================================
      */
 
     try {
@@ -263,6 +347,7 @@ export class RemoteSupportSignalRClient {
         {
           connectionId:
             connection.connectionId,
+
           state:
             connection.state,
         },
@@ -291,9 +376,9 @@ export class RemoteSupportSignalRClient {
   }
 
   /*
-   * ============================================================
+   * ==========================================================
    * JOIN SESSION
-   * ============================================================
+   * ==========================================================
    */
 
   public async joinSession(
@@ -311,22 +396,10 @@ export class RemoteSupportSignalRClient {
     }
 
     try {
-      console.info(
-        '[TitanMDM SignalR] JoinSession solicitado.',
-        {
-          sessionId,
-          connectionId:
-            connection.connectionId,
-          state:
-            connection.state,
-        },
+      await connection.invoke(
+        'JoinSession',
+        sessionId,
       )
-
-      await connection
-        .invoke(
-          'JoinSession',
-          sessionId,
-        )
 
       console.info(
         '[TitanMDM SignalR] JoinSession correcto.',
@@ -358,9 +431,9 @@ export class RemoteSupportSignalRClient {
   }
 
   /*
-   * ============================================================
+   * ==========================================================
    * LEAVE SESSION
-   * ============================================================
+   * ==========================================================
    */
 
   public async leaveSession(
@@ -376,11 +449,10 @@ export class RemoteSupportSignalRClient {
     }
 
     try {
-      await connection
-        .invoke(
-          'LeaveSession',
-          sessionId,
-        )
+      await connection.invoke(
+        'LeaveSession',
+        sessionId,
+      )
 
       console.info(
         '[TitanMDM SignalR] LeaveSession correcto.',
@@ -412,9 +484,65 @@ export class RemoteSupportSignalRClient {
   }
 
   /*
-   * ============================================================
+   * ==========================================================
+   * MONITORS
+   * ==========================================================
+   */
+
+  public async selectMonitor(
+    sessionId: string,
+    monitorIndex: number,
+  ): Promise<void> {
+    const connection =
+      this.requireConnection()
+
+    await connection.invoke(
+      'SelectMonitor',
+      sessionId,
+      monitorIndex,
+    )
+  }
+
+  public async nextMonitor(
+    sessionId: string,
+  ): Promise<void> {
+    const connection =
+      this.requireConnection()
+
+    await connection.invoke(
+      'NextMonitor',
+      sessionId,
+    )
+  }
+
+  public async previousMonitor(
+    sessionId: string,
+  ): Promise<void> {
+    const connection =
+      this.requireConnection()
+
+    await connection.invoke(
+      'PreviousMonitor',
+      sessionId,
+    )
+  }
+
+  public async requestMonitorState(
+    sessionId: string,
+  ): Promise<void> {
+    const connection =
+      this.requireConnection()
+
+    await connection.invoke(
+      'RequestMonitorState',
+      sessionId,
+    )
+  }
+
+  /*
+   * ==========================================================
    * MOUSE
-   * ============================================================
+   * ==========================================================
    */
 
   public async pointerMove(
@@ -425,13 +553,12 @@ export class RemoteSupportSignalRClient {
     const connection =
       this.requireConnection()
 
-    await connection
-      .invoke(
-        'PointerMove',
-        sessionId,
-        x,
-        y,
-      )
+    await connection.invoke(
+      'PointerMove',
+      sessionId,
+      x,
+      y,
+    )
   }
 
   public async pointerButton(
@@ -445,12 +572,11 @@ export class RemoteSupportSignalRClient {
     const connection =
       this.requireConnection()
 
-    await connection
-      .invoke(
-        'PointerButton',
-        sessionId,
-        action,
-      )
+    await connection.invoke(
+      'PointerButton',
+      sessionId,
+      action,
+    )
   }
 
   public async pointerWheel(
@@ -460,18 +586,17 @@ export class RemoteSupportSignalRClient {
     const connection =
       this.requireConnection()
 
-    await connection
-      .invoke(
-        'PointerWheel',
-        sessionId,
-        delta,
-      )
+    await connection.invoke(
+      'PointerWheel',
+      sessionId,
+      delta,
+    )
   }
 
   /*
-   * ============================================================
+   * ==========================================================
    * KEYBOARD
-   * ============================================================
+   * ==========================================================
    */
 
   public async keyboard(
@@ -482,19 +607,18 @@ export class RemoteSupportSignalRClient {
     const connection =
       this.requireConnection()
 
-    await connection
-      .invoke(
-        'Keyboard',
-        sessionId,
-        virtualKey,
-        keyDown,
-      )
+    await connection.invoke(
+      'Keyboard',
+      sessionId,
+      virtualKey,
+      keyDown,
+    )
   }
 
   /*
-   * ============================================================
+   * ==========================================================
    * DISCONNECT
-   * ============================================================
+   * ==========================================================
    */
 
   public async disconnect():
@@ -517,8 +641,7 @@ export class RemoteSupportSignalRClient {
         signalR.HubConnectionState
           .Disconnected
       ) {
-        await connection
-          .stop()
+        await connection.stop()
       }
     } catch (
       error
@@ -531,9 +654,9 @@ export class RemoteSupportSignalRClient {
   }
 
   /*
-   * ============================================================
+   * ==========================================================
    * HELPERS
-   * ============================================================
+   * ==========================================================
    */
 
   private requireConnection():

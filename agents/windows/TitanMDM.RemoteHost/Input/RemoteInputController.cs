@@ -1,4 +1,5 @@
 using System.ComponentModel;
+using System.Drawing;
 using System.Runtime.InteropServices;
 
 namespace TitanMDM.RemoteHost.Input;
@@ -38,25 +39,95 @@ public sealed class RemoteInputController
     private const uint KeyboardKeyUp =
         0x0002;
 
+    /*
+     * ============================================================
+     * POINTER
+     * ============================================================
+     */
+
     public void MovePointer(
         double normalizedX,
-        double normalizedY)
+        double normalizedY,
+        Rectangle targetMonitor)
     {
+        var virtualScreen =
+            SystemInformation.VirtualScreen;
+
+        var clampedX =
+            Math.Clamp(
+                normalizedX,
+                0d,
+                1d);
+
+        var clampedY =
+            Math.Clamp(
+                normalizedY,
+                0d,
+                1d);
+
+        /*
+         * Coordenada real dentro del monitor seleccionado.
+         */
+        var pixelX =
+            targetMonitor.Left +
+            (
+                clampedX *
+                Math.Max(
+                    1,
+                    targetMonitor.Width - 1)
+            );
+
+        var pixelY =
+            targetMonitor.Top +
+            (
+                clampedY *
+                Math.Max(
+                    1,
+                    targetMonitor.Height - 1)
+            );
+
+        /*
+         * SendInput con MOUSEEVENTF_VIRTUALDESK utiliza
+         * coordenadas 0..65535 relativas a todo el escritorio
+         * virtual.
+         */
         var x =
             (int)Math.Round(
-                Math.Clamp(
-                    normalizedX,
-                    0d,
-                    1d)
-                * 65535d);
+                (
+                    pixelX -
+                    virtualScreen.Left
+                )
+                /
+                Math.Max(
+                    1d,
+                    virtualScreen.Width - 1d)
+                *
+                65535d);
 
         var y =
             (int)Math.Round(
-                Math.Clamp(
-                    normalizedY,
-                    0d,
-                    1d)
-                * 65535d);
+                (
+                    pixelY -
+                    virtualScreen.Top
+                )
+                /
+                Math.Max(
+                    1d,
+                    virtualScreen.Height - 1d)
+                *
+                65535d);
+
+        x =
+            Math.Clamp(
+                x,
+                0,
+                65535);
+
+        y =
+            Math.Clamp(
+                y,
+                0,
+                65535);
 
         SendMouse(
             x,
@@ -114,6 +185,12 @@ public sealed class RemoteInputController
             MouseWheel);
     }
 
+    /*
+     * ============================================================
+     * KEYBOARD
+     * ============================================================
+     */
+
     public void KeyDown(
         ushort virtualKey)
     {
@@ -129,6 +206,12 @@ public sealed class RemoteInputController
             virtualKey,
             KeyboardKeyUp);
     }
+
+    /*
+     * ============================================================
+     * NATIVE INPUT
+     * ============================================================
+     */
 
     private static void SendMouse(
         int dx,
@@ -227,7 +310,9 @@ public sealed class RemoteInputController
                 Marshal.SizeOf<
                     NativeInput>());
 
-        if (sent == 1)
+        if (
+            sent ==
+            1)
         {
             return;
         }
@@ -240,10 +325,11 @@ public sealed class RemoteInputController
     [DllImport(
         "user32.dll",
         SetLastError = true)]
-    private static extern uint SendInput(
-        uint numberOfInputs,
-        NativeInput[] inputs,
-        int structureSize);
+    private static extern uint
+        SendInput(
+            uint numberOfInputs,
+            NativeInput[] inputs,
+            int structureSize);
 
     [StructLayout(
         LayoutKind.Sequential)]
