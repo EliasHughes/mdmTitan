@@ -75,6 +75,44 @@ public sealed class User
     public string FullName =>
         $"{FirstName} {LastName}".Trim();
 
+    /*
+ * ================================================================
+ * PROFILE
+ * ================================================================
+ */
+
+public void UpdateProfile(
+    string firstName,
+    string lastName)
+{
+    if (
+        string.IsNullOrWhiteSpace(
+            firstName))
+    {
+        throw new ArgumentException(
+            "First name is required.",
+            nameof(firstName));
+    }
+
+    if (
+        string.IsNullOrWhiteSpace(
+            lastName))
+    {
+        throw new ArgumentException(
+            "Last name is required.",
+            nameof(lastName));
+    }
+
+    FirstName =
+        firstName.Trim();
+
+    LastName =
+        lastName.Trim();
+
+    UpdatedAtUtc =
+        DateTime.UtcNow;
+}
+
     public void SetDepartment(Guid? departmentId)
     {
         DepartmentId = departmentId;

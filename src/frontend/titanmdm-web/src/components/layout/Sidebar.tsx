@@ -19,8 +19,14 @@ export function Sidebar({
 }: SidebarProps) {
   const { hasPermission } = useAuth()
 
-  const allowedItems = navigationItems.filter((item) =>
-    hasPermission(item.permission),
+  const allowedItems =
+  navigationItems.filter(
+    item =>
+      !item.permission
+      ||
+      hasPermission(
+        item.permission,
+      ),
   )
 
   return (
