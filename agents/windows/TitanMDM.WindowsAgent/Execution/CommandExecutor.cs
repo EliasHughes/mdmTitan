@@ -1,4 +1,5 @@
 using System.Text.Json;
+
 using TitanMDM.WindowsAgent.Contracts;
 using TitanMDM.WindowsAgent.Services;
 
@@ -81,14 +82,17 @@ public sealed class CommandExecutor
         ArgumentNullException.ThrowIfNull(
             command);
 
-        if (command.CommandId == Guid.Empty)
+        if (
+            command.CommandId ==
+            Guid.Empty)
         {
             return Failure(
                 "INVALID_COMMAND_ID",
                 "El comando no contiene un CommandId válido.");
         }
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 command.CommandType))
         {
             return Failure(
@@ -96,7 +100,8 @@ public sealed class CommandExecutor
                 "El comando no contiene un tipo válido.");
         }
 
-        if (command.ExpiresAtUtc <=
+        if (
+            command.ExpiresAtUtc <=
             DateTime.UtcNow)
         {
             return Failure(
@@ -119,6 +124,12 @@ public sealed class CommandExecutor
             var json =
                 type switch
                 {
+                    /*
+                     * ============================================
+                     * DIAGNOSTICS
+                     * ============================================
+                     */
+
                     "PING" =>
                         ExecutePing(),
 
@@ -152,6 +163,12 @@ public sealed class CommandExecutor
                             _inventoryProvider
                                 .CollectNetwork()),
 
+                    /*
+                     * ============================================
+                     * SECURITY
+                     * ============================================
+                     */
+
                     "SECURITY_STATUS" =>
                         Serialize(
                             await _securityProvider
@@ -164,6 +181,12 @@ public sealed class CommandExecutor
                                 .EvaluateAsync(
                                     cancellationToken)),
 
+                    /*
+                     * ============================================
+                     * WINDOWS UPDATE
+                     * ============================================
+                     */
+
                     "WINDOWS_UPDATE_STATUS" =>
                         Serialize(
                             await _updateProvider
@@ -174,6 +197,12 @@ public sealed class CommandExecutor
                         await _updateProvider
                             .TriggerScanAsync(
                                 cancellationToken),
+
+                    /*
+                     * ============================================
+                     * DEVICE ACTIONS
+                     * ============================================
+                     */
 
                     "LOCK_DEVICE" =>
                         await _actionExecutor
@@ -190,10 +219,22 @@ public sealed class CommandExecutor
                             .ShutdownDeviceAsync(
                                 cancellationToken),
 
+                    /*
+                     * ============================================
+                     * PROCESS CONTROL
+                     * ============================================
+                     */
+
                     "PROCESS_TERMINATE" =>
                         await ExecuteProcessTerminateAsync(
                             command.PayloadJson,
                             cancellationToken),
+
+                    /*
+                     * ============================================
+                     * SERVICE CONTROL
+                     * ============================================
+                     */
 
                     "SERVICE_START" =>
                         await ExecuteServiceAsync(
@@ -213,53 +254,99 @@ public sealed class CommandExecutor
                             "restart",
                             cancellationToken),
 
+                    /*
+                     * ============================================
+                     * SCRIPT
+                     * ============================================
+                     */
+
                     "SCRIPT_EXECUTE" =>
                         await ExecuteScriptAsync(
                             command.PayloadJson,
                             cancellationToken),
+
+                    /*
+                     * ============================================
+                     * SOFTWARE
+                     * ============================================
+                     */
 
                     "SOFTWARE_INSTALL" =>
                         await ExecuteSoftwareInstallAsync(
                             command.PayloadJson,
                             cancellationToken),
 
+                    "SOFTWARE_UNINSTALL" =>
+                        await ExecuteSoftwareUninstallAsync(
+                            command.PayloadJson,
+                            cancellationToken),
+
+                    /*
+                     * ============================================
+                     * UNKNOWN
+                     * ============================================
+                     */
+
                     _ =>
                         throw new UnsupportedCommandException(
                             type)
                 };
 
-            return Success(json);
+            return Success(
+                json);
         }
-        catch (UnsupportedCommandException ex)
+        catch (
+            UnsupportedCommandException ex)
         {
             return Failure(
                 "UNSUPPORTED_COMMAND",
                 ex.Message);
         }
-        catch (JsonException ex)
+        catch (
+            JsonException ex)
         {
             return Failure(
                 "INVALID_PAYLOAD",
                 ex.Message);
         }
-        catch (OperationCanceledException)
-            when (cancellationToken.IsCancellationRequested)
+        catch (
+            OperationCanceledException)
+            when (
+                cancellationToken
+                    .IsCancellationRequested)
         {
             throw;
         }
-        catch (TimeoutException ex)
+        catch (
+            TimeoutException ex)
         {
             return Failure(
                 "COMMAND_TIMEOUT",
                 ex.Message);
         }
-        catch (UnauthorizedAccessException ex)
+        catch (
+            UnauthorizedAccessException ex)
         {
             return Failure(
                 "ACCESS_DENIED",
                 ex.Message);
         }
-        catch (Exception ex)
+        catch (
+            FileNotFoundException ex)
+        {
+            return Failure(
+                "FILE_NOT_FOUND",
+                ex.Message);
+        }
+        catch (
+            InvalidOperationException ex)
+        {
+            return Failure(
+                "INVALID_OPERATION",
+                ex.Message);
+        }
+        catch (
+            Exception ex)
         {
             _logger.LogError(
                 ex,
@@ -272,20 +359,41 @@ public sealed class CommandExecutor
         }
     }
 
+    /*
+     * ============================================================
+     * PROCESS
+     * ============================================================
+     */
+
     private async Task<string>
         ExecuteProcessTerminateAsync(
             string payloadJson,
             CancellationToken cancellationToken)
     {
         var payload =
-            Deserialize<ProcessActionPayload>(
-                payloadJson);
+            Deserialize<
+                ProcessActionPayload>(
+                    payloadJson);
+
+        if (
+            payload.ProcessId <=
+            0)
+        {
+            throw new JsonException(
+                "ProcessId debe ser mayor que cero.");
+        }
 
         return await _actionExecutor
             .TerminateProcessAsync(
                 payload.ProcessId,
                 cancellationToken);
     }
+
+    /*
+     * ============================================================
+     * SERVICE
+     * ============================================================
+     */
 
     private async Task<string>
         ExecuteServiceAsync(
@@ -294,8 +402,17 @@ public sealed class CommandExecutor
             CancellationToken cancellationToken)
     {
         var payload =
-            Deserialize<ServiceActionPayload>(
-                payloadJson);
+            Deserialize<
+                ServiceActionPayload>(
+                    payloadJson);
+
+        if (
+            string.IsNullOrWhiteSpace(
+                payload.ServiceName))
+        {
+            throw new JsonException(
+                "ServiceName es obligatorio.");
+        }
 
         return action switch
         {
@@ -323,14 +440,21 @@ public sealed class CommandExecutor
         };
     }
 
+    /*
+     * ============================================================
+     * SCRIPT
+     * ============================================================
+     */
+
     private async Task<string>
         ExecuteScriptAsync(
             string payloadJson,
             CancellationToken cancellationToken)
     {
         var payload =
-            Deserialize<ScriptExecutePayload>(
-                payloadJson);
+            Deserialize<
+                ScriptExecutePayload>(
+                    payloadJson);
 
         return await _scriptExecutor
             .ExecuteAsync(
@@ -341,14 +465,21 @@ public sealed class CommandExecutor
                 cancellationToken);
     }
 
+    /*
+     * ============================================================
+     * SOFTWARE INSTALL
+     * ============================================================
+     */
+
     private async Task<string>
         ExecuteSoftwareInstallAsync(
             string payloadJson,
             CancellationToken cancellationToken)
     {
         var payload =
-            Deserialize<SoftwareInstallPayload>(
-                payloadJson);
+            Deserialize<
+                SoftwareInstallPayload>(
+                    payloadJson);
 
         return await _softwareManager
             .InstallAsync(
@@ -360,10 +491,43 @@ public sealed class CommandExecutor
                 cancellationToken);
     }
 
+    /*
+     * ============================================================
+     * SOFTWARE UNINSTALL
+     * ============================================================
+     */
+
+    private async Task<string>
+        ExecuteSoftwareUninstallAsync(
+            string payloadJson,
+            CancellationToken cancellationToken)
+    {
+        var payload =
+            Deserialize<
+                SoftwareUninstallPayload>(
+                    payloadJson);
+
+        return await _softwareManager
+            .UninstallAsync(
+                new WindowsSoftwareUninstallRequest(
+                    payload.ProductCode,
+                    payload.UninstallExecutable,
+                    payload.Arguments,
+                    payload.TimeoutSeconds),
+                cancellationToken);
+    }
+
+    /*
+     * ============================================================
+     * JSON
+     * ============================================================
+     */
+
     private static T Deserialize<T>(
         string payloadJson)
     {
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 payloadJson))
         {
             throw new JsonException(
@@ -378,7 +542,8 @@ public sealed class CommandExecutor
                     PropertyNameCaseInsensitive =
                         true
                 })
-            ?? throw new JsonException(
+            ??
+            throw new JsonException(
                 "PayloadJson no contiene un objeto válido.");
     }
 
@@ -401,9 +566,16 @@ public sealed class CommandExecutor
     private static string Serialize<T>(
         T value)
     {
-        return JsonSerializer.Serialize(
-            value);
+        return JsonSerializer
+            .Serialize(
+                value);
     }
+
+    /*
+     * ============================================================
+     * RESULTS
+     * ============================================================
+     */
 
     private static CommandExecutionResult
         Success(
@@ -428,22 +600,45 @@ public sealed class CommandExecutor
             errorMessage);
     }
 
-    private sealed record ProcessActionPayload(
-        int ProcessId);
+    /*
+     * ============================================================
+     * PAYLOADS
+     * ============================================================
+     */
 
-    private sealed record ServiceActionPayload(
-        string ServiceName);
+    private sealed record
+        ProcessActionPayload(
+            int ProcessId);
 
-    private sealed record ScriptExecutePayload(
-        string ScriptPath,
-        string ExpectedSha256,
-        int TimeoutSeconds = 300);
+    private sealed record
+        ServiceActionPayload(
+            string ServiceName);
 
-    private sealed record SoftwareInstallPayload(
-        string PackagePath,
-        string ExpectedSha256,
-        string? Arguments = null,
-        int TimeoutSeconds = 1800);
+    private sealed record
+        ScriptExecutePayload(
+            string ScriptPath,
+            string ExpectedSha256,
+            int TimeoutSeconds = 300);
+
+    private sealed record
+        SoftwareInstallPayload(
+            string PackagePath,
+            string ExpectedSha256,
+            string? Arguments = null,
+            int TimeoutSeconds = 1800);
+
+    private sealed record
+        SoftwareUninstallPayload(
+            string? ProductCode = null,
+            string? UninstallExecutable = null,
+            string? Arguments = null,
+            int TimeoutSeconds = 1800);
+
+    /*
+     * ============================================================
+     * EXCEPTION
+     * ============================================================
+     */
 
     private sealed class
         UnsupportedCommandException

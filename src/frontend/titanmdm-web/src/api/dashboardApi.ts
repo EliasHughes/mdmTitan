@@ -2,7 +2,7 @@ import apiClient from './apiClient'
 
 /*
  * ================================================================
- * WORKSPACES
+ * WORKSPACE
  * ================================================================
  */
 
@@ -19,12 +19,19 @@ export type DashboardWorkspace =
 
 export interface DeviceSummary {
   total: number
+
   online: number
+
   offline: number
+
   pending: number
+
   enrolling: number
+
   quarantined: number
+
   retired: number
+
   managed: number
 }
 
@@ -36,7 +43,9 @@ export interface DeviceSummary {
 
 export interface PlatformSummary {
   windows: number
+
   android: number
+
   unknown: number
 }
 
@@ -48,10 +57,15 @@ export interface PlatformSummary {
 
 export interface ComplianceSummary {
   compliant: number
+
   nonCompliant: number
+
   evaluating: number
+
   quarantined: number
+
   unknown: number
+
   compliancePercentage:
     number | null
 }
@@ -64,17 +78,29 @@ export interface ComplianceSummary {
 
 export interface CommandSummary {
   total: number
+
   pending: number
+
   queued: number
+
   dispatching: number
+
   sent: number
+
   delivered: number
+
   executing: number
+
   success: number
+
   failed: number
+
   timeout: number
+
   cancelled: number
+
   active: number
+
   problems: number
 }
 
@@ -86,35 +112,155 @@ export interface CommandSummary {
 
 export interface SystemStatus {
   api: string
+
   database: string
 }
 
 /*
  * ================================================================
- * DASHBOARD
+ * WINDOWS ADVANCED
+ * ================================================================
+ */
+
+export interface WindowsDashboardSummary {
+  devices: number
+
+  online: number
+
+  offline: number
+
+  managed: number
+
+  checkInsLast24Hours: number
+
+  updateStatusChecks: number
+
+  updateScanRequests: number
+
+  pendingReboot: number
+
+  updateServiceRunning: number
+
+  updateTelemetryDevices: number
+
+  securityTelemetryDevices: number
+
+  defenderAvailable: number
+
+  firewallAvailable: number
+
+  bitLockerAvailable: number
+
+  tpmAvailable: number
+
+  secureBootEnabled: number
+
+  remoteSessionsTotal: number
+
+  remoteSessionsActive: number
+
+  remoteSessionsCompleted: number
+
+  remoteSessionsFailed: number
+
+  remoteSessionsLast24Hours: number
+}
+
+/*
+ * ================================================================
+ * ANDROID ADVANCED
+ * ================================================================
+ */
+
+export interface AndroidDashboardSummary {
+  devices: number
+
+  managed: number
+
+  missingInGoogle: number
+
+  fullyManaged: number
+
+  dedicated: number
+
+  workProfile: number
+
+  activeEnrollments: number
+
+  expiredEnrollments: number
+
+  revokedEnrollments: number
+
+  policyApplied: number
+
+  policyPendingOrUnknown: number
+
+  applicationsPresent: number
+
+  securityTelemetryDevices: number
+
+  rootDetected: number
+
+  adbEnabled: number
+
+  deviceSecure: number
+
+  encrypted: number
+
+  securityPostureReported: number
+
+  lastSynchronizationUtc:
+    string | null
+}
+
+/*
+ * ================================================================
+ * DASHBOARD SUMMARY
+ * ================================================================
+ *
+ * windows/android permanecen opcionales en el contrato frontend.
+ *
+ * Motivo:
+ *
+ * - initialSummary puede existir antes de recibir datos.
+ * - global puede incluir ambos.
+ * - Windows puede trabajar solamente con windows.
+ * - Android puede trabajar solamente con android.
+ * - mantiene compatibilidad durante refresh y cambios de workspace.
  * ================================================================
  */
 
 export interface DashboardSummary {
-  devices: DeviceSummary
-  platforms: PlatformSummary
-  compliance: ComplianceSummary
-  commands: CommandSummary
-  system: SystemStatus
-  generatedAtUtc: string
+  devices:
+    DeviceSummary
+
+  platforms:
+    PlatformSummary
+
+  compliance:
+    ComplianceSummary
+
+  commands:
+    CommandSummary
+
+  system:
+    SystemStatus
+
+  windows?:
+    WindowsDashboardSummary
+    | null
+
+  android?:
+    AndroidDashboardSummary
+    | null
+
+  generatedAtUtc:
+    string
 }
 
 /*
  * ================================================================
  * REQUEST DEDUPLICATION
- * ================================================================
- *
- * React StrictMode ejecuta determinados efectos dos veces durante
- * desarrollo.
- *
- * Guardamos la solicitud activa por workspace para que dos renders
- * simultáneos reutilicen la misma Promise en lugar de realizar
- * dos peticiones HTTP.
  * ================================================================
  */
 
@@ -133,7 +279,7 @@ const activeRequests =
 export const dashboardApi = {
   async getSummary(
     workspace:
-      DashboardWorkspace,
+      DashboardWorkspace = 'global',
   ): Promise<DashboardSummary> {
     const existingRequest =
       activeRequests.get(

@@ -23,6 +23,12 @@ import type {
   TitanModuleId,
 } from './moduleRegistry'
 
+/*
+ * ================================================================
+ * CONTRACT
+ * ================================================================
+ */
+
 export interface WorkspaceNavigationItem {
   label: string
 
@@ -360,18 +366,19 @@ const androidNavigation:
 const administrationNavigation:
   WorkspaceNavigationItem[] = [
     {
-  label:
-    'Dashboard general',
+      label:
+        'Dashboard general',
 
-  path:
-    '/dashboard?workspace=global',
+      path:
+        '/dashboard?workspace=global',
 
-  permission:
-    'dashboard.global.view',
+      permission:
+        'dashboard.global.view',
 
-  icon:
-    Gauge,
-},
+      icon:
+        Gauge,
+    },
+
     {
       label:
         'Usuarios',
@@ -431,16 +438,23 @@ const administrationNavigation:
 
 /*
  * ================================================================
+ * HELP DESK
+ * ================================================================
+ */
+
+const helpDeskNavigation:
+  WorkspaceNavigationItem[] = []
+
+/*
+ * ================================================================
  * REGISTRY
  * ================================================================
  */
 
 const navigationByWorkspace:
-  Partial<
-    Record<
-      TitanModuleId,
-      WorkspaceNavigationItem[]
-    >
+  Record<
+    TitanModuleId,
+    WorkspaceNavigationItem[]
   > = {
     windows:
       windowsNavigation,
@@ -451,13 +465,15 @@ const navigationByWorkspace:
     administration:
       administrationNavigation,
 
-    /*
-     * Help Desk se agregará cuando activemos
-     * el módulo ITSM.
-     */
     helpdesk:
-      [],
+      helpDeskNavigation,
   }
+
+/*
+ * ================================================================
+ * RESOLVER
+ * ================================================================
+ */
 
 export function getWorkspaceNavigation(
   workspaceId:
@@ -467,20 +483,16 @@ export function getWorkspaceNavigation(
   if (
     !workspaceId
   ) {
-    return (
-      globalNavigation
-    )
+    return [
+      ...globalNavigation,
+    ]
   }
 
   return [
     ...globalNavigation,
 
-    ...(
-      navigationByWorkspace[
-        workspaceId
-      ]
-      ??
-      []
-    ),
+    ...navigationByWorkspace[
+      workspaceId
+    ],
   ]
 }

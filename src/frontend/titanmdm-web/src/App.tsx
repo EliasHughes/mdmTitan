@@ -36,12 +36,28 @@ import {
   DevicesPage,
 } from './pages/devices/DevicesPage'
 
+import {
+  DeviceDetailPage,
+} from './pages/devices/DeviceDetailPage'
+
+import {
+  WindowsControlCenterPage,
+} from './pages/devices/WindowsControlCenterPage'
+
 import EnrollmentPage
   from './pages/enrollment/EnrollmentPage'
 
 import {
   PoliciesPage,
 } from './pages/policies/PoliciesPage'
+
+import {
+  PolicyEditorPage,
+} from './pages/policies/PolicyEditorPage'
+
+import {
+  DeviceGroupsPage,
+} from './pages/groups/DeviceGroupsPage'
 
 import {
   AppsPage,
@@ -62,6 +78,10 @@ import {
 import {
   GeofencingPage,
 } from './pages/geofencing/GeofencingPage'
+
+import {
+  AutomationPage,
+} from './pages/automation/AutomationPage'
 
 import {
   RemotePage,
@@ -87,22 +107,6 @@ import {
   SettingsPage,
 } from './pages/settings/SettingsPage'
 
-import {
-  DeviceDetailPage,
-} from './pages/devices/DeviceDetailPage'
-
-import {
-  PolicyEditorPage,
-} from './pages/policies/PolicyEditorPage'
-
-import {
-  DeviceGroupsPage,
-} from './pages/groups/DeviceGroupsPage'
-
-import {
-  AutomationPage,
-} from './pages/automation/AutomationPage'
-
 function App() {
   return (
     <Routes>
@@ -118,7 +122,7 @@ function App() {
       />
 
       {/* =======================================================
-          AUTHENTICATED CONSOLE
+          AUTHENTICATED
          ======================================================= */}
 
       <Route
@@ -128,10 +132,6 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* =====================================================
-            LAUNCHPAD
-           ===================================================== */}
-
         <Route
           index
           element={
@@ -189,6 +189,19 @@ function App() {
               ]}
             >
               <DeviceDetailPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="devices/:deviceId/control-center"
+          element={
+            <PermissionRoute
+              anyOf={[
+                'devices.commands',
+              ]}
+            >
+              <WindowsControlCenterPage />
             </PermissionRoute>
           }
         />
@@ -451,10 +464,6 @@ function App() {
           }
         />
       </Route>
-
-      {/* =======================================================
-          UNKNOWN ROUTES
-         ======================================================= */}
 
       <Route
         path="*"

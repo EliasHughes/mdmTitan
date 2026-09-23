@@ -47,6 +47,10 @@ import {
 } from '../api/dashboardApi'
 
 import {
+  WorkspaceInsights,
+} from '../components/dashboard/WorkspaceInsights'
+
+import {
   useWorkspace,
 } from '../workspace/WorkspaceContext'
 
@@ -107,6 +111,10 @@ const initialSummary:
       database: 'Unknown',
     },
 
+    windows: null,
+
+    android: null,
+
     generatedAtUtc: '',
   }
 
@@ -133,8 +141,10 @@ function ChartTooltip({
   label,
 }: ChartTooltipProps) {
   if (
-    !active ||
-    !payload ||
+    !active
+    ||
+    !payload
+    ||
     payload.length === 0
   ) {
     return null
@@ -159,13 +169,11 @@ function ChartTooltip({
             }
           >
             <span>
-              {entry.name ??
-                'Valor'}
+              {entry.name ?? 'Valor'}
             </span>
 
             <strong>
-              {entry.value ??
-                0}
+              {entry.value ?? 0}
             </strong>
           </div>
         ),
@@ -197,22 +205,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * DASHBOARD WORKSPACE
-   * ==============================================================
-   *
-   * Prioridad:
-   *
-   * 1. Query string
-   * 2. WorkspaceContext
-   * 3. Global
-   *
-   * Esto evita ejecutar primero:
-   *
-   * /summary?workspace=global
-   *
-   * y después:
-   *
-   * /summary?workspace=android
+   * WORKSPACE
    * ==============================================================
    */
 
@@ -221,7 +214,7 @@ export function DashboardPage() {
       DashboardWorkspace
     >(
       () => {
-        const requestedWorkspace =
+        const requested =
           searchParams
             .get(
               'workspace',
@@ -230,21 +223,21 @@ export function DashboardPage() {
             .toLowerCase()
 
         if (
-          requestedWorkspace ===
+          requested ===
           'windows'
         ) {
           return 'windows'
         }
 
         if (
-          requestedWorkspace ===
+          requested ===
           'android'
         ) {
           return 'android'
         }
 
         if (
-          requestedWorkspace ===
+          requested ===
           'global'
         ) {
           return 'global'
@@ -314,7 +307,8 @@ export function DashboardPage() {
           'windows'
         ) {
           return (
-            'platform=Windows' +
+            'platform=Windows'
+            +
             '&workspace=windows'
           )
         }
@@ -324,14 +318,13 @@ export function DashboardPage() {
           'android'
         ) {
           return (
-            'platform=Android' +
+            'platform=Android'
+            +
             '&workspace=android'
           )
         }
 
-        return (
-          'workspace=global'
-        )
+        return 'workspace=global'
       },
       [
         dashboardWorkspace,
@@ -348,16 +341,10 @@ export function DashboardPage() {
     `/devices?${deviceQuery}&status=offline`
 
   const complianceRoute =
-    dashboardWorkspace ===
-      'global'
-      ? '/compliance?workspace=global'
-      : `/compliance?workspace=${dashboardWorkspace}`
+    `/compliance?workspace=${dashboardWorkspace}`
 
   const automationRoute =
-    dashboardWorkspace ===
-      'global'
-      ? '/automation?workspace=global'
-      : `/automation?workspace=${dashboardWorkspace}`
+    `/automation?workspace=${dashboardWorkspace}`
 
   /*
    * ==============================================================
@@ -410,7 +397,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * INITIAL LOAD / WORKSPACE CHANGE
+   * INITIAL LOAD
    * ==============================================================
    */
 
@@ -435,7 +422,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * WORKSPACE PRESENTATION
+   * PRESENTATION
    * ==============================================================
    */
 
@@ -464,8 +451,10 @@ export function DashboardPage() {
    */
 
   const compliancePercentage =
-    summary.compliance
-      .compliancePercentage ??
+    summary
+      .compliance
+      .compliancePercentage
+    ??
     0
 
   const onlinePercentage =
@@ -473,10 +462,12 @@ export function DashboardPage() {
     0
       ? Math.round(
           (
-            summary.devices.online /
+            summary.devices.online
+            /
             summary.devices.total
-          ) *
-            100,
+          )
+          *
+          100,
         )
       : 0
 
@@ -485,10 +476,12 @@ export function DashboardPage() {
     0
       ? Math.round(
           (
-            summary.devices.managed /
+            summary.devices.managed
+            /
             summary.devices.total
-          ) *
-            100,
+          )
+          *
+          100,
         )
       : 0
 
@@ -497,10 +490,12 @@ export function DashboardPage() {
     0
       ? Math.round(
           (
-            summary.commands.success /
+            summary.commands.success
+            /
             summary.commands.total
-          ) *
-            100,
+          )
+          *
+          100,
         )
       : 0
 
@@ -513,7 +508,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * COLORS
+   * COLOR
    * ==============================================================
    */
 
@@ -534,7 +529,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * CHART DATA — DEVICE STATUS
+   * STATUS DATA
    * ==============================================================
    */
 
@@ -603,7 +598,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * CHART DATA — PLATFORMS
+   * PLATFORM DATA
    * ==============================================================
    */
 
@@ -650,7 +645,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * CHART DATA — COMPLIANCE
+   * COMPLIANCE DATA
    * ==============================================================
    */
 
@@ -696,7 +691,7 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * CHART DATA — COMMAND ENGINE
+   * COMMAND DATA
    * ==============================================================
    */
 
@@ -732,7 +727,8 @@ export function DashboardPage() {
             'Pendientes',
 
           value:
-            summary.commands.pending +
+            summary.commands.pending
+            +
             summary.commands.queued,
         },
 
@@ -751,25 +747,24 @@ export function DashboardPage() {
 
   /*
    * ==============================================================
-   * ATTENTION SCORE
+   * ATTENTION
    * ==============================================================
    */
 
   const attentionCount =
-    summary.devices.offline +
-    summary.devices.quarantined +
-    summary.compliance.nonCompliant +
+    summary.devices.offline
+    +
+    summary.devices.quarantined
+    +
+    summary.compliance.nonCompliant
+    +
     summary.commands.problems
 
-  /*
-   * ==============================================================
-   * PLATFORM TOTAL
-   * ==============================================================
-   */
-
   const platformTotal =
-    summary.platforms.windows +
-    summary.platforms.android +
+    summary.platforms.windows
+    +
+    summary.platforms.android
+    +
     summary.platforms.unknown
 
   /*
@@ -780,9 +775,9 @@ export function DashboardPage() {
 
   return (
     <div className="dashboard-page dashboard-page--graphical">
-      {/* ========================================================
-          HEADER
-         ======================================================== */}
+      {/* ======================================================
+          HERO
+         ====================================================== */}
 
       <section className="dashboard-heading dashboard-heading--hero">
         <div>
@@ -833,9 +828,9 @@ export function DashboardPage() {
         </div>
       </section>
 
-      {/* ========================================================
+      {/* ======================================================
           ERROR
-         ======================================================== */}
+         ====================================================== */}
 
       {error && (
         <div className="dashboard-error">
@@ -864,13 +859,11 @@ export function DashboardPage() {
         </div>
       )}
 
-      {/* ========================================================
+      {/* ======================================================
           KPI
-         ======================================================== */}
+         ====================================================== */}
 
       <section className="dashboard-kpi-grid">
-        {/* Devices */}
-
         <button
           type="button"
           className="dashboard-kpi-card"
@@ -906,8 +899,6 @@ export function DashboardPage() {
             {summary.devices.managed}
           </div>
         </button>
-
-        {/* Online */}
 
         <button
           type="button"
@@ -945,8 +936,6 @@ export function DashboardPage() {
           </div>
         </button>
 
-        {/* Offline */}
-
         <button
           type="button"
           className="dashboard-kpi-card"
@@ -982,8 +971,6 @@ export function DashboardPage() {
             {summary.devices.offline}
           </div>
         </button>
-
-        {/* Compliance */}
 
         <button
           type="button"
@@ -1028,8 +1015,6 @@ export function DashboardPage() {
           </div>
         </button>
 
-        {/* Commands */}
-
         <button
           type="button"
           className="dashboard-kpi-card"
@@ -1065,13 +1050,11 @@ export function DashboardPage() {
         </button>
       </section>
 
-      {/* ========================================================
-          DONUT CHARTS
-         ======================================================== */}
+      {/* ======================================================
+          DEVICE + PLATFORM
+         ====================================================== */}
 
       <section className="dashboard-chart-grid">
-        {/* DEVICE STATUS */}
-
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
             <div>
@@ -1174,8 +1157,6 @@ export function DashboardPage() {
           </div>
         </article>
 
-        {/* PLATFORM */}
-
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
             <div>
@@ -1190,11 +1171,11 @@ export function DashboardPage() {
               <p>
                 {dashboardWorkspace ===
                 'windows'
-                  ? 'Distribución del inventario Windows.'
+                  ? 'Inventario Windows administrado.'
                   : dashboardWorkspace ===
                       'android'
-                    ? 'Distribución del inventario Android Enterprise.'
-                    : 'Equipos Windows y Android actualmente registrados.'}
+                    ? 'Inventario Android Enterprise administrado.'
+                    : 'Distribución global Windows y Android.'}
               </p>
             </div>
 
@@ -1285,13 +1266,11 @@ export function DashboardPage() {
         </article>
       </section>
 
-      {/* ========================================================
-          BAR CHARTS
-         ======================================================== */}
+      {/* ======================================================
+          COMPLIANCE + COMMANDS
+         ====================================================== */}
 
       <section className="dashboard-chart-grid">
-        {/* COMPLIANCE */}
-
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
             <div>
@@ -1378,8 +1357,6 @@ export function DashboardPage() {
             </ResponsiveContainer>
           </div>
         </article>
-
-        {/* COMMAND ENGINE */}
 
         <article className="dashboard-chart-card">
           <header className="dashboard-chart-card__header">
@@ -1473,13 +1450,27 @@ export function DashboardPage() {
         </article>
       </section>
 
-      {/* ========================================================
+      {/* ======================================================
+          WORKSPACE ADVANCED INSIGHTS
+         ====================================================== */}
+
+      {dashboardWorkspace !==
+        'global' && (
+        <WorkspaceInsights
+          workspace={
+            dashboardWorkspace
+          }
+          summary={
+            summary
+          }
+        />
+      )}
+
+      {/* ======================================================
           OPERATIONS
-         ======================================================== */}
+         ====================================================== */}
 
       <section className="dashboard-operations-grid">
-        {/* ATTENTION */}
-
         <article className="dashboard-operation-card dashboard-operation-card--attention">
           <header>
             <div>
@@ -1520,9 +1511,11 @@ export function DashboardPage() {
               </span>
 
               <strong>
-                {summary
-                  .compliance
-                  .nonCompliant}
+                {
+                  summary
+                    .compliance
+                    .nonCompliant
+                }
               </strong>
             </div>
 
@@ -1532,9 +1525,11 @@ export function DashboardPage() {
               </span>
 
               <strong>
-                {summary
-                  .devices
-                  .quarantined}
+                {
+                  summary
+                    .devices
+                    .quarantined
+                }
               </strong>
             </div>
 
@@ -1544,15 +1539,15 @@ export function DashboardPage() {
               </span>
 
               <strong>
-                {summary
-                  .commands
-                  .problems}
+                {
+                  summary
+                    .commands
+                    .problems
+                }
               </strong>
             </div>
           </div>
         </article>
-
-        {/* SYSTEM HEALTH */}
 
         <article className="dashboard-operation-card">
           <header>
@@ -1630,9 +1625,9 @@ export function DashboardPage() {
         </article>
       </section>
 
-      {/* ========================================================
+      {/* ======================================================
           FOOTER
-         ======================================================== */}
+         ====================================================== */}
 
       <footer className="dashboard-generated-at">
         <Clock3
