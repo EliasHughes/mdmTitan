@@ -140,28 +140,42 @@ public sealed class RemoteTransportClient
          */
 
         _connection.Reconnected +=
-            async connectionId =>
-            {
-                try
-                {
-                    StatusChanged?.Invoke(
-                        "Re-registrando");
+    async connectionId =>
+    {
+        try
+        {
+            StatusChanged?.Invoke(
+                "Re-registrando");
 
-                    await RegisterRemoteHostAsync(
-                        CancellationToken.None);
-                    
-                    await PublishMonitorStateAsync(
-                            cancellationToken);
+            /*
+             * La reconexión SignalR tiene un ConnectionId nuevo.
+             *
+             * RemoteHost debe volver a registrarse en HostGroup
+             * y volver a publicar la información de monitores.
+             *
+             * Usamos CancellationToken.None porque este callback
+             * ocurre después de ConnectAsync y no debe depender
+             * del token original de conexión.
+             */
 
-                    StatusChanged?.Invoke(
-                        "Conectado");
-                }
-                catch (Exception ex)
-                {
-                    StatusChanged?.Invoke(
-                        $"Error re-registro: {ex.Message}");
-                }
-            };
+            await RegisterRemoteHostAsync(
+                cancellationToken);
+
+            await PublishMonitorStateAsync(
+                cancellationToken);
+
+            StatusChanged?.Invoke(
+                "Conectado");
+            
+            StartStreaming();
+        }
+        catch (
+            Exception ex)
+        {
+            StatusChanged?.Invoke(
+                $"Error re-registro: {ex.Message}");
+        }
+    };
 
         /*
          * ========================================================
@@ -738,4 +752,32 @@ connection.On(
                 null;
         }
     }
+
+    /*
+ * ================================================================
+ * REMOTE MONITOR INFORMATION
+ * ================================================================
+ *
+ * DTO utilizado por RemoteHost para informar al servidor cuáles
+ * monitores físicos están disponibles en el endpoint Windows.
+ *
+ * Este modelo viaja:
+ *
+ * RemoteHost
+ *     ↓
+ * PublishMonitorState
+ *     ↓
+ * RemoteSupportHub
+ *     ↓
+ * navegador TitanMDM
+ * ================================================================
+ */
+
+public sealed record RemoteMonitorInfo(
+    int Index,
+    string DeviceName,
+    int Width,
+    int Height,
+    bool IsPrimary,
+    string Label);
 }
