@@ -4,48 +4,122 @@ import {
   Routes,
 } from 'react-router-dom'
 
-import { ProtectedRoute } from './auth/ProtectedRoute'
-import { AppLayout } from './components/layout/AppLayout'
+import {
+  AccessDeniedPage,
+} from './pages/AccessDeniedPage'
 
-import { LoginPage } from './pages/LoginPage'
-import { DashboardPage } from './pages/DashboardPage'
+import {
+  ProtectedRoute,
+} from './auth/ProtectedRoute'
 
-import { DevicesPage } from './pages/devices/DevicesPage'
-import EnrollmentPage from './pages/enrollment/EnrollmentPage'
-import { PoliciesPage } from './pages/policies/PoliciesPage'
-import { AppsPage } from './pages/apps/AppsPage'
-import { SecurityPage } from './pages/security/SecurityPage'
-import { CompliancePage } from './pages/compliance/CompliancePage'
-import { KioskPage } from './pages/kiosk/KioskPage'
-import { GeofencingPage } from './pages/geofencing/GeofencingPage'
-import { RemotePage } from './pages/remote/RemotePage'
-import { ReportsPage } from './pages/reports/ReportsPage'
-import { AuditPage } from './pages/audit/AuditPage'
-import { UsersPage } from './pages/users/UsersPage'
-import { RolesPage } from './pages/roles/RolesPage'
-import { SettingsPage } from './pages/settings/SettingsPage'
-import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
-import { PolicyEditorPage } from './pages/policies/PolicyEditorPage'
-import { DeviceGroupsPage } from './pages/groups/DeviceGroupsPage'
-import { AutomationPage } from './pages/automation/AutomationPage'
+import {
+  PermissionRoute,
+} from './auth/PermissionRoute'
 
+import {
+  AppLayout,
+} from './components/layout/AppLayout'
 
+import {
+  LoginPage,
+} from './pages/LoginPage'
+
+import {
+  LaunchpadPage,
+} from './pages/launchpad/LaunchpadPage'
+
+import {
+  DashboardPage,
+} from './pages/DashboardPage'
+
+import {
+  DevicesPage,
+} from './pages/devices/DevicesPage'
+
+import EnrollmentPage
+  from './pages/enrollment/EnrollmentPage'
+
+import {
+  PoliciesPage,
+} from './pages/policies/PoliciesPage'
+
+import {
+  AppsPage,
+} from './pages/apps/AppsPage'
+
+import {
+  SecurityPage,
+} from './pages/security/SecurityPage'
+
+import {
+  CompliancePage,
+} from './pages/compliance/CompliancePage'
+
+import {
+  KioskPage,
+} from './pages/kiosk/KioskPage'
+
+import {
+  GeofencingPage,
+} from './pages/geofencing/GeofencingPage'
+
+import {
+  RemotePage,
+} from './pages/remote/RemotePage'
+
+import {
+  ReportsPage,
+} from './pages/reports/ReportsPage'
+
+import {
+  AuditPage,
+} from './pages/audit/AuditPage'
+
+import {
+  UsersPage,
+} from './pages/users/UsersPage'
+
+import {
+  RolesPage,
+} from './pages/roles/RolesPage'
+
+import {
+  SettingsPage,
+} from './pages/settings/SettingsPage'
+
+import {
+  DeviceDetailPage,
+} from './pages/devices/DeviceDetailPage'
+
+import {
+  PolicyEditorPage,
+} from './pages/policies/PolicyEditorPage'
+
+import {
+  DeviceGroupsPage,
+} from './pages/groups/DeviceGroupsPage'
+
+import {
+  AutomationPage,
+} from './pages/automation/AutomationPage'
 
 function App() {
   return (
     <Routes>
-      {/* =========================================================
-          PUBLIC ROUTES
-         ========================================================= */}
+      {/* =======================================================
+          PUBLIC
+         ======================================================= */}
 
       <Route
         path="/login"
-        element={<LoginPage />}
+        element={
+          <LoginPage />
+        }
       />
 
-      {/* =========================================================
-          PROTECTED TITANMDM CONSOLE
-         ========================================================= */}
+      {/* =======================================================
+          AUTHENTICATED CONSOLE
+         ======================================================= */}
 
       <Route
         element={
@@ -54,117 +128,333 @@ function App() {
           </ProtectedRoute>
         }
       >
-        {/* Dashboard */}
+        {/* =====================================================
+            LAUNCHPAD
+           ===================================================== */}
+
         <Route
           index
-          element={<DashboardPage />}
+          element={
+            <LaunchpadPage />
+          }
         />
 
-          <Route
-          path="devices/:deviceId"
-          element={<DeviceDetailPage />}
+        <Route
+          path="forbidden"
+          element={
+            <AccessDeniedPage />
+          }
         />
 
-        {/* Device Management */}
+        {/* =====================================================
+            DASHBOARD
+           ===================================================== */}
+
+        <Route
+          path="dashboard"
+          element={
+            <PermissionRoute
+              anyOf={[
+                'dashboard.view',
+              ]}
+            >
+              <DashboardPage />
+            </PermissionRoute>
+          }
+        />
+
+        {/* =====================================================
+            DEVICES
+           ===================================================== */}
+
         <Route
           path="devices"
-          element={<DevicesPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'devices.view',
+              ]}
+            >
+              <DevicesPage />
+            </PermissionRoute>
+          }
         />
+
+        <Route
+          path="devices/:deviceId"
+          element={
+            <PermissionRoute
+              anyOf={[
+                'devices.view',
+              ]}
+            >
+              <DeviceDetailPage />
+            </PermissionRoute>
+          }
+        />
+
+        {/* =====================================================
+            ENROLLMENT
+           ===================================================== */}
 
         <Route
           path="enrollment"
-          element={<EnrollmentPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'enrollment.view',
+              ]}
+            >
+              <EnrollmentPage />
+            </PermissionRoute>
+          }
         />
 
-        {/* Configuration */}
+        {/* =====================================================
+            POLICIES
+           ===================================================== */}
+
         <Route
           path="policies"
-          element={<PoliciesPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'policies.view',
+              ]}
+            >
+              <PoliciesPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="policies/new"
-          element={<PolicyEditorPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'policies.manage',
+              ]}
+            >
+              <PolicyEditorPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="policies/:policyId"
-          element={<PolicyEditorPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'policies.view',
+                'policies.manage',
+              ]}
+            >
+              <PolicyEditorPage />
+            </PermissionRoute>
+          }
         />
+
+        {/* =====================================================
+            GROUPS
+           ===================================================== */}
 
         <Route
           path="groups"
-          element={<DeviceGroupsPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'devices.view',
+              ]}
+            >
+              <DeviceGroupsPage />
+            </PermissionRoute>
+          }
         />
+
+        {/* =====================================================
+            APPLICATIONS
+           ===================================================== */}
 
         <Route
           path="apps"
-          element={<AppsPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'apps.view',
+              ]}
+            >
+              <AppsPage />
+            </PermissionRoute>
+          }
         />
 
-        {/* Security */}
+        {/* =====================================================
+            SECURITY
+           ===================================================== */}
+
         <Route
           path="security"
-          element={<SecurityPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'security.view',
+              ]}
+            >
+              <SecurityPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="compliance"
-          element={<CompliancePage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'compliance.view',
+              ]}
+            >
+              <CompliancePage />
+            </PermissionRoute>
+          }
         />
 
-        {/* Advanced MDM */}
+        {/* =====================================================
+            ADVANCED MDM
+           ===================================================== */}
+
         <Route
           path="kiosk"
-          element={<KioskPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'kiosk.view',
+              ]}
+            >
+              <KioskPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="geofencing"
-          element={<GeofencingPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'geofencing.view',
+              ]}
+            >
+              <GeofencingPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="automation"
-          element={<AutomationPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'devices.commands',
+              ]}
+            >
+              <AutomationPage />
+            </PermissionRoute>
+          }
         />
+
+        {/* =====================================================
+            REMOTE SUPPORT
+           ===================================================== */}
 
         <Route
           path="remote"
-          element={<RemotePage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'remote.view',
+              ]}
+            >
+              <RemotePage />
+            </PermissionRoute>
+          }
         />
 
-        {/* Reporting */}
+        {/* =====================================================
+            REPORTING
+           ===================================================== */}
+
         <Route
           path="reports"
-          element={<ReportsPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'reports.view',
+              ]}
+            >
+              <ReportsPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="audit"
-          element={<AuditPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'audit.view',
+              ]}
+            >
+              <AuditPage />
+            </PermissionRoute>
+          }
         />
 
-        {/* Administration */}
+        {/* =====================================================
+            ADMINISTRATION
+           ===================================================== */}
+
         <Route
           path="users"
-          element={<UsersPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'users.view',
+              ]}
+            >
+              <UsersPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="roles"
-          element={<RolesPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'roles.view',
+              ]}
+            >
+              <RolesPage />
+            </PermissionRoute>
+          }
         />
 
         <Route
           path="settings"
-          element={<SettingsPage />}
+          element={
+            <PermissionRoute
+              anyOf={[
+                'settings.view',
+              ]}
+            >
+              <SettingsPage />
+            </PermissionRoute>
+          }
         />
       </Route>
 
-      {/* =========================================================
+      {/* =======================================================
           UNKNOWN ROUTES
-         ========================================================= */}
+         ======================================================= */}
 
       <Route
         path="*"

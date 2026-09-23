@@ -106,6 +106,44 @@ public sealed class TitanMdmSeeder
                     "Dashboard",
                     "Permite visualizar el dashboard principal."),
 
+                /*
+ * ================================================================
+ * WORKSPACES
+ * ================================================================
+ */
+
+            new(
+                "workspace.windows.view",
+                "Acceder a Windows Management",
+                "Workspaces",
+                "Permite acceder al espacio de trabajo Windows."),
+
+            new(
+                "workspace.android.view",
+                "Acceder a Android Management",
+                "Workspaces",
+                "Permite acceder al espacio de trabajo Android."),
+
+            new(
+                "workspace.administration.view",
+                "Acceder a Administración",
+                "Workspaces",
+                "Permite acceder al espacio de administración de TitanMDM."),
+
+            /*
+            * Dashboard general.
+            *
+            * dashboard.view permite utilizar dashboard.
+            * dashboard.global.view permite ver información combinada
+            * Windows + Android.
+            */
+
+            new(
+                "dashboard.global.view",
+                "Ver dashboard general",
+                "Dashboard",
+                "Permite visualizar métricas combinadas de todas las plataformas."),
+
                 // Devices
                 new(
                     "devices.view",

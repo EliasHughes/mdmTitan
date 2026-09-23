@@ -5,161 +5,342 @@ import {
   useState,
 } from 'react'
 
-import { useNavigate } from 'react-router-dom'
-
 import {
   Activity,
   AlertTriangle,
   CheckCircle2,
   Clock3,
   Database,
-  Laptop,
   Monitor,
   RefreshCw,
   Server,
   ShieldAlert,
   ShieldCheck,
   Smartphone,
+  TerminalSquare,
   Wifi,
   WifiOff,
 } from 'lucide-react'
+
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  Cell,
+  Pie,
+  PieChart,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+
+import {
+  useNavigate,
+} from 'react-router-dom'
 
 import {
   dashboardApi,
   type DashboardSummary,
 } from '../api/dashboardApi'
 
+import {
+  useWorkspace,
+} from '../workspace/WorkspaceContext'
+
 import './DashboardPage.css'
 
-const initialSummary: DashboardSummary = {
-  devices: {
-    total: 0,
-    online: 0,
-    offline: 0,
-    pending: 0,
-    enrolling: 0,
-    quarantined: 0,
-    retired: 0,
-    managed: 0,
-  },
+/*
+ * ================================================================
+ * INITIAL STATE
+ * ================================================================
+ */
 
-  platforms: {
-    windows: 0,
-    android: 0,
-    unknown: 0,
-  },
+const initialSummary:
+  DashboardSummary = {
+    devices: {
+      total: 0,
+      online: 0,
+      offline: 0,
+      pending: 0,
+      enrolling: 0,
+      quarantined: 0,
+      retired: 0,
+      managed: 0,
+    },
 
-  compliance: {
-    compliant: 0,
-    nonCompliant: 0,
-    evaluating: 0,
-    quarantined: 0,
-    unknown: 0,
-    compliancePercentage: null,
-  },
+    platforms: {
+      windows: 0,
+      android: 0,
+      unknown: 0,
+    },
 
-  commands: {
-  total: 0,
-  pending: 0,
-  queued: 0,
-  dispatching: 0,
-  sent: 0,
-  delivered: 0,
-  executing: 0,
-  success: 0,
-  failed: 0,
-  timeout: 0,
-  cancelled: 0,
-  active: 0,
-  problems: 0,
-},
+    compliance: {
+      compliant: 0,
+      nonCompliant: 0,
+      evaluating: 0,
+      quarantined: 0,
+      unknown: 0,
+      compliancePercentage: null,
+    },
 
-  system: {
-    api: 'Unknown',
-    database: 'Unknown',
-  },
+    commands: {
+      total: 0,
+      pending: 0,
+      queued: 0,
+      dispatching: 0,
+      sent: 0,
+      delivered: 0,
+      executing: 0,
+      success: 0,
+      failed: 0,
+      timeout: 0,
+      cancelled: 0,
+      active: 0,
+      problems: 0,
+    },
 
-  generatedAtUtc: '',
+    system: {
+      api: 'Unknown',
+      database: 'Unknown',
+    },
+
+    generatedAtUtc: '',
+  }
+
+/*
+ * ================================================================
+ * TOOLTIP
+ * ================================================================
+ */
+
+interface ChartTooltipProps {
+  active?: boolean
+  payload?: Array<{
+    name?: string
+    value?: number
+  }>
+  label?: string
 }
 
-export function DashboardPage() {
-  const navigate = useNavigate()
+function ChartTooltip({
+  active,
+  payload,
+  label,
+}: ChartTooltipProps) {
+  if (
+    !active ||
+    !payload ||
+    payload.length === 0
+  ) {
+    return null
+  }
 
-  const [summary, setSummary] =
+  return (
+    <div className="dashboard-chart-tooltip">
+      {label && (
+        <strong>
+          {label}
+        </strong>
+      )}
+
+      {payload.map(
+        (
+          entry,
+          index,
+        ) => (
+          <div
+            key={
+              `${entry.name}-${index}`
+            }
+          >
+            <span>
+              {entry.name}
+            </span>
+
+            <strong>
+              {entry.value ?? 0}
+            </strong>
+          </div>
+        ),
+      )}
+    </div>
+  )
+}
+
+/*
+ * ================================================================
+ * DASHBOARD
+ * ================================================================
+ */
+
+export function DashboardPage() {
+  const navigate =
+    useNavigate()
+
+  const {
+    activeWorkspaceId,
+    activeModule,
+  } =
+    useWorkspace()
+
+  const [
+    summary,
+    setSummary,
+  ] =
     useState<DashboardSummary>(
       initialSummary,
     )
 
-  const [isLoading, setIsLoading] =
+  const [
+    isLoading,
+    setIsLoading,
+  ] =
     useState(true)
 
-  const [error, setError] =
-    useState<string | null>(null)
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    )
+
+  /*
+   * ==============================================================
+   * DATA
+   * ==============================================================
+   */
 
   const loadDashboard =
-    useCallback(async () => {
-      try {
-        setIsLoading(true)
-        setError(null)
+    useCallback(
+      async () => {
+        try {
+          setIsLoading(
+            true,
+          )
 
-        const data =
-          await dashboardApi.getSummary()
+          setError(
+            null,
+          )
 
-        setSummary(data)
-      } catch (loadError) {
-        console.error(
-          'Dashboard loading error:',
-          loadError,
-        )
+          const dashboardWorkspace =
+                activeWorkspaceId ===
+                  'windows'
+                  ? 'windows'
+                  : activeWorkspaceId ===
+                      'android'
+                    ? 'android'
+                    : 'global'
 
-        setError(
-          'No fue posible obtener los datos del dashboard.',
-        )
-      } finally {
-        setIsLoading(false)
-      }
-    }, [])
+              const data =
+                await dashboardApi
+                  .getSummary(
+                    dashboardWorkspace,
+                  )
 
-  useEffect(() => {
-    document.title =
-      'Dashboard | TitanMDM'
+          setSummary(
+            data,
+          )
+        } catch (
+          loadError
+        ) {
+          console.error(
+            'Dashboard loading error:',
+            loadError,
+          )
 
-    void loadDashboard()
-  }, [loadDashboard])
+          setError(
+            'No fue posible obtener los datos del dashboard.',
+          )
+        } finally {
+          setIsLoading(
+            false,
+          )
+        }
+      },
+      [ activeWorkspaceId,
+        
+      ],
+    )
 
-  const managedPercentage =
-    useMemo(() => {
-      if (summary.devices.total === 0) {
-        return 0
-      }
+  useEffect(
+    () => {
+      document.title =
+        'Dashboard | TitanMDM'
 
-      return Math.round(
-        (
-          summary.devices.managed /
-          summary.devices.total
-        ) * 100,
-      )
-    }, [
-      summary.devices.managed,
-      summary.devices.total,
-    ])
+      void loadDashboard()
+    },
+    [
+      loadDashboard,
+    ],
+  )
+
+  /*
+   * ==============================================================
+   * WORKSPACE
+   * ==============================================================
+   */
+
+  const workspaceName =
+    activeModule?.shortTitle ??
+    'General'
+
+  const workspaceDescription =
+    activeWorkspaceId ===
+      'windows'
+      ? 'Estado operativo de la infraestructura Windows administrada por TitanMDM.'
+      : activeWorkspaceId ===
+          'android'
+        ? 'Estado operativo de Android Enterprise y la flota móvil administrada.'
+        : 'Visión general de dispositivos, cumplimiento, comandos y servicios TitanMDM.'
+
+  /*
+   * ==============================================================
+   * CALCULATED VALUES
+   * ==============================================================
+   */
+
+  const compliancePercentage =
+    summary.compliance
+      .compliancePercentage ??
+    0
 
   const onlinePercentage =
-    useMemo(() => {
-      if (summary.devices.total === 0) {
-        return 0
-      }
+    summary.devices.total >
+    0
+      ? Math.round(
+          (
+            summary.devices.online /
+            summary.devices.total
+          ) *
+            100,
+        )
+      : 0
 
-      return Math.round(
-        (
-          summary.devices.online /
-          summary.devices.total
-        ) * 100,
-      )
-    }, [
-      summary.devices.online,
-      summary.devices.total,
-    ])
+  const managedPercentage =
+    summary.devices.total >
+    0
+      ? Math.round(
+          (
+            summary.devices.managed /
+            summary.devices.total
+          ) *
+            100,
+        )
+      : 0
+
+  const commandSuccessPercentage =
+    summary.commands.total >
+    0
+      ? Math.round(
+          (
+            summary.commands.success /
+            summary.commands.total
+          ) *
+            100,
+        )
+      : 0
 
   const generatedAt =
     summary.generatedAtUtc
@@ -168,56 +349,247 @@ export function DashboardPage() {
         ).toLocaleString()
       : '—'
 
+  /*
+   * ==============================================================
+   * CHART DATA
+   * ==============================================================
+   */
+
+  const deviceStatusData =
+    useMemo(
+      () => [
+        {
+          name:
+            'Online',
+          value:
+            summary.devices.online,
+          color:
+            '#22c55e',
+        },
+        {
+          name:
+            'Offline',
+          value:
+            summary.devices.offline,
+          color:
+            '#ef4444',
+        },
+        {
+          name:
+            'Pendientes',
+          value:
+            summary.devices.pending,
+          color:
+            '#f59e0b',
+        },
+        {
+          name:
+            'Inscribiendo',
+          value:
+            summary.devices.enrolling,
+          color:
+            '#3b82f6',
+        },
+        {
+          name:
+            'Cuarentena',
+          value:
+            summary.devices.quarantined,
+          color:
+            '#a855f7',
+        },
+      ],
+      [
+        summary,
+      ],
+    )
+
+  const platformData =
+    useMemo(
+      () => [
+        {
+          name:
+            'Windows',
+          value:
+            summary.platforms.windows,
+          color:
+            '#2563eb',
+        },
+        {
+          name:
+            'Android',
+          value:
+            summary.platforms.android,
+          color:
+            '#16a34a',
+        },
+        {
+          name:
+            'Otros',
+          value:
+            summary.platforms.unknown,
+          color:
+            '#94a3b8',
+        },
+      ],
+      [
+        summary.platforms,
+      ],
+    )
+
+  const complianceData =
+    useMemo(
+      () => [
+        {
+          name:
+            'Conformes',
+          value:
+            summary.compliance.compliant,
+        },
+        {
+          name:
+            'No conformes',
+          value:
+            summary.compliance.nonCompliant,
+        },
+        {
+          name:
+            'Evaluando',
+          value:
+            summary.compliance.evaluating,
+        },
+        {
+          name:
+            'Desconocidos',
+          value:
+            summary.compliance.unknown,
+        },
+      ],
+      [
+        summary.compliance,
+      ],
+    )
+
+  const commandData =
+    useMemo(
+      () => [
+        {
+          name:
+            'Correctos',
+          value:
+            summary.commands.success,
+        },
+        {
+          name:
+            'Fallidos',
+          value:
+            summary.commands.failed,
+        },
+        {
+          name:
+            'Ejecutando',
+          value:
+            summary.commands.executing,
+        },
+        {
+          name:
+            'Pendientes',
+          value:
+            summary.commands.pending +
+            summary.commands.queued,
+        },
+        {
+          name:
+            'Timeout',
+          value:
+            summary.commands.timeout,
+        },
+      ],
+      [
+        summary.commands,
+      ],
+    )
+
+  const attentionCount =
+    summary.devices.offline +
+    summary.devices.quarantined +
+    summary.compliance.nonCompliant +
+    summary.commands.problems
+
+  /*
+   * ==============================================================
+   * RENDER
+   * ==============================================================
+   */
+
   return (
-    <div className="dashboard-page">
-      <section className="dashboard-heading">
+    <div className="dashboard-page dashboard-page--graphical">
+      {/* ========================================================
+          HEADER
+         ======================================================== */}
+
+      <section className="dashboard-heading dashboard-heading--hero">
         <div>
           <span className="dashboard-heading__eyebrow">
-            TITANMDM ENTERPRISE
+            TITAN OPERATIONS · {workspaceName.toUpperCase()}
           </span>
 
           <h1>
-            Centro de administración
+            Dashboard operativo
           </h1>
 
           <p>
-            Estado operativo de dispositivos,
-            plataformas, cumplimiento y servicios
-            de TitanMDM.
+            {workspaceDescription}
           </p>
         </div>
 
-        <button
-          type="button"
-          className="dashboard-refresh-button"
-          onClick={() =>
-            void loadDashboard()
-          }
-          disabled={isLoading}
-        >
-          <RefreshCw
-            size={17}
-            className={
-              isLoading
-                ? 'is-spinning'
-                : ''
-            }
-          />
+        <div className="dashboard-heading__actions">
+          <div className="dashboard-live-status">
+            <span />
 
-          Actualizar
-        </button>
+            Datos en vivo
+          </div>
+
+          <button
+            type="button"
+            className="dashboard-refresh-button"
+            disabled={
+              isLoading
+            }
+            onClick={() =>
+              void loadDashboard()
+            }
+          >
+            <RefreshCw
+              size={16}
+              className={
+                isLoading
+                  ? 'is-spinning'
+                  : ''
+              }
+            />
+
+            {isLoading
+              ? 'Actualizando...'
+              : 'Actualizar'}
+          </button>
+        </div>
       </section>
 
       {error && (
         <div className="dashboard-error">
-          <ShieldAlert size={20} />
+          <ShieldAlert
+            size={20}
+          />
 
           <div>
             <strong>
-              No se pudo cargar el dashboard
+              Error al cargar dashboard
             </strong>
 
-            <span>{error}</span>
+            <span>
+              {error}
+            </span>
           </div>
 
           <button
@@ -231,20 +603,36 @@ export function DashboardPage() {
         </div>
       )}
 
-      <section className="dashboard-stats-grid">
+      {/* ========================================================
+          KPI
+         ======================================================== */}
+
+      <section className="dashboard-kpi-grid">
         <button
           type="button"
-          className="dashboard-stat-card"
+          className="dashboard-kpi-card"
           onClick={() =>
-            navigate('/devices')
+            navigate(
+              activeWorkspaceId ===
+                'android'
+                ? '/devices?platform=Android&workspace=android'
+                : activeWorkspaceId ===
+                    'windows'
+                  ? '/devices?platform=Windows&workspace=windows'
+                  : '/devices',
+            )
           }
         >
-          <div className="dashboard-stat-card__icon">
-            <Monitor size={22} />
+          <div className="dashboard-kpi-card__icon">
+            <Monitor
+              size={20}
+            />
           </div>
 
-          <div>
-            <span>Dispositivos</span>
+          <div className="dashboard-kpi-card__content">
+            <span>
+              Dispositivos
+            </span>
 
             <strong>
               {isLoading
@@ -253,318 +641,656 @@ export function DashboardPage() {
             </strong>
 
             <small>
-              {summary.devices.managed}{' '}
-              administrados
+              {managedPercentage}% administrados
             </small>
+          </div>
+
+          <div className="dashboard-kpi-card__trend">
+            {summary.devices.managed}
           </div>
         </button>
 
         <button
           type="button"
-          className="dashboard-stat-card"
+          className="dashboard-kpi-card"
           onClick={() =>
             navigate(
               '/devices?status=online',
             )
           }
         >
-          <div className="dashboard-stat-card__icon">
-            <Wifi size={22} />
+          <div className="dashboard-kpi-card__icon dashboard-kpi-card__icon--success">
+            <Wifi
+              size={20}
+            />
           </div>
 
-          <div>
-            <span>En línea</span>
+          <div className="dashboard-kpi-card__content">
+            <span>
+              En línea
+            </span>
 
             <strong>
-              {isLoading
-                ? '...'
-                : summary.devices.online}
+              {summary.devices.online}
             </strong>
 
             <small>
-              {onlinePercentage}% del inventario
+              {onlinePercentage}% conectados
             </small>
+          </div>
+
+          <div className="dashboard-kpi-card__trend dashboard-kpi-card__trend--success">
+            {onlinePercentage}%
           </div>
         </button>
 
         <button
           type="button"
-          className="dashboard-stat-card"
+          className="dashboard-kpi-card"
           onClick={() =>
             navigate(
               '/devices?status=offline',
             )
           }
         >
-          <div className="dashboard-stat-card__icon">
-            <WifiOff size={22} />
+          <div className="dashboard-kpi-card__icon dashboard-kpi-card__icon--danger">
+            <WifiOff
+              size={20}
+            />
           </div>
 
-          <div>
-            <span>Fuera de línea</span>
+          <div className="dashboard-kpi-card__content">
+            <span>
+              Offline
+            </span>
 
             <strong>
-              {isLoading
-                ? '...'
-                : summary.devices.offline}
+              {summary.devices.offline}
             </strong>
 
             <small>
-              Sin comunicación
+              Requieren revisión
             </small>
+          </div>
+
+          <div className="dashboard-kpi-card__trend dashboard-kpi-card__trend--danger">
+            {summary.devices.offline}
           </div>
         </button>
 
         <button
           type="button"
-          className="dashboard-stat-card"
+          className="dashboard-kpi-card"
           onClick={() =>
             navigate(
-              '/compliance?status=noncompliant',
+              '/compliance',
             )
           }
         >
-          <div className="dashboard-stat-card__icon">
-            <ShieldCheck size={22} />
+          <div className="dashboard-kpi-card__icon dashboard-kpi-card__icon--success">
+            <ShieldCheck
+              size={20}
+            />
           </div>
 
-          <div>
-            <span>Cumplimiento</span>
+          <div className="dashboard-kpi-card__content">
+            <span>
+              Cumplimiento
+            </span>
 
             <strong>
               {summary.compliance
-                .compliancePercentage === null
+                .compliancePercentage ===
+              null
                 ? 'N/D'
-                : `${summary.compliance.compliancePercentage}%`}
+                : `${compliancePercentage}%`}
             </strong>
 
             <small>
-              {
-                summary.compliance
-                  .compliant
-              }{' '}
-              conformes
+              {summary.compliance.compliant} conformes
             </small>
+          </div>
+
+          <div className="dashboard-kpi-card__trend">
+            {summary.compliance.nonCompliant} alertas
+          </div>
+        </button>
+
+        <button
+          type="button"
+          className="dashboard-kpi-card"
+          onClick={() =>
+            navigate(
+              '/automation',
+            )
+          }
+        >
+          <div className="dashboard-kpi-card__icon">
+            <TerminalSquare
+              size={20}
+            />
+          </div>
+
+          <div className="dashboard-kpi-card__content">
+            <span>
+              Commands
+            </span>
+
+            <strong>
+              {summary.commands.active}
+            </strong>
+
+            <small>
+              {commandSuccessPercentage}% correctos
+            </small>
+          </div>
+
+          <div className="dashboard-kpi-card__trend">
+            {summary.commands.total}
           </div>
         </button>
       </section>
 
-      <section className="dashboard-secondary-grid">
-        <article className="dashboard-panel">
-          <div className="dashboard-panel__header">
+      {/* ========================================================
+          MAIN CHARTS
+         ======================================================== */}
+
+      <section className="dashboard-chart-grid">
+        <article className="dashboard-chart-card">
+          <header className="dashboard-chart-card__header">
             <div>
+              <span>
+                INVENTARIO
+              </span>
+
               <h2>
                 Estado de dispositivos
               </h2>
 
               <p>
-                Distribución operativa del
-                inventario.
+                Distribución actual del inventario administrado.
               </p>
             </div>
 
-            <Activity size={20} />
-          </div>
+            <Activity
+              size={20}
+            />
+          </header>
 
-          <div className="security-summary">
-            <div>
-              <span>En línea</span>
-              <strong>
-                {summary.devices.online}
-              </strong>
+          <div className="dashboard-donut-layout">
+            <div className="dashboard-chart-container dashboard-chart-container--donut">
+              <ResponsiveContainer
+                width="100%"
+                height={250}
+              >
+                <PieChart>
+                  <Pie
+                    data={
+                      deviceStatusData
+                    }
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={70}
+                    outerRadius={98}
+                    paddingAngle={3}
+                    stroke="none"
+                  >
+                    {deviceStatusData.map(
+                      item => (
+                        <Cell
+                          key={
+                            item.name
+                          }
+                          fill={
+                            item.color
+                          }
+                        />
+                      ),
+                    )}
+                  </Pie>
+
+                  <Tooltip
+                    content={
+                      <ChartTooltip />
+                    }
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+
+              <div className="dashboard-donut-center">
+                <strong>
+                  {summary.devices.total}
+                </strong>
+
+                <span>
+                  Total
+                </span>
+              </div>
             </div>
 
+            <div className="dashboard-chart-legend">
+              {deviceStatusData.map(
+                item => (
+                  <div
+                    key={
+                      item.name
+                    }
+                  >
+                    <span
+                      className="dashboard-chart-legend__dot"
+                      style={{
+                        background:
+                          item.color,
+                      }}
+                    />
+
+                    <span>
+                      {item.name}
+                    </span>
+
+                    <strong>
+                      {item.value}
+                    </strong>
+                  </div>
+                ),
+              )}
+            </div>
+          </div>
+        </article>
+
+        <article className="dashboard-chart-card">
+          <header className="dashboard-chart-card__header">
             <div>
-              <span>Fuera de línea</span>
+              <span>
+                PLATAFORMAS
+              </span>
+
+              <h2>
+                Distribución de sistemas
+              </h2>
+
+              <p>
+                Equipos Windows y Android actualmente registrados.
+              </p>
+            </div>
+
+            <Smartphone
+              size={20}
+            />
+          </header>
+
+          <div className="dashboard-donut-layout">
+            <div className="dashboard-chart-container dashboard-chart-container--donut">
+              <ResponsiveContainer
+                width="100%"
+                height={250}
+              >
+                <PieChart>
+                  <Pie
+                    data={
+                      platformData
+                    }
+                    dataKey="value"
+                    nameKey="name"
+                    innerRadius={70}
+                    outerRadius={98}
+                    paddingAngle={4}
+                    stroke="none"
+                  >
+                    {platformData.map(
+                      item => (
+                        <Cell
+                          key={
+                            item.name
+                          }
+                          fill={
+                            item.color
+                          }
+                        />
+                      ),
+                    )}
+                  </Pie>
+
+                  <Tooltip
+                    content={
+                      <ChartTooltip />
+                    }
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+
+              <div className="dashboard-donut-center">
+                <strong>
+                  {summary.platforms.windows +
+                    summary.platforms.android +
+                    summary.platforms.unknown}
+                </strong>
+
+                <span>
+                  Plataformas
+                </span>
+              </div>
+            </div>
+
+            <div className="dashboard-chart-legend">
+              {platformData.map(
+                item => (
+                  <div
+                    key={
+                      item.name
+                    }
+                  >
+                    <span
+                      className="dashboard-chart-legend__dot"
+                      style={{
+                        background:
+                          item.color,
+                      }}
+                    />
+
+                    <span>
+                      {item.name}
+                    </span>
+
+                    <strong>
+                      {item.value}
+                    </strong>
+                  </div>
+                ),
+              )}
+            </div>
+          </div>
+        </article>
+      </section>
+
+      {/* ========================================================
+          BAR CHARTS
+         ======================================================== */}
+
+      <section className="dashboard-chart-grid">
+        <article className="dashboard-chart-card">
+          <header className="dashboard-chart-card__header">
+            <div>
+              <span>
+                SEGURIDAD
+              </span>
+
+              <h2>
+                Cumplimiento
+              </h2>
+
+              <p>
+                Estado actual de las evaluaciones de cumplimiento.
+              </p>
+            </div>
+
+            <ShieldCheck
+              size={20}
+            />
+          </header>
+
+          <div className="dashboard-chart-container">
+            <ResponsiveContainer
+              width="100%"
+              height={270}
+            >
+              <BarChart
+                data={
+                  complianceData
+                }
+                margin={{
+                  top: 20,
+                  right: 10,
+                  left: -18,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="4 4"
+                  vertical={false}
+                  stroke="#edf1f6"
+                />
+
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{
+                    fontSize: 10,
+                    fill: '#7b8798',
+                  }}
+                />
+
+                <YAxis
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{
+                    fontSize: 10,
+                    fill: '#9aa5b5',
+                  }}
+                />
+
+                <Tooltip
+                  content={
+                    <ChartTooltip />
+                  }
+                />
+
+                <Bar
+                  dataKey="value"
+                  name="Dispositivos"
+                  fill={
+                    activeModule?.theme.primary ??
+                    '#4169e1'
+                  }
+                  radius={[
+                    7,
+                    7,
+                    0,
+                    0,
+                  ]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+
+        <article className="dashboard-chart-card">
+          <header className="dashboard-chart-card__header">
+            <div>
+              <span>
+                AUTOMATIZACIÓN
+              </span>
+
+              <h2>
+                Command Engine
+              </h2>
+
+              <p>
+                Resultado de comandos enviados a los endpoints.
+              </p>
+            </div>
+
+            <TerminalSquare
+              size={20}
+            />
+          </header>
+
+          <div className="dashboard-chart-container">
+            <ResponsiveContainer
+              width="100%"
+              height={270}
+            >
+              <BarChart
+                data={
+                  commandData
+                }
+                layout="vertical"
+                margin={{
+                  top: 15,
+                  right: 25,
+                  left: 15,
+                  bottom: 5,
+                }}
+              >
+                <CartesianGrid
+                  strokeDasharray="4 4"
+                  horizontal={false}
+                  stroke="#edf1f6"
+                />
+
+                <XAxis
+                  type="number"
+                  allowDecimals={false}
+                  tickLine={false}
+                  axisLine={false}
+                  tick={{
+                    fontSize: 10,
+                    fill: '#9aa5b5',
+                  }}
+                />
+
+                <YAxis
+                  type="category"
+                  dataKey="name"
+                  tickLine={false}
+                  axisLine={false}
+                  width={80}
+                  tick={{
+                    fontSize: 10,
+                    fill: '#7b8798',
+                  }}
+                />
+
+                <Tooltip
+                  content={
+                    <ChartTooltip />
+                  }
+                />
+
+                <Bar
+                  dataKey="value"
+                  name="Comandos"
+                  fill={
+                    activeModule?.theme.primary ??
+                    '#4169e1'
+                  }
+                  radius={[
+                    0,
+                    7,
+                    7,
+                    0,
+                  ]}
+                />
+              </BarChart>
+            </ResponsiveContainer>
+          </div>
+        </article>
+      </section>
+
+      {/* ========================================================
+          OPERATIONS
+         ======================================================== */}
+
+      <section className="dashboard-operations-grid">
+        <article className="dashboard-operation-card dashboard-operation-card--attention">
+          <header>
+            <div>
+              <AlertTriangle
+                size={20}
+              />
+
+              <div>
+                <span>
+                  ATENCIÓN
+                </span>
+
+                <h2>
+                  Requiere revisión
+                </h2>
+              </div>
+            </div>
+
+            <strong>
+              {attentionCount}
+            </strong>
+          </header>
+
+          <div className="dashboard-operation-list">
+            <div>
+              <span>
+                Equipos offline
+              </span>
+
               <strong>
                 {summary.devices.offline}
               </strong>
             </div>
 
             <div>
-              <span>Pendientes</span>
+              <span>
+                No conformes
+              </span>
+
               <strong>
-                {summary.devices.pending}
+                {summary.compliance.nonCompliant}
               </strong>
             </div>
 
             <div>
-              <span>Inscribiendo</span>
-              <strong>
-                {summary.devices.enrolling}
-              </strong>
-            </div>
+              <span>
+                Cuarentena
+              </span>
 
-            <div>
-              <span>Cuarentena</span>
               <strong>
                 {summary.devices.quarantined}
               </strong>
             </div>
 
             <div>
-              <span>Retirados</span>
+              <span>
+                Problemas de comandos
+              </span>
+
               <strong>
-                {summary.devices.retired}
+                {summary.commands.problems}
               </strong>
             </div>
           </div>
         </article>
 
-        <article className="dashboard-panel">
-          <div className="dashboard-panel__header">
+        <article className="dashboard-operation-card">
+          <header>
             <div>
-              <h2>Plataformas</h2>
+              <Server
+                size={20}
+              />
 
-              <p>
-                Sistemas operativos
-                administrados.
-              </p>
-            </div>
+              <div>
+                <span>
+                  INFRAESTRUCTURA
+                </span>
 
-            <Laptop size={20} />
-          </div>
-
-          <div className="platform-list">
-            <button
-              type="button"
-              className="platform-item"
-              onClick={() =>
-                navigate(
-                  '/devices?platform=windows',
-                )
-              }
-            >
-              <div className="platform-item__icon">
-                <Monitor size={21} />
+                <h2>
+                  Salud de plataforma
+                </h2>
               </div>
-
-              <div className="platform-item__content">
-                <div>
-                  <strong>Windows</strong>
-                  <span>
-                    {
-                      summary.platforms
-                        .windows
-                    }
-                  </span>
-                </div>
-
-                <small>
-                  Equipos Windows
-                </small>
-              </div>
-            </button>
-
-            <button
-              type="button"
-              className="platform-item"
-              onClick={() =>
-                navigate(
-                  '/devices?platform=android',
-                )
-              }
-            >
-              <div className="platform-item__icon">
-                <Smartphone size={21} />
-              </div>
-
-              <div className="platform-item__content">
-                <div>
-                  <strong>Android</strong>
-                  <span>
-                    {
-                      summary.platforms
-                        .android
-                    }
-                  </span>
-                </div>
-
-                <small>
-                  Equipos Android
-                </small>
-              </div>
-            </button>
-          </div>
-        </article>
-
-        <article className="dashboard-panel">
-          <div className="dashboard-panel__header">
-            <div>
-              <h2>Cumplimiento</h2>
-
-              <p>
-                Estado de evaluación de los
-                endpoints.
-              </p>
             </div>
 
-            <ShieldCheck size={20} />
-          </div>
+            <CheckCircle2
+              size={22}
+              className="dashboard-health-ok"
+            />
+          </header>
 
-          <div className="security-summary">
-            <div>
-              <span>Conformes</span>
-              <strong>
-                {
-                  summary.compliance
-                    .compliant
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>No conformes</span>
-              <strong>
-                {
-                  summary.compliance
-                    .nonCompliant
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Evaluando</span>
-              <strong>
-                {
-                  summary.compliance
-                    .evaluating
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>Desconocido</span>
-              <strong>
-                {
-                  summary.compliance
-                    .unknown
-                }
-              </strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="dashboard-panel">
-          <div className="dashboard-panel__header">
-            <div>
-              <h2>
-                Salud de plataforma
-              </h2>
-
-              <p>
-                Disponibilidad de los servicios
-                principales.
-              </p>
-            </div>
-
-            <Server size={20} />
-          </div>
-
-          <div className="security-summary">
+          <div className="dashboard-operation-list">
             <div>
               <span>
-                <Server size={15} />
+                <Server
+                  size={14}
+                />
+
                 API
               </span>
 
@@ -575,7 +1301,10 @@ export function DashboardPage() {
 
             <div>
               <span>
-                <Database size={15} />
+                <Database
+                  size={14}
+                />
+
                 SQL Server
               </span>
 
@@ -586,246 +1315,35 @@ export function DashboardPage() {
 
             <div>
               <span>
-                Administración
+                Cobertura administrada
               </span>
 
               <strong>
                 {managedPercentage}%
               </strong>
             </div>
-          </div>
-        </article>
-      </section>
-
-      <section className="dashboard-secondary-grid">
-        <article className="dashboard-panel">
-          <div className="dashboard-panel__header">
-            <div>
-              <h2>
-                Atención requerida
-              </h2>
-
-              <p>
-                Estados que requieren revisión
-                administrativa.
-              </p>
-            </div>
-
-            <AlertTriangle size={20} />
-          </div>
-
-          <div className="security-summary">
-            <div>
-              <span>
-                No conformes
-              </span>
-
-              <strong>
-                {
-                  summary.compliance
-                    .nonCompliant
-                }
-              </strong>
-            </div>
 
             <div>
               <span>
-                Cuarentena
+                Éxito de comandos
               </span>
 
               <strong>
-                {
-                  summary.devices
-                    .quarantined
-                }
-              </strong>
-            </div>
-
-            <div>
-              <span>
-                Offline
-              </span>
-
-              <strong>
-                {summary.devices.offline}
-              </strong>
-            </div>
-          </div>
-        </article>
-
-        <article className="dashboard-panel">
-          <div className="dashboard-panel__header">
-            <div>
-              <h2>
-                Estado del inventario
-              </h2>
-
-              <p>
-                Cobertura de administración
-                TitanMDM.
-              </p>
-            </div>
-
-            <CheckCircle2 size={20} />
-          </div>
-
-          <div className="security-summary">
-            <div>
-              <span>Total</span>
-              <strong>
-                {summary.devices.total}
-              </strong>
-            </div>
-
-            <div>
-              <span>Administrados</span>
-              <strong>
-                {summary.devices.managed}
-              </strong>
-            </div>
-
-            <div>
-              <span>
-                Cobertura
-              </span>
-              <strong>
-                {managedPercentage}%
+                {commandSuccessPercentage}%
               </strong>
             </div>
           </div>
         </article>
       </section>
 
-      <section className="dashboard-secondary-grid">
-  <article className="dashboard-panel">
-    <div className="dashboard-panel__header">
-      <div>
-        <h2>
-          Command Engine
-        </h2>
-
-        <p>
-          Ejecución de acciones remotas
-          sobre dispositivos.
-        </p>
-      </div>
-
-      <Activity size={20} />
-    </div>
-
-    <div className="security-summary">
-      <div>
-        <span>Total</span>
-
-        <strong>
-          {summary.commands.total}
-        </strong>
-      </div>
-
-      <div>
-        <span>Activos</span>
-
-        <strong>
-          {summary.commands.active}
-        </strong>
-      </div>
-
-      <div>
-        <span>Ejecutando</span>
-
-        <strong>
-          {summary.commands.executing}
-        </strong>
-      </div>
-
-      <div>
-        <span>Correctos</span>
-
-        <strong>
-          {summary.commands.success}
-        </strong>
-      </div>
-
-      <div>
-        <span>Fallidos</span>
-
-        <strong>
-          {summary.commands.failed}
-        </strong>
-      </div>
-
-      <div>
-        <span>Timeout</span>
-
-        <strong>
-          {summary.commands.timeout}
-        </strong>
-      </div>
-    </div>
-  </article>
-
-  <article className="dashboard-panel">
-    <div className="dashboard-panel__header">
-      <div>
-        <h2>
-          Cola de administración
-        </h2>
-
-        <p>
-          Estado de entrega de comandos
-          hacia los agentes.
-        </p>
-      </div>
-
-      <Clock3 size={20} />
-    </div>
-
-    <div className="security-summary">
-      <div>
-        <span>Pendientes</span>
-
-        <strong>
-          {summary.commands.pending}
-        </strong>
-      </div>
-
-      <div>
-        <span>En cola</span>
-
-        <strong>
-          {summary.commands.queued}
-        </strong>
-      </div>
-
-      <div>
-        <span>Enviados</span>
-
-        <strong>
-          {summary.commands.sent}
-        </strong>
-      </div>
-
-      <div>
-        <span>Entregados</span>
-
-        <strong>
-          {summary.commands.delivered}
-        </strong>
-      </div>
-
-      <div>
-        <span>Problemas</span>
-
-        <strong>
-          {summary.commands.problems}
-        </strong>
-      </div>
-    </div>
-  </article>
-</section>
+      {/* ========================================================
+          FOOTER
+         ======================================================== */}
 
       <footer className="dashboard-generated-at">
-        <Clock3 size={14} />
+        <Clock3
+          size={14}
+        />
 
         Última actualización:
         {' '}

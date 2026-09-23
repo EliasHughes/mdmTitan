@@ -6,5 +6,6 @@ public interface IDashboardService
 {
     Task<DashboardSummaryDto> GetSummaryAsync(
         Guid organizationId,
+        DashboardWorkspace workspace,
         CancellationToken cancellationToken = default);
 }

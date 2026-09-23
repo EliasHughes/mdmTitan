@@ -1981,3 +1981,435 @@ button {
     );
   }
 }
+
+/* ================================================================
+   TITANMDM WORKSPACE THEME
+   ================================================================ */
+
+:root {
+  --workspace-primary: #4169e1;
+  --workspace-primary-dark: #315edb;
+  --workspace-soft: #edf2ff;
+  --workspace-border: #dbe4ff;
+}
+
+/* ================================================================
+   WORKSPACE TRANSITIONS
+   ================================================================ */
+
+.app-layout,
+.app-layout__content,
+.app-header,
+.sidebar,
+.sidebar__link,
+.sidebar-workspace,
+.header-workspace__icon,
+.sidebar__brand-mark {
+  transition:
+    color 0.2s ease,
+    background 0.22s ease,
+    border-color 0.22s ease,
+    box-shadow 0.22s ease;
+}
+
+/* ================================================================
+   SIDEBAR ACTIVE COLOR
+   ================================================================ */
+
+.sidebar__link--active {
+  box-shadow:
+    inset 3px 0 0
+    var(--workspace-primary);
+
+  background:
+    linear-gradient(
+      90deg,
+      color-mix(
+        in srgb,
+        var(--workspace-primary) 25%,
+        transparent
+      ),
+      color-mix(
+        in srgb,
+        var(--workspace-primary) 8%,
+        transparent
+      )
+    );
+}
+
+/* ================================================================
+   WORKSPACE BLOCK
+   ================================================================ */
+
+.sidebar-workspace {
+  display: flex;
+  align-items: center;
+
+  gap: 11px;
+
+  margin: 14px 12px 2px;
+
+  padding: 12px;
+
+  border:
+    1px solid
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 24%,
+      transparent
+    );
+
+  border-radius: 11px;
+
+  background:
+    color-mix(
+      in srgb,
+      var(--workspace-primary) 10%,
+      transparent
+    );
+}
+
+.sidebar-workspace__icon {
+  width: 34px;
+  height: 34px;
+
+  flex: 0 0 34px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  color: white;
+
+  background:
+    var(--workspace-primary);
+}
+
+.sidebar-workspace__content {
+  min-width: 0;
+}
+
+.sidebar-workspace__content span {
+  display: block;
+
+  color: #7888a8;
+
+  font-size: 8px;
+  font-weight: 800;
+
+  letter-spacing: 0.1em;
+}
+
+.sidebar-workspace__content strong {
+  display: block;
+
+  margin-top: 3px;
+
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+
+  color: white;
+
+  font-size: 11px;
+}
+
+/* ================================================================
+   COLLAPSED SIDEBAR
+   ================================================================ */
+
+.sidebar--collapsed
+.sidebar-workspace {
+  justify-content: center;
+
+  padding: 8px;
+}
+
+.sidebar--collapsed
+.sidebar-workspace__content {
+  display: none;
+}
+
+/* ================================================================
+   HEADER WORKSPACE
+   ================================================================ */
+
+.header-workspace {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  padding: 5px 8px;
+
+  border: 0;
+  border-radius: 10px;
+
+  background:
+    transparent;
+
+  text-align: left;
+}
+
+.header-workspace:hover {
+  background:
+    var(--workspace-soft);
+}
+
+.header-workspace__icon {
+  width: 36px;
+  height: 36px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 10px;
+
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+/* ================================================================
+   HEADER ACCENTS
+   ================================================================ */
+
+.header-icon-button:hover {
+  color:
+    var(--workspace-primary);
+
+  border-color:
+    var(--workspace-border);
+
+  background:
+    var(--workspace-soft);
+}
+
+.header-notification-dot {
+  background:
+    var(--workspace-primary);
+}
+
+.app-header__avatar {
+  color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-soft);
+}
+
+/* ================================================================
+   GENERIC WORKSPACE ACCENT
+   ================================================================ */
+
+.page-eyebrow,
+.dashboard-heading__eyebrow,
+.admin-eyebrow {
+  color:
+    var(--workspace-primary);
+}
+
+/* ================================================================
+   WORKSPACE IDENTITIES
+   ================================================================ */
+
+html[data-workspace="windows"] {
+  --workspace-primary: #2563eb;
+  --workspace-primary-dark: #1d4ed8;
+  --workspace-soft: #eff6ff;
+  --workspace-border: #bfdbfe;
+}
+
+html[data-workspace="android"] {
+  --workspace-primary: #16a34a;
+  --workspace-primary-dark: #15803d;
+  --workspace-soft: #f0fdf4;
+  --workspace-border: #bbf7d0;
+}
+
+html[data-workspace="administration"] {
+  --workspace-primary: #475569;
+  --workspace-primary-dark: #334155;
+  --workspace-soft: #f8fafc;
+  --workspace-border: #cbd5e1;
+}
+
+html[data-workspace="helpdesk"] {
+  --workspace-primary: #7656d6;
+  --workspace-primary-dark: #6045bb;
+  --workspace-soft: #f5f3ff;
+  --workspace-border: #ddd6fe;
+}
+
+/* ================================================================
+   RESPONSIVE
+   ================================================================ */
+
+@media (max-width: 850px) {
+  .sidebar-workspace {
+    margin-inline: 8px;
+  }
+}
+
+@media (max-width: 760px) {
+  .header-workspace__icon {
+    display: none;
+  }
+}
+/* ================================================================
+   ACCESS DENIED
+   ================================================================ */
+
+.access-denied-page {
+  min-height: calc(100vh - 150px);
+
+  display: grid;
+  place-items: center;
+
+  padding: 30px;
+}
+
+.access-denied-card {
+  width: min(100%, 580px);
+
+  padding: 42px;
+
+  border: 1px solid #e1e6ee;
+  border-radius: 20px;
+
+  background: #ffffff;
+
+  box-shadow:
+    0 18px 60px
+    rgba(20, 35, 65, 0.07);
+
+  text-align: center;
+}
+
+.access-denied-card__icon {
+  width: 62px;
+  height: 62px;
+
+  display: grid;
+  place-items: center;
+
+  margin: 0 auto 18px;
+
+  border-radius: 17px;
+
+  color: #b54747;
+  background: #fff0f0;
+}
+
+.access-denied-card__eyebrow {
+  color: #b54747;
+
+  font-size: 9px;
+  font-weight: 800;
+
+  letter-spacing: 0.13em;
+}
+
+.access-denied-card h1 {
+  margin: 10px 0 0;
+
+  color: #202b3d;
+
+  font-size: 27px;
+  line-height: 1.2;
+
+  letter-spacing: -0.03em;
+}
+
+.access-denied-card > p {
+  max-width: 470px;
+
+  margin: 14px auto 0;
+
+  color: #778397;
+
+  font-size: 12px;
+  line-height: 1.7;
+}
+
+.access-denied-context {
+  display: flex;
+  align-items: center;
+
+  gap: 10px;
+
+  margin: 25px auto 0;
+
+  padding: 12px 14px;
+
+  border: 1px solid var(--workspace-border);
+  border-radius: 10px;
+
+  color: var(--workspace-primary);
+
+  background: var(--workspace-soft);
+
+  text-align: left;
+}
+
+.access-denied-context span,
+.access-denied-context strong {
+  display: block;
+}
+
+.access-denied-context span {
+  color: #8893a4;
+
+  font-size: 9px;
+}
+
+.access-denied-context strong {
+  margin-top: 2px;
+
+  color: #354156;
+
+  font-size: 11px;
+}
+
+.access-denied-actions {
+  display: flex;
+  justify-content: center;
+
+  gap: 10px;
+
+  margin-top: 28px;
+}
+
+.access-denied-button {
+  min-height: 40px;
+
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+
+  gap: 7px;
+
+  padding: 0 15px;
+
+  border: 1px solid #dce2eb;
+  border-radius: 9px;
+
+  color: #536077;
+  background: #ffffff;
+
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.access-denied-button--primary {
+  color: #ffffff;
+
+  border-color:
+    var(--workspace-primary);
+
+  background:
+    var(--workspace-primary);
+}

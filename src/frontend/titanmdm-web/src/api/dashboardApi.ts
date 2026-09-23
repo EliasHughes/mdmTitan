@@ -1,5 +1,22 @@
 import apiClient from './apiClient'
 
+/*
+ * ================================================================
+ * WORKSPACE
+ * ================================================================
+ */
+
+export type DashboardWorkspace =
+  | 'global'
+  | 'windows'
+  | 'android'
+
+/*
+ * ================================================================
+ * DEVICE SUMMARY
+ * ================================================================
+ */
+
 export interface DeviceSummary {
   total: number
   online: number
@@ -11,11 +28,23 @@ export interface DeviceSummary {
   managed: number
 }
 
+/*
+ * ================================================================
+ * PLATFORM SUMMARY
+ * ================================================================
+ */
+
 export interface PlatformSummary {
   windows: number
   android: number
   unknown: number
 }
+
+/*
+ * ================================================================
+ * COMPLIANCE SUMMARY
+ * ================================================================
+ */
 
 export interface ComplianceSummary {
   compliant: number
@@ -23,34 +52,15 @@ export interface ComplianceSummary {
   evaluating: number
   quarantined: number
   unknown: number
-  compliancePercentage: number | null
+  compliancePercentage:
+    number | null
 }
 
-export interface SystemStatus {
-  api: string
-  database: string
-}
-
-export interface DashboardSummary {
-  devices: DeviceSummary
-  platforms: PlatformSummary
-  compliance: ComplianceSummary
-  system: SystemStatus
-  generatedAtUtc: string
-  commands: CommandSummary
-}
-
-export const dashboardApi = {
-  async getSummary(): Promise<DashboardSummary> {
-    const response =
-      await apiClient.get<DashboardSummary>(
-        '/dashboard/summary',
-      )
-
-    return response.data
-  },
-
-}
+/*
+ * ================================================================
+ * COMMAND SUMMARY
+ * ================================================================
+ */
 
 export interface CommandSummary {
   total: number
@@ -66,4 +76,61 @@ export interface CommandSummary {
   cancelled: number
   active: number
   problems: number
+}
+
+/*
+ * ================================================================
+ * SYSTEM STATUS
+ * ================================================================
+ */
+
+export interface SystemStatus {
+  api: string
+  database: string
+}
+
+/*
+ * ================================================================
+ * DASHBOARD SUMMARY
+ * ================================================================
+ */
+
+export interface DashboardSummary {
+  devices: DeviceSummary
+
+  platforms: PlatformSummary
+
+  compliance: ComplianceSummary
+
+  commands: CommandSummary
+
+  system: SystemStatus
+
+  generatedAtUtc: string
+}
+
+/*
+ * ================================================================
+ * DASHBOARD API
+ * ================================================================
+ */
+
+export const dashboardApi = {
+  async getSummary(
+    workspace:
+      DashboardWorkspace =
+        'global',
+  ): Promise<DashboardSummary> {
+    const response =
+      await apiClient.get<DashboardSummary>(
+        '/dashboard/summary',
+        {
+          params: {
+            workspace,
+          },
+        },
+      )
+
+    return response.data
+  },
 }

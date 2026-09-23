@@ -15,6 +15,10 @@ import {
 } from '../../assistant/components/TitanAssistant'
 
 import {
+  WorkspaceProvider,
+} from '../../workspace/WorkspaceContext'
+
+import {
   Header,
 } from './Header'
 
@@ -30,30 +34,32 @@ export function AppLayout() {
     useState(false)
 
   return (
-    <TitanAssistantProvider>
-      <div className="app-layout">
-        <Sidebar
-          collapsed={
-            sidebarCollapsed
-          }
-          onToggle={() =>
-            setSidebarCollapsed(
-              (value) =>
-                !value,
-            )
-          }
-        />
+    <WorkspaceProvider>
+      <TitanAssistantProvider>
+        <div className="app-layout">
+          <Sidebar
+            collapsed={
+              sidebarCollapsed
+            }
+            onToggle={() =>
+              setSidebarCollapsed(
+                value =>
+                  !value,
+              )
+            }
+          />
 
-        <div className="app-layout__main">
-          <Header />
+          <div className="app-layout__main">
+            <Header />
 
-          <main className="app-layout__content">
-            <Outlet />
-          </main>
+            <main className="app-layout__content">
+              <Outlet />
+            </main>
+          </div>
+
+          <TitanAssistant />
         </div>
-
-        <TitanAssistant />
-      </div>
-    </TitanAssistantProvider>
+      </TitanAssistantProvider>
+    </WorkspaceProvider>
   )
 }
