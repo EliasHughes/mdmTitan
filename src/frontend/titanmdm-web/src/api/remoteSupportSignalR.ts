@@ -370,8 +370,9 @@ export class RemoteSupportSignalRClient {
         null
 
       throw new Error(
-        `No fue posible conectar SignalR: ${message}`,
-      )
+        `No fue posible conectar SignalR: ${message}`, {
+    cause: error,
+  },)
     }
   }
 
@@ -424,10 +425,12 @@ export class RemoteSupportSignalRClient {
         },
       )
 
-      throw new Error(
-        `JoinSession falló: ${message}`,
-      )
-    }
+     throw new Error(
+  `JoinSession falló: ${message}`,
+  {
+    cause: error,
+  },
+)
   }
 
   /*
@@ -478,9 +481,11 @@ export class RemoteSupportSignalRClient {
       )
 
       throw new Error(
-        `LeaveSession falló: ${message}`,
-      )
-    }
+  `No fue posible conectar SignalR: ${message}`,
+  {
+    cause: error,
+  },
+)
   }
 
   /*
