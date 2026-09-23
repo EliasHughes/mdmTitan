@@ -1,6 +1,8 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using TitanMDM.Application.Devices;
 
 namespace TitanMDM.Api.Controllers;
@@ -11,6 +13,15 @@ namespace TitanMDM.Api.Controllers;
 public sealed class DevicesController
     : ControllerBase
 {
+    private const string DevicesViewPermission =
+        "devices.view";
+
+    private const string WindowsWorkspacePermission =
+        "workspace.windows.view";
+
+    private const string AndroidWorkspacePermission =
+        "workspace.android.view";
+
     private readonly IDeviceQueryService
         _deviceQueryService;
 
@@ -18,10 +29,17 @@ public sealed class DevicesController
         IDeviceQueryService deviceQueryService)
     {
         _deviceQueryService =
-            deviceQueryService ??
+            deviceQueryService
+            ??
             throw new ArgumentNullException(
                 nameof(deviceQueryService));
     }
+
+    /*
+     * ============================================================
+     * LIST DEVICES
+     * ============================================================
+     */
 
     [HttpGet]
     public async Task<IActionResult> GetDevices(
@@ -33,10 +51,18 @@ public sealed class DevicesController
         [FromQuery] int pageSize = 25,
         CancellationToken cancellationToken = default)
     {
+        if (
+            !HasPermission(
+                DevicesViewPermission))
+        {
+            return Forbid();
+        }
+
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        if (
+            organizationId is null)
         {
             return Unauthorized(
                 new
@@ -46,20 +72,110 @@ public sealed class DevicesController
                 });
         }
 
+        /*
+         * ========================================================
+         * PLATFORM ACCESS
+         * ========================================================
+         */
+
+        var hasWindowsAccess =
+            HasPermission(
+                WindowsWorkspacePermission);
+
+        var hasAndroidAccess =
+            HasPermission(
+                AndroidWorkspacePermission);
+
+        if (
+            !hasWindowsAccess
+            &&
+            !hasAndroidAccess)
+        {
+            return Forbid();
+        }
+
+        var normalizedPlatform =
+            NormalizePlatform(
+                platform);
+
+        /*
+         * Plataforma explícita.
+         */
+
+        if (
+            normalizedPlatform ==
+            "Windows"
+            &&
+            !hasWindowsAccess)
+        {
+            return Forbid();
+        }
+
+        if (
+            normalizedPlatform ==
+            "Android"
+            &&
+            !hasAndroidAccess)
+        {
+            return Forbid();
+        }
+
+        /*
+         * Si no llega platform y el usuario solo tiene
+         * acceso a un workspace, forzamos ese workspace.
+         *
+         * Esto evita:
+         *
+         * usuario Android
+         *   ↓
+         * elimina ?platform=Android
+         *   ↓
+         * recibe Windows también
+         */
+
+        if (
+            string.IsNullOrWhiteSpace(
+                normalizedPlatform))
+        {
+            if (
+                hasWindowsAccess
+                &&
+                !hasAndroidAccess)
+            {
+                normalizedPlatform =
+                    "Windows";
+            }
+            else if (
+                hasAndroidAccess
+                &&
+                !hasWindowsAccess)
+            {
+                normalizedPlatform =
+                    "Android";
+            }
+        }
+
         var result =
             await _deviceQueryService
                 .GetDevicesAsync(
                     organizationId.Value,
                     search,
-                    platform,
+                    normalizedPlatform,
                     status,
                     compliance,
                     page,
                     pageSize,
                     cancellationToken);
 
-        return Ok(result);
+        return Ok(
+            result);
     }
+
+    /*
+     * ============================================================
+     * DEVICE DETAILS
+     * ============================================================
+     */
 
     [HttpGet("{deviceId:guid}")]
     public async Task<IActionResult>
@@ -67,10 +183,18 @@ public sealed class DevicesController
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
+        if (
+            !HasPermission(
+                DevicesViewPermission))
+        {
+            return Forbid();
+        }
+
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        if (
+            organizationId is null)
         {
             return Unauthorized(
                 new
@@ -87,7 +211,8 @@ public sealed class DevicesController
                     deviceId,
                     cancellationToken);
 
-        if (device is null)
+        if (
+            device is null)
         {
             return NotFound(
                 new
@@ -97,8 +222,45 @@ public sealed class DevicesController
                 });
         }
 
-        return Ok(device);
+        /*
+         * El usuario puede conocer el ID del dispositivo,
+         * pero no recibe los datos si no tiene acceso al
+         * workspace correspondiente.
+         */
+
+        if (
+            string.Equals(
+                device.Platform,
+                "Windows",
+                StringComparison.OrdinalIgnoreCase)
+            &&
+            !HasPermission(
+                WindowsWorkspacePermission))
+        {
+            return Forbid();
+        }
+
+        if (
+            string.Equals(
+                device.Platform,
+                "Android",
+                StringComparison.OrdinalIgnoreCase)
+            &&
+            !HasPermission(
+                AndroidWorkspacePermission))
+        {
+            return Forbid();
+        }
+
+        return Ok(
+            device);
     }
+
+    /*
+     * ============================================================
+     * ANDROID DETAILS
+     * ============================================================
+     */
 
     [HttpGet("{deviceId:guid}/android")]
     public async Task<IActionResult>
@@ -106,10 +268,21 @@ public sealed class DevicesController
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
+        if (
+            !HasPermission(
+                DevicesViewPermission)
+            ||
+            !HasPermission(
+                AndroidWorkspacePermission))
+        {
+            return Forbid();
+        }
+
         var organizationId =
             GetOrganizationId();
 
-        if (organizationId is null)
+        if (
+            organizationId is null)
         {
             return Unauthorized(
                 new
@@ -126,7 +299,8 @@ public sealed class DevicesController
                     deviceId,
                     cancellationToken);
 
-        if (android is null)
+        if (
+            android is null)
         {
             return NotFound(
                 new
@@ -136,19 +310,89 @@ public sealed class DevicesController
                 });
         }
 
-        return Ok(android);
+        return Ok(
+            android);
     }
+
+    /*
+     * ============================================================
+     * PLATFORM NORMALIZATION
+     * ============================================================
+     */
+
+    private static string? NormalizePlatform(
+        string? platform)
+    {
+        if (
+            string.IsNullOrWhiteSpace(
+                platform))
+        {
+            return null;
+        }
+
+        var value =
+            platform
+                .Trim();
+
+        if (
+            value.Equals(
+                "Windows",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Windows";
+        }
+
+        if (
+            value.Equals(
+                "Android",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            return "Android";
+        }
+
+        /*
+         * Una plataforma desconocida no debe convertirse
+         * silenciosamente en una consulta global.
+         */
+
+        return value;
+    }
+
+    /*
+     * ============================================================
+     * CLAIMS
+     * ============================================================
+     */
 
     private Guid? GetOrganizationId()
     {
         var value =
             User.FindFirstValue(
-                "organization_id");
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
 
         return Guid.TryParse(
             value,
             out var organizationId)
             ? organizationId
             : null;
+    }
+
+    private bool HasPermission(
+        string permission)
+    {
+        return User.Claims
+            .Any(
+                claim =>
+                    claim.Type ==
+                        "permission"
+                    &&
+                    string.Equals(
+                        claim.Value,
+                        permission,
+                        StringComparison
+                            .OrdinalIgnoreCase));
     }
 }
