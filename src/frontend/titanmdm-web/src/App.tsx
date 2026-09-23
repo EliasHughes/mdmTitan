@@ -37,6 +37,10 @@ import {
 } from './pages/devices/DevicesPage'
 
 import {
+  DeviceEntryPage,
+} from './pages/devices/DeviceEntryPage'
+
+import {
   DeviceDetailPage,
 } from './pages/devices/DeviceDetailPage'
 
@@ -110,20 +114,12 @@ import {
 function App() {
   return (
     <Routes>
-      {/* =======================================================
-          PUBLIC
-         ======================================================= */}
-
       <Route
         path="/login"
         element={
           <LoginPage />
         }
       />
-
-      {/* =======================================================
-          AUTHENTICATED
-         ======================================================= */}
 
       <Route
         element={
@@ -146,10 +142,6 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            DASHBOARD
-           ===================================================== */}
-
         <Route
           path="dashboard"
           element={
@@ -162,10 +154,6 @@ function App() {
             </PermissionRoute>
           }
         />
-
-        {/* =====================================================
-            DEVICES
-           ===================================================== */}
 
         <Route
           path="devices"
@@ -180,8 +168,35 @@ function App() {
           }
         />
 
+        {/*
+          Generic device entry.
+
+          Windows:
+            /devices/:id
+              ↓
+            /devices/:id/control-center
+
+          Android:
+            /devices/:id
+              ↓
+            /devices/:id/android
+        */}
+
         <Route
           path="devices/:deviceId"
+          element={
+            <PermissionRoute
+              anyOf={[
+                'devices.view',
+              ]}
+            >
+              <DeviceEntryPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="devices/:deviceId/android"
           element={
             <PermissionRoute
               anyOf={[
@@ -206,10 +221,6 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            ENROLLMENT
-           ===================================================== */}
-
         <Route
           path="enrollment"
           element={
@@ -222,10 +233,6 @@ function App() {
             </PermissionRoute>
           }
         />
-
-        {/* =====================================================
-            POLICIES
-           ===================================================== */}
 
         <Route
           path="policies"
@@ -267,10 +274,6 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            GROUPS
-           ===================================================== */}
-
         <Route
           path="groups"
           element={
@@ -284,10 +287,6 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            APPLICATIONS
-           ===================================================== */}
-
         <Route
           path="apps"
           element={
@@ -300,10 +299,6 @@ function App() {
             </PermissionRoute>
           }
         />
-
-        {/* =====================================================
-            SECURITY
-           ===================================================== */}
 
         <Route
           path="security"
@@ -330,10 +325,6 @@ function App() {
             </PermissionRoute>
           }
         />
-
-        {/* =====================================================
-            ADVANCED MDM
-           ===================================================== */}
 
         <Route
           path="kiosk"
@@ -374,10 +365,6 @@ function App() {
           }
         />
 
-        {/* =====================================================
-            REMOTE SUPPORT
-           ===================================================== */}
-
         <Route
           path="remote"
           element={
@@ -390,10 +377,6 @@ function App() {
             </PermissionRoute>
           }
         />
-
-        {/* =====================================================
-            REPORTING
-           ===================================================== */}
 
         <Route
           path="reports"
@@ -420,10 +403,6 @@ function App() {
             </PermissionRoute>
           }
         />
-
-        {/* =====================================================
-            ADMINISTRATION
-           ===================================================== */}
 
         <Route
           path="users"
