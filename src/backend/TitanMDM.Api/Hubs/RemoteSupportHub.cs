@@ -79,6 +79,116 @@ public sealed class RemoteSupportHub : Hub
             .OnConnectedAsync();
     }
 
+    public async Task SelectMonitor(
+    Guid sessionId,
+    int monitorIndex)
+{
+    var session =
+        await GetHumanSessionAsync(
+            sessionId,
+            "remote.manage");
+
+    if (
+        monitorIndex < 0
+        ||
+        monitorIndex > 15)
+    {
+        throw new HubException(
+            "Índice de monitor no válido.");
+    }
+
+    await Clients
+        .Group(
+            HostGroup(
+                session.OrganizationId,
+                session.Id))
+        .SendAsync(
+            "SelectMonitor",
+            monitorIndex);
+}
+
+public async Task PreviousMonitor(
+    Guid sessionId)
+{
+    var session =
+        await GetHumanSessionAsync(
+            sessionId,
+            "remote.manage");
+
+    await Clients
+        .Group(
+            HostGroup(
+                session.OrganizationId,
+                session.Id))
+        .SendAsync(
+            "PreviousMonitor");
+}
+
+public async Task NextMonitor(
+    Guid sessionId)
+{
+    var session =
+        await GetHumanSessionAsync(
+            sessionId,
+            "remote.manage");
+
+    await Clients
+        .Group(
+            HostGroup(
+                session.OrganizationId,
+                session.Id))
+        .SendAsync(
+            "NextMonitor");
+}
+
+public async Task RequestMonitorState(
+    Guid sessionId)
+{
+    var session =
+        await GetHumanSessionAsync(
+            sessionId,
+            "remote.view");
+
+    await Clients
+        .Group(
+            HostGroup(
+                session.OrganizationId,
+                session.Id))
+        .SendAsync(
+            "RequestMonitorState");
+}
+
+public async Task PublishMonitorState(
+    Guid sessionId,
+    int selectedMonitorIndex,
+    IReadOnlyList<RemoteMonitorInfoDto> monitors)
+{
+    var remoteHost =
+        ValidateRemoteHost(
+            sessionId);
+
+    if (
+        monitors.Count >
+        16)
+    {
+        throw new HubException(
+            "Cantidad de monitores no válida.");
+    }
+
+    await Clients
+        .Group(
+            TechnicianGroup(
+                remoteHost.OrganizationId,
+                sessionId))
+        .SendAsync(
+            "RemoteMonitorState",
+            new
+            {
+                sessionId,
+                selectedMonitorIndex,
+                monitors
+            });
+}
     public override async Task OnDisconnectedAsync(
         Exception? exception)
     {
@@ -352,72 +462,75 @@ public sealed class RemoteSupportHub : Hub
      * ============================================================
      */
 
-    public async Task PublishFrame(
-        Guid sessionId,
-        long sequence,
-        int width,
-        int height,
-        string mimeType,
-        string base64Data,
-        DateTime capturedAtUtc)
+  public async Task PublishFrame(
+    Guid sessionId,
+    long sequence,
+    int width,
+    int height,
+    string mimeType,
+    string base64Data,
+    DateTime capturedAtUtc,
+    int displayIndex,
+    int displayCount,
+    string displayLabel)
+{
+    var remoteHost =
+        ValidateRemoteHost(
+            sessionId);
+
+    if (
+        width <= 0
+        ||
+        height <= 0)
     {
-        var remoteHost =
-            ValidateRemoteHost(
-                sessionId);
-
-        if (
-            width <= 0
-            ||
-            height <= 0)
-        {
-            throw new HubException(
-                "Dimensiones de frame no válidas.");
-        }
-
-        if (
-            string.IsNullOrWhiteSpace(
-                mimeType))
-        {
-            throw new HubException(
-                "MimeType del frame no válido.");
-        }
-
-        if (
-            string.IsNullOrWhiteSpace(
-                base64Data))
-        {
-            return;
-        }
-
-        /*
-         * Protección básica contra frames excesivamente grandes.
-         */
-        if (
-            base64Data.Length >
-            4_000_000)
-        {
-            throw new HubException(
-                "Frame demasiado grande.");
-        }
-
-        await Clients
-            .Group(
-                TechnicianGroup(
-                    remoteHost.OrganizationId,
-                    sessionId))
-            .SendAsync(
-                "RemoteFrame",
-                new
-                {
-                    sessionId,
-                    sequence,
-                    width,
-                    height,
-                    mimeType,
-                    base64Data,
-                    capturedAtUtc
-                });
+        throw new HubException(
+            "Dimensiones de frame no válidas.");
     }
+
+    if (
+        string.IsNullOrWhiteSpace(
+            mimeType))
+    {
+        throw new HubException(
+            "MimeType del frame no válido.");
+    }
+
+    if (
+        string.IsNullOrWhiteSpace(
+            base64Data))
+    {
+        return;
+    }
+
+    if (
+        base64Data.Length >
+        8_000_000)
+    {
+        throw new HubException(
+            "Frame demasiado grande.");
+    }
+
+    await Clients
+        .Group(
+            TechnicianGroup(
+                remoteHost.OrganizationId,
+                sessionId))
+        .SendAsync(
+            "RemoteFrame",
+            new
+            {
+                sessionId,
+                sequence,
+                width,
+                height,
+                mimeType,
+                base64Data,
+                capturedAtUtc,
+                displayIndex,
+                displayCount,
+                displayLabel
+            });
+}
 
     /*
      * ============================================================
@@ -808,3 +921,11 @@ public sealed class RemoteSupportHub : Hub
             sessionId);
     }
 }
+
+public sealed record RemoteMonitorInfoDto(
+    int Index,
+    string DeviceName,
+    int Width,
+    int Height,
+    bool IsPrimary,
+    string Label);

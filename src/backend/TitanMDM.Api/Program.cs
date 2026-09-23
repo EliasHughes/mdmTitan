@@ -3,15 +3,71 @@ using TitanMDM.Api.Services;
 using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence.Seed;
 
-
 var builder =
-    WebApplication.CreateBuilder(args);
+    WebApplication.CreateBuilder(
+        args);
+
+/*
+ * ================================================================
+ * CONTROLLERS / OPENAPI
+ * ================================================================
+ */
 
 builder.Services.AddControllers();
 
 builder.Services.AddOpenApi();
 
-builder.Services.AddSignalR();
+/*
+ * ================================================================
+ * SIGNALR
+ * ================================================================
+ *
+ * Remote Support transmite frames JPEG en Base64 desde
+ * TitanMDM.RemoteHost hacia el Hub.
+ *
+ * El límite por defecto de SignalR es demasiado pequeño para una
+ * captura de escritorio.
+ *
+ * Mouse y teclado funcionan porque sus mensajes pesan pocos bytes,
+ * pero un frame 1080p comprimido puede superar fácilmente decenas
+ * o cientos de KB.
+ *
+ * Para la fase actual permitimos hasta 8 MB por mensaje.
+ *
+ * Más adelante optimizaremos:
+ *
+ * - resolución dinámica
+ * - calidad JPEG adaptativa
+ * - FPS dinámico
+ * - delta frames
+ * - chunking si fuera necesario
+ * ================================================================
+ */
+
+builder.Services
+    .AddSignalR(
+        options =>
+        {
+            options.MaximumReceiveMessageSize =
+                8 * 1024 * 1024;
+
+            options.EnableDetailedErrors =
+                true;
+
+            options.KeepAliveInterval =
+                TimeSpan.FromSeconds(
+                    10);
+
+            options.ClientTimeoutInterval =
+                TimeSpan.FromSeconds(
+                    30);
+        });
+
+/*
+ * ================================================================
+ * REMOTE SUPPORT SERVICES
+ * ================================================================
+ */
 
 builder.Services.AddSingleton<
     RemoteSupportNotifier>();
@@ -19,8 +75,21 @@ builder.Services.AddSingleton<
 builder.Services.AddSingleton<
     RemoteHostTokenService>();
 
-builder.Services.AddTitanMdmInfrastructure(
-    builder.Configuration);
+/*
+ * ================================================================
+ * INFRASTRUCTURE
+ * ================================================================
+ */
+
+builder.Services
+    .AddTitanMdmInfrastructure(
+        builder.Configuration);
+
+/*
+ * ================================================================
+ * CORS
+ * ================================================================
+ */
 
 builder.Services.AddCors(
     options =>
@@ -41,21 +110,44 @@ builder.Services.AddCors(
 var app =
     builder.Build();
 
-using (var scope =
-       app.Services.CreateScope())
+/*
+ * ================================================================
+ * DATABASE SEED
+ * ================================================================
+ */
+
+using (
+    var scope =
+        app.Services
+            .CreateScope())
 {
     var seeder =
         scope.ServiceProvider
             .GetRequiredService<
                 TitanMdmSeeder>();
 
-    await seeder.SeedAsync();
+    await seeder
+        .SeedAsync();
 }
 
-if (app.Environment.IsDevelopment())
+/*
+ * ================================================================
+ * DEVELOPMENT
+ * ================================================================
+ */
+
+if (
+    app.Environment
+        .IsDevelopment())
 {
     app.MapOpenApi();
 }
+
+/*
+ * ================================================================
+ * HTTP PIPELINE
+ * ================================================================
+ */
 
 app.UseCors(
     "TitanMdmFrontend");
@@ -64,10 +156,29 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
+/*
+ * ================================================================
+ * API
+ * ================================================================
+ */
+
 app.MapControllers();
 
-app.MapHub<RemoteSupportHub>(
-    RemoteSupportHub.Route);
+/*
+ * ================================================================
+ * SIGNALR HUB
+ * ================================================================
+ */
+
+app.MapHub<
+    RemoteSupportHub>(
+        RemoteSupportHub.Route);
+
+/*
+ * ================================================================
+ * ROOT
+ * ================================================================
+ */
 
 app.MapGet(
     "/",
@@ -96,9 +207,18 @@ app.MapGet(
                 remoteSupportHub =
                     RemoteSupportHub.Route,
 
+                remoteFrameMaxMessageBytes =
+                    8 * 1024 * 1024,
+
                 utc =
                     DateTime.UtcNow
             }));
+
+/*
+ * ================================================================
+ * HEALTH
+ * ================================================================
+ */
 
 app.MapGet(
     "/api/health",
@@ -120,6 +240,9 @@ app.MapGet(
 
                 remoteSupport =
                     "Enabled",
+
+                remoteFrameMaxMessageBytes =
+                    8 * 1024 * 1024,
 
                 utc =
                     DateTime.UtcNow

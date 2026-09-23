@@ -149,6 +149,9 @@ public sealed class RemoteTransportClient
 
                     await RegisterRemoteHostAsync(
                         CancellationToken.None);
+                    
+                    await PublishMonitorStateAsync(
+                            cancellationToken);
 
                     StatusChanged?.Invoke(
                         "Conectado");
@@ -241,20 +244,81 @@ public sealed class RemoteTransportClient
         HubConnection connection)
     {
         connection.On<double, double>(
-            "PointerMove",
-            (
+    "PointerMove",
+    (
+        x,
+        y) =>
+    {
+        if (
+            !_session.AllowMouse)
+        {
+            return;
+        }
+
+        var monitorBounds =
+            _captureService
+                .GetSelectedBounds();
+
+        _inputController
+            .MovePointer(
                 x,
-                y) =>
-            {
-                if (
-                    _session.AllowMouse)
-                {
-                    _inputController
-                        .MovePointer(
-                            x,
-                            y);
-                }
-            });
+                y,
+                monitorBounds);
+    });
+
+connection.On<int>(
+    "SelectMonitor",
+    async monitorIndex =>
+    {
+        var selected =
+            _captureService
+                .SelectDisplay(
+                    monitorIndex);
+
+        StatusChanged?.Invoke(
+            $"Transmitiendo · {selected.Label}");
+
+        await PublishMonitorStateAsync(
+            CancellationToken.None);
+    });
+
+connection.On(
+    "NextMonitor",
+    async () =>
+    {
+        var selected =
+            _captureService
+                .SelectNextDisplay();
+
+        StatusChanged?.Invoke(
+            $"Transmitiendo · {selected.Label}");
+
+        await PublishMonitorStateAsync(
+            CancellationToken.None);
+    });
+
+connection.On(
+    "PreviousMonitor",
+    async () =>
+    {
+        var selected =
+            _captureService
+                .SelectPreviousDisplay();
+
+        StatusChanged?.Invoke(
+            $"Transmitiendo · {selected.Label}");
+
+        await PublishMonitorStateAsync(
+            CancellationToken.None);
+    });
+
+connection.On(
+    "RequestMonitorState",
+    async () =>
+    {
+        await PublishMonitorStateAsync(
+            CancellationToken.None);
+    });
 
         connection.On<string>(
             "PointerButton",
@@ -355,6 +419,59 @@ public sealed class RemoteTransportClient
             });
     }
 
+    private async Task PublishMonitorStateAsync(
+    CancellationToken cancellationToken)
+{
+    if (
+        _connection is null
+        ||
+        _connection.State !=
+            HubConnectionState.Connected)
+    {
+        return;
+    }
+
+    var displays =
+        _captureService
+            .GetDisplays();
+
+    var selected =
+        _captureService
+            .GetSelectedDisplay();
+
+    var payload =
+        displays
+            .Select(
+                display =>
+                    new RemoteMonitorInfo(
+                        Index:
+                            display.Index,
+
+                        DeviceName:
+                            display.DeviceName,
+
+                        Width:
+                            display.Width,
+
+                        Height:
+                            display.Height,
+
+                        IsPrimary:
+                            display.IsPrimary,
+
+                        Label:
+                            display.Label))
+            .ToArray();
+
+    await _connection
+        .InvokeAsync(
+            "PublishMonitorState",
+            _session.SessionId,
+            selected.Index,
+            payload,
+            cancellationToken);
+}
+
     /*
      * ============================================================
      * START STREAMING
@@ -418,7 +535,9 @@ public sealed class RemoteTransportClient
                     _captureService
                         .Capture(
                             jpegQuality:
-                                55);
+                                40,
+                                maxWidth:
+                                  1440);
 
                 if (
                     frame.Data.Length ==
@@ -455,6 +574,9 @@ public sealed class RemoteTransportClient
                         frame.MimeType,
                         base64,
                         frame.CapturedAtUtc,
+                        frame.DisplayIndex,
+                        frame.DisplayCount,
+                        frame.DisplayLabel,
                         cancellationToken);
 
                 _framesPublished++;
@@ -477,7 +599,7 @@ public sealed class RemoteTransportClient
                         0)
                 {
                     StatusChanged?.Invoke(
-                        $"Transmitiendo · {_framesPublished} frames");
+                         $"Transmitiendo · {frame.DisplayLabel} · {_framesPublished} frames");
                 }
             }
             catch (
@@ -525,7 +647,7 @@ public sealed class RemoteTransportClient
              * o implementar captura diferencial.
              */
             await DelaySafeAsync(
-                160,
+                110,
                 cancellationToken);
         }
     }
