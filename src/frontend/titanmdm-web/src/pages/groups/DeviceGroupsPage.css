@@ -477,3 +477,135 @@
     min-width: 0;
   }
 }
+.fleet-edit-group {
+  flex: 1;
+  min-width: 0;
+}
+
+.fleet-rule-summary {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.fleet-rule-summary strong {
+  color: #334155;
+  font-size: 10px;
+}
+
+.fleet-rule-summary span {
+  padding: 4px 8px;
+  border: 1px solid #dbe2ef;
+  border-radius: 999px;
+  background: #f8fafc;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.fleet-selected-group > div:last-child {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.fleet-selected-group .fleet-dynamic-rule {
+  margin-bottom: 0;
+}
+
+@media (max-width: 900px) {
+  .fleet-selected-group {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .fleet-edit-group {
+    width: 100%;
+  }
+}
+.fleet-command-info small {
+  margin-top: 4px;
+  color: #64748b;
+  font-size: 10px;
+}
+
+.fleet-command-select {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.fleet-command-select label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .05em;
+  text-transform: uppercase;
+}
+
+.fleet-command-validation {
+  display: flex;
+  align-items: center;
+}
+
+.fleet-command-ready,
+.fleet-command-warning {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.fleet-command-ready {
+  border: 1px solid #bbf7d0;
+  background: #f0fdf4;
+  color: #15803d;
+}
+
+.fleet-command-warning {
+  border: 1px solid #fde68a;
+  background: #fffbeb;
+  color: #b45309;
+}
+
+.fleet-command-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.fleet-spin {
+  animation:
+    fleet-spin
+    .8s
+    linear
+    infinite;
+}
+
+@keyframes fleet-spin {
+  to {
+    transform:
+      rotate(360deg);
+  }
+}
+
+@media (max-width: 1100px) {
+  .fleet-command-actions {
+    justify-content:
+      flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .fleet-spin {
+    animation: none;
+  }
+}
