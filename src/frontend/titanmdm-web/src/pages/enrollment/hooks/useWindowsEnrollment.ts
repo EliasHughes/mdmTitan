@@ -325,11 +325,11 @@ export function useWindowsEnrollment() {
 
           downloadBlob(
             blob,
-            'Install-TitanMDMAgent.ps1',
+             'TitanMDM-Agent-Setup.exe',
           )
 
           setSuccess(
-            'Instalador individual generado. La credencial incluida permite un solo enrolamiento.',
+             'Instalador TitanMDM generado correctamente. La credencial incluida permite un solo enrolamiento.',
           )
 
           await loadTokens()
@@ -397,11 +397,11 @@ export function useWindowsEnrollment() {
 
           downloadBlob(
             blob,
-            'Install-TitanMDMAgent-GPO.ps1',
+             'TitanMDM-GPO.zip',
           )
 
           setSuccess(
-            `Script GPO generado para hasta ${maxUses} equipos.`,
+            `Paquete GPO generado para hasta ${maxUses} equipos.`,
           )
 
           await loadTokens()

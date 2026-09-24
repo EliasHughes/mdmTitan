@@ -10,9 +10,20 @@ public interface IWindowsAgentDistributionService
         CancellationToken cancellationToken =
             default);
 
-    Task<string> BuildBootstrapScriptAsync(
-        string enrollmentToken,
-        string deploymentMode,
-        CancellationToken cancellationToken =
-            default);
+    Task<WindowsDistributionArtifact>
+        BuildIndividualInstallerAsync(
+            string enrollmentToken,
+            CancellationToken cancellationToken =
+                default);
+
+    Task<WindowsDistributionArtifact>
+        BuildGpoPackageAsync(
+            string enrollmentToken,
+            CancellationToken cancellationToken =
+                default);
 }
+
+public sealed record WindowsDistributionArtifact(
+    byte[] Content,
+    string FileName,
+    string ContentType);

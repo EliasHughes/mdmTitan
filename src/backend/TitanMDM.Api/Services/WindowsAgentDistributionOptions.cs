@@ -25,4 +25,32 @@ public sealed class WindowsAgentDistributionOptions
         set;
     } =
         "TitanMDM-WindowsAgent-x64.zip";
+
+    public string ScriptsPath
+    {
+        get;
+        set;
+    } =
+        "../../../scripts/windows";
+
+    public string InnoSetupCompilerPath
+    {
+        get;
+        set;
+    } =
+        @"C:\Program Files (x86)\Inno Setup 6\ISCC.exe";
+
+    public string IndividualInstallerFileName
+    {
+        get;
+        set;
+    } =
+        "TitanMDM-Agent-Setup.exe";
+
+    public string GpoPackageFileName
+    {
+        get;
+        set;
+    } =
+        "TitanMDM-GPO.zip";
 }

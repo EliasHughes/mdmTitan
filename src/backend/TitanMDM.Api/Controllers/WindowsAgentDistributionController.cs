@@ -1,5 +1,4 @@
 using System.Security.Claims;
-using System.Text;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using TitanMDM.Api.Services;
@@ -21,10 +20,8 @@ public sealed class WindowsAgentDistributionController
         _enrollmentService;
 
     public WindowsAgentDistributionController(
-        IWindowsAgentDistributionService
-            distributionService,
-        IEnrollmentService
-            enrollmentService)
+        IWindowsAgentDistributionService distributionService,
+        IEnrollmentService enrollmentService)
     {
         _distributionService =
             distributionService;
@@ -32,19 +29,6 @@ public sealed class WindowsAgentDistributionController
         _enrollmentService =
             enrollmentService;
     }
-
-    /*
-     * ============================================================
-     * WINDOWS AGENT PACKAGE
-     * ============================================================
-     *
-     * El equipo todavía no posee DeviceId / DeviceSecret cuando
-     * descarga el paquete.
-     *
-     * El paquete contiene únicamente binarios.
-     * La autorización de inscripción depende del EnrollmentToken.
-     * ============================================================
-     */
 
     [AllowAnonymous]
     [HttpGet("package")]
@@ -85,12 +69,6 @@ public sealed class WindowsAgentDistributionController
                 });
         }
     }
-
-    /*
-     * ============================================================
-     * PACKAGE INFORMATION
-     * ============================================================
-     */
 
     [Authorize]
     [HttpGet("package-info")]
@@ -152,20 +130,6 @@ public sealed class WindowsAgentDistributionController
         }
     }
 
-    /*
-     * ============================================================
-     * GENERATE INSTALLER
-     * ============================================================
-     *
-     * individual:
-     *      MaxUses siempre será 1.
-     *
-     * gpo:
-     *      MaxUses proviene de la petición y puede ser utilizado
-     *      por múltiples equipos Windows.
-     * ============================================================
-     */
-
     [Authorize]
     [HttpPost("installer")]
     public async Task<IActionResult>
@@ -184,7 +148,7 @@ public sealed class WindowsAgentDistributionController
                 new
                 {
                     message =
-                        "El token de autenticación no contiene una organización válida."
+                        "El token no contiene una organización válida."
                 });
         }
 
@@ -197,14 +161,13 @@ public sealed class WindowsAgentDistributionController
                 new
                 {
                     message =
-                        "El token de autenticación no contiene un usuario válido."
+                        "El token no contiene un usuario válido."
                 });
         }
 
         if (
             string.IsNullOrWhiteSpace(
-                request.DeploymentMode)
-        )
+                request.DeploymentMode))
         {
             return BadRequest(
                 new
@@ -220,12 +183,9 @@ public sealed class WindowsAgentDistributionController
                 .ToLowerInvariant();
 
         if (
-            deploymentMode !=
-                "individual"
+            deploymentMode != "individual"
             &&
-            deploymentMode !=
-                "gpo"
-        )
+            deploymentMode != "gpo")
         {
             return BadRequest(
                 new
@@ -234,13 +194,6 @@ public sealed class WindowsAgentDistributionController
                         "DeploymentMode debe ser individual o gpo."
                 });
         }
-
-        /*
-         * El instalador individual siempre genera una
-         * credencial de un solo uso.
-         *
-         * GPO utiliza el MaxUses indicado desde la UI.
-         */
 
         var maxUses =
             deploymentMode ==
@@ -261,37 +214,32 @@ public sealed class WindowsAgentDistributionController
                             maxUses),
                         cancellationToken);
 
-            var script =
-                await _distributionService
-                    .BuildBootstrapScriptAsync(
-                        enrollmentToken.Token,
-                        deploymentMode,
-                        cancellationToken);
+            WindowsDistributionArtifact artifact;
 
-            var fileName =
+            if (
                 deploymentMode ==
-                    "gpo"
-                    ? "Install-TitanMDMAgent-GPO.ps1"
-                    : "Install-TitanMDMAgent.ps1";
-
-            var bytes =
-                Encoding.UTF8
-                    .GetBytes(
-                        script);
+                "individual")
+            {
+                artifact =
+                    await _distributionService
+                        .BuildIndividualInstallerAsync(
+                            enrollmentToken.Token,
+                            cancellationToken);
+            }
+            else
+            {
+                artifact =
+                    await _distributionService
+                        .BuildGpoPackageAsync(
+                            enrollmentToken.Token,
+                            cancellationToken);
+            }
 
             return File(
-                bytes,
-                "text/plain; charset=utf-8",
-                fileName);
+                artifact.Content,
+                artifact.ContentType,
+                artifact.FileName);
         }
-
-        /*
-         * IMPORTANTE:
-         *
-         * ArgumentOutOfRangeException hereda de ArgumentException.
-         * Por eso debe aparecer primero.
-         */
-
         catch (ArgumentOutOfRangeException ex)
         {
             return BadRequest(
@@ -319,6 +267,15 @@ public sealed class WindowsAgentDistributionController
                         ex.Message
                 });
         }
+        catch (DirectoryNotFoundException ex)
+        {
+            return NotFound(
+                new
+                {
+                    message =
+                        ex.Message
+                });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(
@@ -329,12 +286,6 @@ public sealed class WindowsAgentDistributionController
                 });
         }
     }
-
-    /*
-     * ============================================================
-     * CLAIM HELPERS
-     * ============================================================
-     */
 
     private Guid? GetOrganizationId()
     {
@@ -358,8 +309,7 @@ public sealed class WindowsAgentDistributionController
         if (
             Guid.TryParse(
                 value,
-                out var userId)
-        )
+                out var userId))
         {
             return userId;
         }
@@ -375,12 +325,6 @@ public sealed class WindowsAgentDistributionController
             : null;
     }
 }
-
-/*
- * ================================================================
- * REQUEST CONTRACT
- * ================================================================
- */
 
 public sealed record CreateWindowsInstallerRequest(
     string DeploymentMode,
