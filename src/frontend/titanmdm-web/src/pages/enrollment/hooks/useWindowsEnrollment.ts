@@ -4,7 +4,9 @@ import {
   useState,
 } from 'react'
 
-import { enrollmentApi } from '../../../api/enrollmentApi'
+import {
+  enrollmentApi,
+} from '../../../api/enrollmentApi'
 
 import type {
   CreatedEnrollmentToken,
@@ -16,213 +18,464 @@ import {
   getEffectiveTokenStatus,
 } from '../utils/enrollmentFormatters'
 
+function downloadBlob(
+  blob: Blob,
+  fileName: string,
+) {
+  const url =
+    URL.createObjectURL(
+      blob,
+    )
+
+  const anchor =
+    document.createElement(
+      'a',
+    )
+
+  anchor.href =
+    url
+
+  anchor.download =
+    fileName
+
+  document.body
+    .appendChild(
+      anchor,
+    )
+
+  anchor.click()
+
+  anchor.remove()
+
+  URL.revokeObjectURL(
+    url,
+  )
+}
+
 export function useWindowsEnrollment() {
   const [
     tokens,
     setTokens,
-  ] = useState<EnrollmentToken[]>([])
+  ] =
+    useState<
+      EnrollmentToken[]
+    >([])
 
   const [
     expirationMinutes,
     setExpirationMinutes,
-  ] = useState(60)
+  ] =
+    useState(60)
 
   const [
     maxUses,
     setMaxUses,
-  ] = useState(1)
+  ] =
+    useState(1)
 
   const [
     createdToken,
     setCreatedToken,
   ] =
-    useState<CreatedEnrollmentToken | null>(
-      null,
-    )
+    useState<
+      CreatedEnrollmentToken | null
+    >(null)
 
   const [
     loading,
     setLoading,
-  ] = useState(false)
+  ] =
+    useState(false)
 
   const [
     creating,
     setCreating,
-  ] = useState(false)
+  ] =
+    useState(false)
+
+  const [
+    downloadingIndividual,
+    setDownloadingIndividual,
+  ] =
+    useState(false)
+
+  const [
+    downloadingGpo,
+    setDownloadingGpo,
+  ] =
+    useState(false)
 
   const [
     copied,
     setCopied,
-  ] = useState(false)
+  ] =
+    useState(false)
 
   const [
     error,
     setError,
-  ] = useState<string | null>(null)
+  ] =
+    useState<
+      string | null
+    >(null)
 
   const [
     success,
     setSuccess,
-  ] = useState<string | null>(null)
+  ] =
+    useState<
+      string | null
+    >(null)
 
   const windowsTokens =
     useMemo(
       () =>
         tokens.filter(
-          (token) =>
-            token.platform === 'Windows',
+          token =>
+            token.platform ===
+            'Windows',
         ),
-      [tokens],
+      [
+        tokens,
+      ],
     )
 
   const statistics =
     useMemo(
       () => ({
-        total: windowsTokens.length,
+        total:
+          windowsTokens.length,
 
         active:
           windowsTokens.filter(
-            (token) =>
+            token =>
               getEffectiveTokenStatus(
                 token.status,
                 token.expiresAtUtc,
-              ) === 'Active',
+              ) ===
+              'Active',
           ).length,
 
         expired:
           windowsTokens.filter(
-            (token) =>
+            token =>
               getEffectiveTokenStatus(
                 token.status,
                 token.expiresAtUtc,
-              ) === 'Expired',
+              ) ===
+              'Expired',
           ).length,
 
         revoked:
           windowsTokens.filter(
-            (token) =>
-              token.status === 'Revoked',
+            token =>
+              token.status ===
+              'Revoked',
           ).length,
       }),
-      [windowsTokens],
+      [
+        windowsTokens,
+      ],
     )
 
   const loadTokens =
-    useCallback(async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    useCallback(
+      async () => {
+        try {
+          setLoading(
+            true,
+          )
 
-        const response =
-          await enrollmentApi.getTokens()
+          setError(
+            null,
+          )
 
-        setTokens(response)
-      } catch (requestError) {
-        console.error(requestError)
+          const response =
+            await enrollmentApi
+              .getTokens()
 
-        setError(
-          extractRequestError(
-            requestError,
-            'No fue posible cargar las credenciales Windows.',
-          ),
-        )
-      } finally {
-        setLoading(false)
-      }
-    }, [])
+          setTokens(
+            response,
+          )
+        } catch (
+          requestError
+        ) {
+          setError(
+            extractRequestError(
+              requestError,
+              'No fue posible cargar las credenciales Windows.',
+            ),
+          )
+        } finally {
+          setLoading(
+            false,
+          )
+        }
+      },
+      [],
+    )
 
   const createToken =
-    useCallback(async () => {
-      if (
-        maxUses < 1 ||
-        maxUses > 1000
-      ) {
-        setError(
-          'Los usos permitidos deben estar entre 1 y 1000.',
-        )
+    useCallback(
+      async () => {
+        if (
+          maxUses <
+            1
+          ||
+          maxUses >
+            1000
+        ) {
+          setError(
+            'Los usos permitidos deben estar entre 1 y 1000.',
+          )
 
-        return
-      }
+          return
+        }
 
-      try {
-        setCreating(true)
-        setError(null)
-        setSuccess(null)
-        setCreatedToken(null)
-        setCopied(false)
+        try {
+          setCreating(
+            true,
+          )
 
-        const response =
-          await enrollmentApi.createToken({
-            platform: 'Windows',
-            expirationMinutes,
-            maxUses,
-          })
+          setError(
+            null,
+          )
 
-        setCreatedToken(response)
+          setSuccess(
+            null,
+          )
 
-        setSuccess(
-          'La credencial Windows fue creada correctamente.',
-        )
+          setCreatedToken(
+            null,
+          )
 
-        await loadTokens()
-      } catch (requestError) {
-        console.error(requestError)
+          setCopied(
+            false,
+          )
 
-        setError(
-          extractRequestError(
-            requestError,
-            'No fue posible crear la credencial Windows.',
-          ),
-        )
-      } finally {
-        setCreating(false)
-      }
-    }, [
-      expirationMinutes,
-      maxUses,
-      loadTokens,
-    ])
+          const response =
+            await enrollmentApi
+              .createToken({
+                platform:
+                  'Windows',
+
+                expirationMinutes,
+
+                maxUses,
+              })
+
+          setCreatedToken(
+            response,
+          )
+
+          setSuccess(
+            'La credencial Windows fue creada correctamente.',
+          )
+
+          await loadTokens()
+        } catch (
+          requestError
+        ) {
+          setError(
+            extractRequestError(
+              requestError,
+              'No fue posible crear la credencial Windows.',
+            ),
+          )
+        } finally {
+          setCreating(
+            false,
+          )
+        }
+      },
+      [
+        expirationMinutes,
+        maxUses,
+        loadTokens,
+      ],
+    )
+
+  const downloadIndividualInstaller =
+    useCallback(
+      async () => {
+        try {
+          setDownloadingIndividual(
+            true,
+          )
+
+          setError(
+            null,
+          )
+
+          setSuccess(
+            null,
+          )
+
+          const blob =
+            await enrollmentApi
+              .downloadWindowsInstaller({
+                deploymentMode:
+                  'individual',
+
+                expirationMinutes,
+
+                maxUses:
+                  1,
+              })
+
+          downloadBlob(
+            blob,
+            'Install-TitanMDMAgent.ps1',
+          )
+
+          setSuccess(
+            'Instalador individual generado. La credencial incluida permite un solo enrolamiento.',
+          )
+
+          await loadTokens()
+        } catch (
+          requestError
+        ) {
+          setError(
+            extractRequestError(
+              requestError,
+              'No fue posible generar el instalador Windows.',
+            ),
+          )
+        } finally {
+          setDownloadingIndividual(
+            false,
+          )
+        }
+      },
+      [
+        expirationMinutes,
+        loadTokens,
+      ],
+    )
+
+  const downloadGpoInstaller =
+    useCallback(
+      async () => {
+        if (
+          maxUses <
+            1
+          ||
+          maxUses >
+            1000
+        ) {
+          setError(
+            'Para GPO, MaxUses debe estar entre 1 y 1000.',
+          )
+
+          return
+        }
+
+        try {
+          setDownloadingGpo(
+            true,
+          )
+
+          setError(
+            null,
+          )
+
+          setSuccess(
+            null,
+          )
+
+          const blob =
+            await enrollmentApi
+              .downloadWindowsInstaller({
+                deploymentMode:
+                  'gpo',
+
+                expirationMinutes,
+
+                maxUses,
+              })
+
+          downloadBlob(
+            blob,
+            'Install-TitanMDMAgent-GPO.ps1',
+          )
+
+          setSuccess(
+            `Script GPO generado para hasta ${maxUses} equipos.`,
+          )
+
+          await loadTokens()
+        } catch (
+          requestError
+        ) {
+          setError(
+            extractRequestError(
+              requestError,
+              'No fue posible generar el script GPO.',
+            ),
+          )
+        } finally {
+          setDownloadingGpo(
+            false,
+          )
+        }
+      },
+      [
+        expirationMinutes,
+        maxUses,
+        loadTokens,
+      ],
+    )
 
   const revokeToken =
     useCallback(
       async (
-        token: EnrollmentToken,
+        token:
+          EnrollmentToken,
       ) => {
-        const effectiveStatus =
+        const status =
           getEffectiveTokenStatus(
             token.status,
             token.expiresAtUtc,
           )
 
-        if (effectiveStatus !== 'Active') {
+        if (
+          status !==
+          'Active'
+        ) {
           return
         }
 
-        const confirmed =
-          window.confirm(
+        if (
+          !window.confirm(
             '¿Deseas revocar esta credencial Windows?',
           )
-
-        if (!confirmed) {
+        ) {
           return
         }
 
         try {
-          setError(null)
-          setSuccess(null)
-
-          await enrollmentApi.revokeToken(
-            token.id,
+          setError(
+            null,
           )
+
+          setSuccess(
+            null,
+          )
+
+          await enrollmentApi
+            .revokeToken(
+              token.id,
+            )
 
           setSuccess(
             'La credencial Windows fue revocada.',
           )
 
           await loadTokens()
-        } catch (requestError) {
-          console.error(requestError)
-
+        } catch (
+          requestError
+        ) {
           setError(
             extractRequestError(
               requestError,
@@ -231,37 +484,53 @@ export function useWindowsEnrollment() {
           )
         }
       },
-      [loadTokens],
+      [
+        loadTokens,
+      ],
     )
 
   const copyToken =
-    useCallback(async () => {
-      if (!createdToken) {
-        return
-      }
+    useCallback(
+      async () => {
+        if (
+          !createdToken
+        ) {
+          return
+        }
 
-      try {
-        await navigator.clipboard.writeText(
-          createdToken.token,
-        )
+        try {
+          await navigator
+            .clipboard
+            .writeText(
+              createdToken.token,
+            )
 
-        setCopied(true)
+          setCopied(
+            true,
+          )
 
-        window.setTimeout(
-          () => setCopied(false),
-          2500,
-        )
-      } catch (copyError) {
-        console.error(copyError)
-
-        setError(
-          'No fue posible copiar la credencial Windows.',
-        )
-      }
-    }, [createdToken])
+          window.setTimeout(
+            () =>
+              setCopied(
+                false,
+              ),
+            2500,
+          )
+        } catch {
+          setError(
+            'No fue posible copiar la credencial Windows.',
+          )
+        }
+      },
+      [
+        createdToken,
+      ],
+    )
 
   return {
-    tokens: windowsTokens,
+    tokens:
+      windowsTokens,
+
     statistics,
 
     expirationMinutes,
@@ -274,6 +543,10 @@ export function useWindowsEnrollment() {
 
     loading,
     creating,
+
+    downloadingIndividual,
+    downloadingGpo,
+
     copied,
 
     error,
@@ -281,10 +554,16 @@ export function useWindowsEnrollment() {
 
     loadTokens,
     createToken,
+
+    downloadIndividualInstaller,
+    downloadGpoInstaller,
+
     revokeToken,
     copyToken,
   }
 }
 
 export type WindowsEnrollmentController =
-  ReturnType<typeof useWindowsEnrollment>
+  ReturnType<
+    typeof useWindowsEnrollment
+  >
