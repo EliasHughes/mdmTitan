@@ -1409,8 +1409,9 @@ export function RemotePage() {
    */
 
   return (
-    <div
-      style={{
+  <div
+    className="remote-page"
+    style={{
         display:
           'grid',
 

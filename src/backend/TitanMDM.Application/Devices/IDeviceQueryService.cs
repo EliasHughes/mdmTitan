@@ -8,6 +8,9 @@ public interface IDeviceQueryService
         string? platform,
         string? status,
         string? compliance,
+        bool? managed,
+        string? sortBy,
+        string? sortDirection,
         int page,
         int pageSize,
         CancellationToken cancellationToken = default);
@@ -19,6 +22,12 @@ public interface IDeviceQueryService
 
     Task<AndroidDeviceDetailsDto?>
         GetAndroidDeviceDetailsAsync(
+            Guid organizationId,
+            Guid deviceId,
+            CancellationToken cancellationToken = default);
+
+    Task<DeviceOperationalSnapshotDto?>
+        GetOperationalSnapshotAsync(
             Guid organizationId,
             Guid deviceId,
             CancellationToken cancellationToken = default);

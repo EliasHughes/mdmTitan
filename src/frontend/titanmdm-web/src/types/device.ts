@@ -116,3 +116,44 @@ export interface AndroidDeviceDetails {
   isDeletedInGoogle: boolean
   deletedInGoogleAtUtc: string | null
 }
+
+export interface DeviceGroupMembership {
+  id: string
+  name: string
+  isDynamic: boolean
+  source: string
+}
+
+export interface DeviceSecuritySummary {
+  complianceScore: number
+  riskLevel: string
+  complianceStatus: string
+  agentInstalled: boolean
+  agentVersionName: string
+  lastSecurityScanAtUtc: string | null
+  lastComplianceCheckAtUtc: string | null
+}
+
+export interface DeviceCommandSnapshot {
+  id: string
+  commandType: string
+  status: string
+  createdAtUtc: string
+  completedAtUtc: string | null
+  resultJson: string | null
+  errorCode: string | null
+  errorMessage: string | null
+}
+
+export interface DeviceOperationalSnapshot {
+  device: DeviceDetails
+  groups: DeviceGroupMembership[]
+  security: DeviceSecuritySummary | null
+
+  latestResults: Record<
+    string,
+    DeviceCommandSnapshot
+  >
+
+  lastInventoryAtUtc: string | null
+}

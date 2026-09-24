@@ -1,23 +1,37 @@
 @import './styles/titan-theme.css';
 @import './styles/titan-motion.css';
+@import './styles/titan-shell.css';
 
 html,
 body,
 #root {
-  margin: 0;
+  width: 100%;
+  min-width: 320px;
   min-height: 100%;
+  margin: 0;
 }
 
 body {
+  min-height: 100vh;
+
   font-family:
     'Segoe UI',
     Inter,
     system-ui,
+    -apple-system,
+    BlinkMacSystemFont,
     sans-serif;
+
+  background:
+    var(--titan-bg);
+
+  color:
+    var(--titan-text);
 }
 
 a {
   color: inherit;
+
   text-decoration: none;
 }
 
@@ -26,6 +40,10 @@ input,
 select,
 textarea {
   font: inherit;
+}
+
+button {
+  cursor: pointer;
 }
 
 img,
