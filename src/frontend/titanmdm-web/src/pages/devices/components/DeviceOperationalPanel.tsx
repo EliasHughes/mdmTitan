@@ -166,69 +166,70 @@ function calculateHealth(
     value: string
   }[] = []
 
+  /*
+   * Administración
+   * 25 puntos
+   */
   const managed =
     snapshot.device
       .isManaged
 
   score +=
     managed
-      ? 20
+      ? 25
       : 0
 
   checks.push({
     label:
       'Administración',
+
     ok:
       managed,
+
     value:
       managed
         ? 'Administrado'
         : 'No administrado',
   })
 
-  const online =
+  /*
+   * Cumplimiento
+   * 25 puntos
+   */
+  const compliance =
     snapshot.device
-      .status ===
-      'Online'
-
-  score +=
-    online
-      ? 20
-      : 5
-
-  checks.push({
-    label:
-      'Conectividad',
-    ok:
-      online,
-    value:
-      snapshot.device.status,
-  })
+      .complianceStatus
 
   const compliant =
-    snapshot.device
-      .complianceStatus ===
-      'Compliant'
+    compliance ===
+    'Compliant'
+
+  const unknownCompliance =
+    compliance ===
+    'Unknown'
 
   score +=
     compliant
       ? 25
-      : snapshot.device
-          .complianceStatus ===
-        'Unknown'
+      : unknownCompliance
         ? 10
         : 0
 
   checks.push({
     label:
       'Cumplimiento',
+
     ok:
       compliant,
+
     value:
-      snapshot.device
-        .complianceStatus,
+      compliance,
   })
 
+  /*
+   * Agente
+   * 20 puntos
+   */
   const agent =
     Boolean(
       snapshot.device
@@ -242,14 +243,16 @@ function calculateHealth(
 
   score +=
     agent
-      ? 15
+      ? 20
       : 0
 
   checks.push({
     label:
       'Agente',
+
     ok:
       agent,
+
     value:
       snapshot.device
         .agentVersion
@@ -260,6 +263,10 @@ function calculateHealth(
       'No detectado',
   })
 
+  /*
+   * Telemetría
+   * 15 puntos
+   */
   const lastSeen =
     snapshot.device
       .lastSeenAtUtc
@@ -270,26 +277,28 @@ function calculateHealth(
       : null
 
   const recent =
-    lastSeen
-      ? Date.now() -
-          lastSeen.getTime()
-        <
-        24 *
-          60 *
-          60 *
-          1000
-      : false
+    lastSeen !== null
+    &&
+    Date.now() -
+      lastSeen.getTime()
+      <
+      24 *
+        60 *
+        60 *
+        1000
 
   score +=
     recent
-      ? 10
+      ? 15
       : 0
 
   checks.push({
     label:
       'Telemetría',
+
     ok:
       recent,
+
     value:
       formatDate(
         snapshot.device
@@ -297,6 +306,10 @@ function calculateHealth(
       ),
   })
 
+  /*
+   * Seguridad
+   * 15 puntos
+   */
   const securityScore =
     snapshot.security
       ?.complianceScore
@@ -305,18 +318,33 @@ function calculateHealth(
     securityScore !==
     undefined
   ) {
+    const normalizedSecurity =
+      Math.max(
+        0,
+        Math.min(
+          100,
+          securityScore,
+        ),
+      )
+
     score +=
       Math.round(
-        securityScore *
-        0.1,
+        normalizedSecurity *
+        0.15,
       )
   } else {
-    score += 5
+    /*
+     * No castigamos excesivamente
+     * un equipo que todavía no ha
+     * sido evaluado.
+     */
+    score += 7
   }
 
   checks.push({
     label:
       'Seguridad',
+
     ok:
       securityScore !==
         undefined
@@ -331,11 +359,39 @@ function calculateHealth(
         : 'Sin evaluación',
   })
 
+  /*
+   * La conectividad se muestra como
+   * indicador operacional, pero no
+   * modifica el Health Score.
+   *
+   * Un equipo apagado no equivale
+   * necesariamente a un equipo enfermo.
+   */
+  const online =
+    snapshot.device
+      .status ===
+      'Online'
+
+  checks.push({
+    label:
+      'Conectividad',
+
+    ok:
+      online,
+
+    value:
+      snapshot.device
+        .status,
+  })
+
   return {
     score:
-      Math.min(
-        100,
-        score,
+      Math.max(
+        0,
+        Math.min(
+          100,
+          score,
+        ),
       ),
 
     checks,
