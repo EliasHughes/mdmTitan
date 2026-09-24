@@ -429,40 +429,40 @@ public sealed class DeviceQueryService
         }
 
         var groups =
-            await (
-                from member
-                    in _dbContext
-                        .DeviceGroupMembers
-                        .AsNoTracking()
+    await (
+        from member
+            in _dbContext
+                .DeviceGroupMembers
+                .AsNoTracking()
 
-                join group
-                    in _dbContext
-                        .DeviceGroups
-                        .AsNoTracking()
+        join deviceGroup
+            in _dbContext
+                .DeviceGroups
+                .AsNoTracking()
 
-                    on member.GroupId
-                    equals group.Id
+            on member.GroupId
+            equals deviceGroup.Id
 
-                where
-                    member.OrganizationId ==
-                        organizationId
-                    &&
-                    member.DeviceId ==
-                        deviceId
-                    &&
-                    group.OrganizationId ==
-                        organizationId
+        where
+            member.OrganizationId ==
+                organizationId
+            &&
+            member.DeviceId ==
+                deviceId
+            &&
+            deviceGroup.OrganizationId ==
+                organizationId
 
-                orderby group.Name
+        orderby deviceGroup.Name
 
-                select
-                    new DeviceGroupMembershipDto(
-                        group.Id,
-                        group.Name,
-                        group.IsDynamic,
-                        member.Source))
-                .ToListAsync(
-                    cancellationToken);
+        select
+            new DeviceGroupMembershipDto(
+                deviceGroup.Id,
+                deviceGroup.Name,
+                deviceGroup.IsDynamic,
+                member.Source))
+        .ToListAsync(
+            cancellationToken);
 
         var posture =
             await _dbContext
