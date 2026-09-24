@@ -1100,3 +1100,245 @@
     align-self: flex-start;
   }
 }
+
+/* ============================================================
+   WINDOWS DEPLOYMENT
+   ============================================================ */
+
+.windows-deployment-grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+
+  gap: 18px;
+
+  padding: 22px;
+}
+
+.windows-deployment-card {
+  display: flex;
+  flex-direction: column;
+
+  min-width: 0;
+  min-height: 330px;
+
+  padding: 22px;
+
+  border: 1px solid #dbe4f0;
+  border-radius: 14px;
+
+  background:
+    linear-gradient(
+      145deg,
+      #ffffff 0%,
+      #f8fbff 100%
+    );
+
+  box-shadow:
+    0 4px 18px
+    rgba(15, 23, 42, 0.04);
+}
+
+.windows-deployment-card__header {
+  display: flex;
+  align-items: center;
+
+  gap: 14px;
+}
+
+.windows-deployment-icon {
+  width: 46px;
+  height: 46px;
+
+  flex: 0 0 46px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 12px;
+
+  color: #ffffff;
+  background:
+    linear-gradient(
+      135deg,
+      #2563eb,
+      #1d4ed8
+    );
+
+  font-size: 18px;
+  font-weight: 800;
+
+  box-shadow:
+    0 7px 18px
+    rgba(37, 99, 235, 0.18);
+}
+
+.windows-deployment-eyebrow {
+  display: block;
+
+  margin-bottom: 4px;
+
+  color: #64748b;
+
+  font-size: 10px;
+  font-weight: 800;
+
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.windows-deployment-card h3 {
+  margin: 0;
+
+  color: #0f172a;
+
+  font-size: 17px;
+}
+
+.windows-deployment-card > p {
+  margin: 18px 0 0;
+
+  color: #64748b;
+
+  font-size: 13px;
+  line-height: 1.65;
+}
+
+.windows-deployment-features {
+  display: flex;
+  flex-direction: column;
+
+  gap: 9px;
+
+  margin: 18px 0 22px;
+}
+
+.windows-deployment-features span {
+  color: #475569;
+
+  font-size: 12px;
+  line-height: 1.4;
+}
+
+.windows-deployment-card
+.enrollment-primary-button {
+  width: 100%;
+
+  margin-top: auto;
+}
+
+.windows-gpo-button {
+  background: #1e40af;
+}
+
+.windows-gpo-button:hover:not(:disabled) {
+  background: #1e3a8a;
+}
+
+.windows-deployment-note {
+  display: block;
+
+  margin-top: 10px;
+
+  color: #94a3b8;
+
+  font-size: 11px;
+  line-height: 1.5;
+
+  text-align: center;
+}
+
+/* ============================================================
+   WINDOWS INSTALLATION STEPS
+   ============================================================ */
+
+.windows-installation-steps {
+  display: grid;
+
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+
+  gap: 14px;
+
+  padding: 22px;
+}
+
+.windows-installation-steps article {
+  display: flex;
+  align-items: flex-start;
+
+  gap: 12px;
+
+  min-width: 0;
+
+  padding: 16px;
+
+  border: 1px solid #e2e8f0;
+  border-radius: 11px;
+
+  background: #f8fafc;
+}
+
+.windows-installation-step {
+  width: 34px;
+  height: 34px;
+
+  flex: 0 0 34px;
+
+  display: grid;
+  place-items: center;
+
+  border-radius: 9px;
+
+  color: #1d4ed8;
+  background: #dbeafe;
+
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.windows-installation-steps strong {
+  display: block;
+
+  color: #1e293b;
+
+  font-size: 13px;
+}
+
+.windows-installation-steps p {
+  margin: 5px 0 0;
+
+  color: #64748b;
+
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+/* ============================================================
+   WINDOWS DEPLOYMENT RESPONSIVE
+   ============================================================ */
+
+@media (max-width: 1050px) {
+  .windows-installation-steps {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 760px) {
+  .windows-deployment-grid {
+    grid-template-columns: 1fr;
+
+    padding: 16px;
+  }
+
+  .windows-deployment-card {
+    min-height: auto;
+  }
+
+  .windows-installation-steps {
+    grid-template-columns: 1fr;
+
+    padding: 16px;
+  }
+}

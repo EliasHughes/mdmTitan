@@ -3,14 +3,19 @@ import apiClient from './apiClient'
 import type {
   CreateEnrollmentTokenRequest,
   CreatedEnrollmentToken,
+  CreateWindowsInstallerRequest,
   EnrollmentToken,
   EnrollmentTokenValidationResult,
+  WindowsAgentPackageInfo,
 } from '../types/enrollment'
 
 export const enrollmentApi = {
-  async getTokens(): Promise<EnrollmentToken[]> {
+  async getTokens():
+    Promise<EnrollmentToken[]> {
     const response =
-      await apiClient.get<EnrollmentToken[]>(
+      await apiClient.get<
+        EnrollmentToken[]
+      >(
         '/enrollment/tokens',
       )
 
@@ -18,10 +23,13 @@ export const enrollmentApi = {
   },
 
   async createToken(
-    request: CreateEnrollmentTokenRequest,
+    request:
+      CreateEnrollmentTokenRequest,
   ): Promise<CreatedEnrollmentToken> {
     const response =
-      await apiClient.post<CreatedEnrollmentToken>(
+      await apiClient.post<
+        CreatedEnrollmentToken
+      >(
         '/enrollment/tokens',
         request,
       )
@@ -30,7 +38,8 @@ export const enrollmentApi = {
   },
 
   async revokeToken(
-    enrollmentTokenId: string,
+    enrollmentTokenId:
+      string,
   ): Promise<void> {
     await apiClient.post(
       `/enrollment/tokens/${enrollmentTokenId}/revoke`,
@@ -38,15 +47,48 @@ export const enrollmentApi = {
   },
 
   async validateToken(
-    token: string,
-    platform: string,
+    token:
+      string,
+    platform:
+      string,
   ): Promise<EnrollmentTokenValidationResult> {
     const response =
-      await apiClient.post<EnrollmentTokenValidationResult>(
+      await apiClient.post<
+        EnrollmentTokenValidationResult
+      >(
         '/enrollment/validate',
         {
           token,
           platform,
+        },
+      )
+
+    return response.data
+  },
+
+  async getWindowsPackageInfo():
+    Promise<WindowsAgentPackageInfo> {
+    const response =
+      await apiClient.get<
+        WindowsAgentPackageInfo
+      >(
+        '/enrollment/windows/package-info',
+      )
+
+    return response.data
+  },
+
+  async downloadWindowsInstaller(
+    request:
+      CreateWindowsInstallerRequest,
+  ): Promise<Blob> {
+    const response =
+      await apiClient.post(
+        '/enrollment/windows/installer',
+        request,
+        {
+          responseType:
+            'blob',
         },
       )
 
