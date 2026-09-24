@@ -16,12 +16,19 @@ import {
   Eye,
   EyeOff,
   LockKeyhole,
+  Monitor,
   ShieldCheck,
   Smartphone,
-  Monitor,
 } from 'lucide-react'
 
 import { useAuth } from '../auth/AuthContext'
+
+import {
+  TitanLoginRobot,
+  type TitanLoginRobotMode,
+} from './login/TitanLoginRobot'
+
+import './LoginPage.css'
 
 interface LocationState {
   from?: string
@@ -53,18 +60,55 @@ export function LoginPage() {
   const [isSubmitting, setIsSubmitting] =
     useState(false)
 
+  const [
+    robotMode,
+    setRobotMode,
+  ] =
+    useState<TitanLoginRobotMode>(
+      'idle',
+    )
+
+  const [
+    transitionPhase,
+    setTransitionPhase,
+  ] = useState(false)
+
+  const [
+    postLoginAnimation,
+    setPostLoginAnimation,
+  ] = useState(false)
+
   useEffect(() => {
     document.title =
       'Iniciar sesión | TitanMDM'
   }, [])
 
-  if (isAuthenticated) {
+  const redirectTo =
+    (
+      location.state as
+        | LocationState
+        | null
+    )?.from || '/'
+
+  if (
+    isAuthenticated &&
+    !postLoginAnimation
+  ) {
     return (
       <Navigate
-        to="/"
+        to={redirectTo}
         replace
       />
     )
+  }
+
+  function backToIdle() {
+    if (
+      !isSubmitting &&
+      !transitionPhase
+    ) {
+      setRobotMode('idle')
+    }
   }
 
   const handleSubmit =
@@ -76,7 +120,9 @@ export function LoginPage() {
       setError('')
 
       const normalizedEmail =
-        email.trim().toLowerCase()
+        email
+          .trim()
+          .toLowerCase()
 
       if (
         !normalizedEmail ||
@@ -86,10 +132,22 @@ export function LoginPage() {
           'Ingresa tu correo electrónico y contraseña.',
         )
 
+        setRobotMode('error')
+
+        window.setTimeout(() => {
+          if (
+            !isSubmitting &&
+            !transitionPhase
+          ) {
+            setRobotMode('idle')
+          }
+        }, 1300)
+
         return
       }
 
       setIsSubmitting(true)
+      setRobotMode('authenticating')
 
       try {
         await login({
@@ -97,21 +155,28 @@ export function LoginPage() {
           password,
         })
 
-        const state =
-          location.state as
-            | LocationState
-            | null
+        setPostLoginAnimation(true)
+        setRobotMode('success')
 
-        navigate(
-          state?.from || '/',
-          {
-            replace: true,
-          },
-        )
+        window.setTimeout(() => {
+          setTransitionPhase(true)
+          setRobotMode('launch')
+        }, 620)
+
+        window.setTimeout(() => {
+          navigate(
+            redirectTo,
+            {
+              replace: true,
+            },
+          )
+        }, 1850)
       } catch (requestError) {
-        if (axios.isAxiosError(
-          requestError,
-        )) {
+        if (
+          axios.isAxiosError(
+            requestError,
+          )
+        ) {
           if (
             requestError.response
               ?.status === 401
@@ -135,13 +200,30 @@ export function LoginPage() {
             'Ocurrió un error inesperado.',
           )
         }
-      } finally {
+
         setIsSubmitting(false)
+        setRobotMode('error')
+
+        window.setTimeout(() => {
+          if (
+            !transitionPhase
+          ) {
+            setRobotMode('idle')
+          }
+        }, 1800)
       }
     }
 
   return (
-    <main className="login-page">
+    <main
+      className={
+        `login-page ${
+          transitionPhase
+            ? 'login-page--transitioning'
+            : ''
+        }`
+      }
+    >
       <section className="login-brand">
         <div className="login-brand__content">
           <div className="brand">
@@ -172,11 +254,9 @@ export function LoginPage() {
             </h1>
 
             <p>
-              Administra dispositivos
-              Android y Windows desde una
-              plataforma segura,
-              centralizada y preparada
-              para crecer.
+              Administra dispositivos Android y Windows
+              desde una plataforma segura, centralizada
+              y preparada para crecer.
             </p>
 
             <div className="platforms">
@@ -204,125 +284,195 @@ export function LoginPage() {
       </section>
 
       <section className="login-panel">
-        <div className="login-card">
-          <div className="login-card__mobile-brand">
-            <div className="brand__mark">
-              T
-            </div>
+        <div className="login-scene">
+          <div className="login-card-scene">
+            <TitanLoginRobot
+              mode={robotMode}
+              emailValue={email}
+              showPassword={showPassword}
+            />
 
-            <strong>
-              TitanMDM
-            </strong>
-          </div>
+            <div className="login-card">
+              <div className="login-card__mobile-brand">
+                <div className="brand__mark">
+                  T
+                </div>
 
-          <div className="login-card__heading">
-            <div className="login-icon">
-              <LockKeyhole size={23} />
-            </div>
+                <div>
+                  <strong>
+                    TitanMDM
+                  </strong>
 
-            <h2>
-              Bienvenido
-            </h2>
+                  <span>
+                    Enterprise
+                  </span>
+                </div>
+              </div>
 
-            <p>
-              Ingresa tus credenciales
-              para acceder a la consola.
-            </p>
-          </div>
+              <div className="login-card__heading">
+                <div className="login-icon">
+                  <LockKeyhole size={23} />
+                </div>
 
-          <form
-            onSubmit={handleSubmit}
-            className="login-form"
-          >
-            <label>
-              Correo electrónico
+                <h2>
+                  Bienvenido
+                </h2>
 
-              <input
-                type="email"
-                value={email}
-                autoComplete="username"
-                placeholder="usuario@empresa.com"
-                disabled={isSubmitting}
-                onChange={(event) =>
-                  setEmail(
-                    event.target.value,
-                  )
-                }
-              />
-            </label>
+                <p>
+                  Ingresa tus credenciales para acceder a la consola.
+                </p>
+              </div>
 
-            <label>
-              Contraseña
+              <form
+                onSubmit={handleSubmit}
+                className="login-form"
+              >
+                <label>
+                  Correo electrónico
 
-              <div className="password-field">
-                <input
-                  type={
-                    showPassword
-                      ? 'text'
-                      : 'password'
-                  }
-                  value={password}
-                  autoComplete="current-password"
-                  placeholder="Ingresa tu contraseña"
-                  disabled={isSubmitting}
-                  onChange={(event) =>
-                    setPassword(
-                      event.target.value,
-                    )
-                  }
-                />
+                  <input
+                    type="email"
+                    value={email}
+                    autoComplete="username"
+                    placeholder="usuario@empresa.com"
+                    disabled={
+                      isSubmitting ||
+                      transitionPhase
+                    }
+                    onFocus={() =>
+                      setRobotMode('email')
+                    }
+                    onBlur={backToIdle}
+                    onChange={(event) =>
+                      setEmail(
+                        event.target.value,
+                      )
+                    }
+                  />
+                </label>
+
+                <label>
+                  Contraseña
+
+                  <div className="password-field">
+                    <input
+                      type={
+                        showPassword
+                          ? 'text'
+                          : 'password'
+                      }
+                      value={password}
+                      autoComplete="current-password"
+                      placeholder="Ingresa tu contraseña"
+                      disabled={
+                        isSubmitting ||
+                        transitionPhase
+                      }
+                      onFocus={() =>
+                        setRobotMode('password')
+                      }
+                      onBlur={backToIdle}
+                      onChange={(event) =>
+                        setPassword(
+                          event.target.value,
+                        )
+                      }
+                    />
+
+                    <button
+                      type="button"
+                      className="password-toggle"
+                      aria-label={
+                        showPassword
+                          ? 'Ocultar contraseña'
+                          : 'Mostrar contraseña'
+                      }
+                      disabled={
+                        isSubmitting ||
+                        transitionPhase
+                      }
+                      onClick={() => {
+                        setShowPassword(
+                          current => !current,
+                        )
+
+                        setRobotMode('password')
+                      }}
+                    >
+                      {showPassword ? (
+                        <EyeOff size={19} />
+                      ) : (
+                        <Eye size={19} />
+                      )}
+                    </button>
+                  </div>
+                </label>
+
+                {error && (
+                  <div
+                    className="login-error"
+                    role="alert"
+                  >
+                    {error}
+                  </div>
+                )}
 
                 <button
-                  type="button"
-                  className="password-toggle"
-                  aria-label={
-                    showPassword
-                      ? 'Ocultar contraseña'
-                      : 'Mostrar contraseña'
-                  }
-                  onClick={() =>
-                    setShowPassword(
-                      (current) =>
-                        !current,
-                    )
+                  type="submit"
+                  className="login-submit"
+                  disabled={
+                    isSubmitting ||
+                    transitionPhase
                   }
                 >
-                  {showPassword ? (
-                    <EyeOff size={19} />
-                  ) : (
-                    <Eye size={19} />
-                  )}
+                  {isSubmitting
+                    ? 'Verificando...'
+                    : 'Iniciar sesión'}
                 </button>
+              </form>
+
+              <div className="login-security">
+                <ShieldCheck size={17} />
+
+                <span>
+                  Acceso protegido por TitanMDM Security
+                </span>
               </div>
-            </label>
+            </div>
 
-            {error && (
-              <div
-                className="login-error"
-                role="alert"
-              >
-                {error}
-              </div>
-            )}
+            {transitionPhase && (
+  <div className="login-titan-transition">
+    <div className="login-titan-transition__grid" />
 
-            <button
-              type="submit"
-              className="login-submit"
-              disabled={isSubmitting}
-            >
-              {isSubmitting
-                ? 'Verificando...'
-                : 'Iniciar sesión'}
-            </button>
-          </form>
+    <div className="login-titan-transition__beam" />
 
-          <div className="login-security">
-            <ShieldCheck size={17} />
+    <div className="login-titan-transition__ring login-titan-transition__ring--1" />
+    <div className="login-titan-transition__ring login-titan-transition__ring--2" />
+    <div className="login-titan-transition__ring login-titan-transition__ring--3" />
 
-            <span>
-              Acceso protegido por
-              TitanMDM Security
-            </span>
+    <div className="login-titan-transition__content">
+      <div className="login-titan-transition__mark">
+        T
+      </div>
+
+      <span>
+        TITANMDM
+      </span>
+
+      <h2>
+        Acceso autorizado
+      </h2>
+
+      <p>
+        Inicializando consola empresarial...
+      </p>
+
+      <div className="login-titan-transition__progress">
+        <span />
+      </div>
+    </div>
+  </div>
+)}
           </div>
         </div>
       </section>
