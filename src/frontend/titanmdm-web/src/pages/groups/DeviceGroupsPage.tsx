@@ -3,9 +3,11 @@ import {
   CheckCircle2,
   ChevronRight,
   Cpu,
+  Edit3,
   Laptop,
   Plus,
   RefreshCw,
+  Save,
   Search,
   Send,
   ShieldCheck,
@@ -17,6 +19,7 @@ import {
   WifiOff,
   X,
 } from 'lucide-react'
+
 import {
   useCallback,
   useEffect,
@@ -31,7 +34,9 @@ import {
   type DeviceGroupDetails,
 } from '../../api/deviceGroupsApi'
 
-import { devicesApi } from '../../api/devicesApi'
+import {
+  devicesApi,
+} from '../../api/devicesApi'
 
 import type {
   DeviceListItem,
@@ -43,193 +48,465 @@ type GroupMode =
   | 'static'
   | 'dynamic'
 
+type PlatformFilter =
+  | 'All'
+  | 'Windows'
+  | 'Android'
+
+type StatusFilter =
+  | 'All'
+  | 'Online'
+  | 'Offline'
+  | 'Quarantined'
+
 const commandOptions = [
   {
     value: 'PING',
     label: 'Ping',
+    windowsOnly: false,
   },
   {
     value: 'DEVICE_INFO',
     label: 'Actualizar información',
+    windowsOnly: false,
+  },
+  {
+    value: 'DEVICE_INVENTORY',
+    label: 'Inventario completo',
+    windowsOnly: true,
   },
   {
     value: 'APP_INVENTORY',
     label: 'Inventario de aplicaciones',
+    windowsOnly: false,
+  },
+  {
+    value: 'PROCESS_INVENTORY',
+    label: 'Inventario de procesos',
+    windowsOnly: true,
+  },
+  {
+    value: 'SERVICE_INVENTORY',
+    label: 'Inventario de servicios',
+    windowsOnly: true,
+  },
+  {
+    value: 'NETWORK_INFO',
+    label: 'Información de red',
+    windowsOnly: true,
   },
   {
     value: 'SECURITY_STATUS',
-    label: 'Análisis de seguridad',
+    label: 'Estado de seguridad',
+    windowsOnly: false,
   },
   {
     value: 'COMPLIANCE_CHECK',
     label: 'Evaluar cumplimiento',
+    windowsOnly: false,
+  },
+  {
+    value: 'WINDOWS_UPDATE_STATUS',
+    label: 'Estado de Windows Update',
+    windowsOnly: true,
+  },
+  {
+    value: 'WINDOWS_UPDATE_SCAN',
+    label: 'Buscar actualizaciones',
+    windowsOnly: true,
   },
 ]
 
 export function DeviceGroupsPage() {
-  const [groups, setGroups] =
-    useState<DeviceGroup[]>([])
+  const [
+    groups,
+    setGroups,
+  ] = useState<DeviceGroup[]>([])
 
-  const [devices, setDevices] =
-    useState<DeviceListItem[]>([])
+  const [
+    devices,
+    setDevices,
+  ] = useState<DeviceListItem[]>([])
 
-  const [selectedGroup, setSelectedGroup] =
+  const [
+    selectedGroup,
+    setSelectedGroup,
+  ] =
     useState<DeviceGroupDetails | null>(
       null,
     )
 
-  const [selectedDeviceIds,
-    setSelectedDeviceIds] =
+  const [
+    selectedDeviceIds,
+    setSelectedDeviceIds,
+  ] =
     useState<Set<string>>(
       new Set(),
     )
 
-  const [search, setSearch] =
-    useState('')
+  const [
+    search,
+    setSearch,
+  ] = useState('')
 
-  const [name, setName] =
-    useState('')
+  const [
+    platformFilter,
+    setPlatformFilter,
+  ] =
+    useState<PlatformFilter>(
+      'All',
+    )
 
-  const [description, setDescription] =
-    useState('')
+  const [
+    statusFilter,
+    setStatusFilter,
+  ] =
+    useState<StatusFilter>(
+      'All',
+    )
 
-  const [mode, setMode] =
-    useState<GroupMode>('static')
+  const [
+    name,
+    setName,
+  ] = useState('')
 
-  const [dynamicPlatform,
-    setDynamicPlatform] =
-    useState('Android')
+  const [
+    description,
+    setDescription,
+  ] = useState('')
 
-  const [dynamicStatus,
-    setDynamicStatus] =
+  const [
+    mode,
+    setMode,
+  ] =
+    useState<GroupMode>(
+      'static',
+    )
+
+  const [
+    dynamicPlatform,
+    setDynamicPlatform,
+  ] =
+    useState('Windows')
+
+  const [
+    dynamicStatus,
+    setDynamicStatus,
+  ] =
     useState('Online')
 
-  const [commandType, setCommandType] =
+  const [
+    editName,
+    setEditName,
+  ] = useState('')
+
+  const [
+    editDescription,
+    setEditDescription,
+  ] = useState('')
+
+  const [
+    editingGroup,
+    setEditingGroup,
+  ] = useState(false)
+
+  const [
+    commandType,
+    setCommandType,
+  ] =
     useState('PING')
 
-  const [loading, setLoading] =
-    useState(true)
+  const [
+    loading,
+    setLoading,
+  ] = useState(true)
 
-  const [working, setWorking] =
-    useState(false)
+  const [
+    working,
+    setWorking,
+  ] = useState(false)
 
-  const [message, setMessage] =
-    useState<string | null>(null)
+  const [
+    message,
+    setMessage,
+  ] =
+    useState<string | null>(
+      null,
+    )
 
-  const [error, setError] =
-    useState<string | null>(null)
+  const [
+    error,
+    setError,
+  ] =
+    useState<string | null>(
+      null,
+    )
 
   const loadBase =
-    useCallback(async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    useCallback(
+      async () => {
+        try {
+          setLoading(true)
+          setError(null)
 
-        const [groupData, deviceData] =
-          await Promise.all([
-            deviceGroupsApi.getAll(),
+          const [
+            groupData,
+            deviceData,
+          ] =
+            await Promise.all([
+              deviceGroupsApi
+                .getAll(),
 
-            devicesApi.getDevices({
-              page: 1,
-              pageSize: 100,
-            }),
-          ])
+              devicesApi
+                .getDevices({
+                  page: 1,
+                  pageSize: 100,
+                }),
+            ])
 
-        setGroups(groupData)
-        setDevices(deviceData.items)
-      } catch {
-        setError(
-          'No fue posible cargar la administración de flota.',
-        )
-      } finally {
-        setLoading(false)
-      }
-    }, [])
+          setGroups(
+            groupData,
+          )
 
-  useEffect(() => {
-    void loadBase()
-  }, [loadBase])
+          setDevices(
+            deviceData.items,
+          )
+        } catch {
+          setError(
+            'No fue posible cargar la administración de flota.',
+          )
+        } finally {
+          setLoading(false)
+        }
+      },
+      [],
+    )
 
-  useEffect(() => {
-    document.title =
-      'Grupos y Flota | TitanMDM'
-  }, [])
+  useEffect(
+    () => {
+      void loadBase()
+    },
+    [
+      loadBase,
+    ],
+  )
+
+  useEffect(
+    () => {
+      document.title =
+        'Grupos y Flota | TitanMDM'
+    },
+    [],
+  )
 
   const filteredDevices =
-    useMemo(() => {
-      const value =
-        search.trim().toLowerCase()
+    useMemo(
+      () => {
+        const value =
+          search
+            .trim()
+            .toLowerCase()
 
-      if (!value) {
-        return devices
-      }
+        return devices.filter(
+          device => {
+            const matchesSearch =
+              !value
+              ||
+              device.deviceName
+                .toLowerCase()
+                .includes(
+                  value,
+                )
+              ||
+              device.serialNumber
+                .toLowerCase()
+                .includes(
+                  value,
+                )
+              ||
+              (
+                device.assignedUser ??
+                ''
+              )
+                .toLowerCase()
+                .includes(
+                  value,
+                )
+              ||
+              (
+                device.department ??
+                ''
+              )
+                .toLowerCase()
+                .includes(
+                  value,
+                )
 
-      return devices.filter(
-        (device) =>
-          device.deviceName
-            .toLowerCase()
-            .includes(value) ||
-          device.serialNumber
-            .toLowerCase()
-            .includes(value) ||
-          (
-            device.assignedUser ?? ''
-          )
-            .toLowerCase()
-            .includes(value) ||
-          (
-            device.department ?? ''
-          )
-            .toLowerCase()
-            .includes(value),
-      )
-    }, [devices, search])
+            const matchesPlatform =
+              platformFilter ===
+                'All'
+              ||
+              device.platform ===
+                platformFilter
 
-  const totalMembers =
+            const matchesStatus =
+              statusFilter ===
+                'All'
+              ||
+              device.status ===
+                statusFilter
+
+            return (
+              matchesSearch
+              &&
+              matchesPlatform
+              &&
+              matchesStatus
+            )
+          },
+        )
+      },
+      [
+        devices,
+        search,
+        platformFilter,
+        statusFilter,
+      ],
+    )
+
+  const windowsDevices =
     useMemo(
       () =>
-        groups.reduce(
-          (total, group) =>
-            total +
-            group.deviceCount,
-          0,
-        ),
-      [groups],
+        devices.filter(
+          device =>
+            device.platform ===
+            'Windows',
+        ).length,
+      [
+        devices,
+      ],
+    )
+
+  const androidDevices =
+    useMemo(
+      () =>
+        devices.filter(
+          device =>
+            device.platform ===
+            'Android',
+        ).length,
+      [
+        devices,
+      ],
     )
 
   const onlineDevices =
     useMemo(
       () =>
         devices.filter(
-          (device) =>
-            device.status === 'Online',
+          device =>
+            device.status ===
+            'Online',
         ).length,
-      [devices],
+      [
+        devices,
+      ],
     )
 
   const compliantDevices =
     useMemo(
       () =>
         devices.filter(
-          (device) =>
+          device =>
             device.complianceStatus ===
             'Compliant',
         ).length,
-      [devices],
+      [
+        devices,
+      ],
+    )
+
+  const totalMembers =
+    useMemo(
+      () =>
+        groups.reduce(
+          (
+            total,
+            group,
+          ) =>
+            total +
+            group.deviceCount,
+          0,
+        ),
+      [
+        groups,
+      ],
+    )
+
+  const selectedDevices =
+    useMemo(
+      () =>
+        devices.filter(
+          device =>
+            selectedDeviceIds.has(
+              device.id,
+            ),
+        ),
+      [
+        devices,
+        selectedDeviceIds,
+      ],
+    )
+
+  const selectedWindowsCount =
+    useMemo(
+      () =>
+        selectedDevices.filter(
+          device =>
+            device.platform ===
+            'Windows',
+        ).length,
+      [
+        selectedDevices,
+      ],
+    )
+
+  const currentCommand =
+    useMemo(
+      () =>
+        commandOptions.find(
+          command =>
+            command.value ===
+            commandType,
+        ),
+      [
+        commandType,
+      ],
     )
 
   function toggleDevice(
     deviceId: string,
   ) {
     setSelectedDeviceIds(
-      (current) => {
+      current => {
         const next =
-          new Set(current)
+          new Set(
+            current,
+          )
 
-        if (next.has(deviceId)) {
-          next.delete(deviceId)
-        } else {
-          next.add(deviceId)
+        if (
+          next.has(
+            deviceId,
+          )
+        ) {
+          next.delete(
+            deviceId,
+          )
+        }
+        else {
+          next.add(
+            deviceId,
+          )
         }
 
         return next
@@ -240,30 +517,87 @@ export function DeviceGroupsPage() {
   function toggleAllVisible() {
     const visibleIds =
       filteredDevices.map(
-        (device) => device.id,
+        device =>
+          device.id,
       )
 
     const allSelected =
-      visibleIds.length > 0 &&
-      visibleIds.every((id) =>
-        selectedDeviceIds.has(id),
+      visibleIds.length >
+        0
+      &&
+      visibleIds.every(
+        id =>
+          selectedDeviceIds.has(
+            id,
+          ),
       )
 
     setSelectedDeviceIds(
-      (current) => {
+      current => {
         const next =
-          new Set(current)
+          new Set(
+            current,
+          )
 
-        visibleIds.forEach((id) => {
-          if (allSelected) {
-            next.delete(id)
-          } else {
-            next.add(id)
-          }
-        })
+        visibleIds.forEach(
+          id => {
+            if (
+              allSelected
+            ) {
+              next.delete(
+                id,
+              )
+            }
+            else {
+              next.add(
+                id,
+              )
+            }
+          },
+        )
 
         return next
       },
+    )
+  }
+
+  function selectWindows() {
+    setSelectedDeviceIds(
+      new Set(
+        filteredDevices
+          .filter(
+            device =>
+              device.platform ===
+              'Windows',
+          )
+          .map(
+            device =>
+              device.id,
+          ),
+      ),
+    )
+  }
+
+  function selectOnline() {
+    setSelectedDeviceIds(
+      new Set(
+        filteredDevices
+          .filter(
+            device =>
+              device.status ===
+              'Online',
+          )
+          .map(
+            device =>
+              device.id,
+          ),
+      ),
+    )
+  }
+
+  function clearSelection() {
+    setSelectedDeviceIds(
+      new Set(),
     )
   }
 
@@ -276,14 +610,31 @@ export function DeviceGroupsPage() {
 
       const details =
         await deviceGroupsApi
-          .getById(groupId)
+          .getById(
+            groupId,
+          )
 
-      setSelectedGroup(details)
+      setSelectedGroup(
+        details,
+      )
+
+      setEditName(
+        details.name,
+      )
+
+      setEditDescription(
+        details.description ??
+          '',
+      )
+
+      setEditingGroup(
+        false,
+      )
 
       setSelectedDeviceIds(
         new Set(
           details.members.map(
-            (member) =>
+            member =>
               member.deviceId,
           ),
         ),
@@ -298,17 +649,27 @@ export function DeviceGroupsPage() {
   }
 
   function closeGroup() {
-    setSelectedGroup(null)
+    setSelectedGroup(
+      null,
+    )
+
+    setEditingGroup(
+      false,
+    )
+
     setSelectedDeviceIds(
       new Set(),
     )
   }
 
   async function createGroup() {
-    if (!name.trim()) {
+    if (
+      !name.trim()
+    ) {
       setError(
         'El grupo necesita un nombre.',
       )
+
       return
     }
 
@@ -318,46 +679,60 @@ export function DeviceGroupsPage() {
       setMessage(null)
 
       const ruleJson =
-        mode === 'dynamic'
+        mode ===
+        'dynamic'
           ? JSON.stringify({
-              operator: 'AND',
-              conditions: [
-                {
-                  field:
-                    'platform',
-                  operator:
-                    'equals',
-                  value:
-                    dynamicPlatform,
-                },
-                {
-                  field:
-                    'status',
-                  operator:
-                    'equals',
-                  value:
-                    dynamicStatus,
-                },
-              ],
+              operator:
+                'AND',
+
+              conditions:
+                [
+                  {
+                    field:
+                      'platform',
+                    operator:
+                      'equals',
+                    value:
+                      dynamicPlatform,
+                  },
+                  {
+                    field:
+                      'status',
+                    operator:
+                      'equals',
+                    value:
+                      dynamicStatus,
+                  },
+                ],
             })
           : null
 
       const created =
-        await deviceGroupsApi.create({
-          name: name.trim(),
-          description:
-            description.trim() ||
-            null,
-          isDynamic:
-            mode === 'dynamic',
-          ruleJson,
-          deviceIds:
-            mode === 'static'
-              ? Array.from(
-                  selectedDeviceIds,
-                )
-              : [],
-        })
+        await deviceGroupsApi
+          .create({
+            name:
+              name.trim(),
+
+            description:
+              description
+                .trim()
+              ||
+              null,
+
+            isDynamic:
+              mode ===
+              'dynamic',
+
+            ruleJson,
+
+            deviceIds:
+              mode ===
+              'static'
+                ? Array.from(
+                    selectedDeviceIds,
+                  )
+                : [],
+          })
 
       setMessage(
         `Grupo "${created.name}" creado correctamente.`,
@@ -365,12 +740,16 @@ export function DeviceGroupsPage() {
 
       setName('')
       setDescription('')
+
       setSelectedDeviceIds(
         new Set(),
       )
 
       await loadBase()
-      await openGroup(created.id)
+
+      await openGroup(
+        created.id,
+      )
     } catch {
       setError(
         'No fue posible crear el grupo.',
@@ -380,8 +759,88 @@ export function DeviceGroupsPage() {
     }
   }
 
+  async function updateGroup() {
+    if (
+      !selectedGroup
+    ) {
+      return
+    }
+
+    if (
+      !editName.trim()
+    ) {
+      setError(
+        'El nombre del grupo no puede estar vacío.',
+      )
+
+      return
+    }
+
+    try {
+      setWorking(true)
+      setError(null)
+      setMessage(null)
+
+      const updated =
+        await deviceGroupsApi
+          .update(
+            selectedGroup.id,
+            {
+              name:
+                editName.trim(),
+
+              description:
+                editDescription
+                  .trim()
+                ||
+                null,
+
+              isDynamic:
+                selectedGroup
+                  .isDynamic,
+
+              ruleJson:
+                selectedGroup
+                  .ruleJson,
+            },
+          )
+
+      setSelectedGroup(
+        updated,
+      )
+
+      setEditingGroup(
+        false,
+      )
+
+      await loadBase()
+
+      setMessage(
+        'Grupo actualizado correctamente.',
+      )
+    } catch {
+      setError(
+        'No fue posible actualizar el grupo.',
+      )
+    } finally {
+      setWorking(false)
+    }
+  }
+
   async function synchronizeMembers() {
-    if (!selectedGroup) {
+    if (
+      !selectedGroup
+    ) {
+      return
+    }
+
+    if (
+      selectedGroup.isDynamic
+    ) {
+      setError(
+        'Los miembros de un grupo dinámico no se modifican manualmente.',
+      )
+
       return
     }
 
@@ -392,31 +851,41 @@ export function DeviceGroupsPage() {
 
       const original =
         new Set(
-          selectedGroup.members.map(
-            (member) =>
-              member.deviceId,
-          ),
+          selectedGroup
+            .members
+            .map(
+              member =>
+                member.deviceId,
+            ),
         )
 
       const additions =
         Array.from(
           selectedDeviceIds,
-        ).filter(
-          (id) =>
-            !original.has(id),
         )
+          .filter(
+            id =>
+              !original.has(
+                id,
+              ),
+          )
 
       const removals =
         Array.from(
           original,
-        ).filter(
-          (id) =>
-            !selectedDeviceIds.has(
-              id,
-            ),
         )
+          .filter(
+            id =>
+              !selectedDeviceIds
+                .has(
+                  id,
+                ),
+          )
 
-      if (additions.length > 0) {
+      if (
+        additions.length >
+        0
+      ) {
         await deviceGroupsApi
           .addMembers(
             selectedGroup.id,
@@ -425,7 +894,8 @@ export function DeviceGroupsPage() {
       }
 
       for (
-        const deviceId of removals
+        const deviceId
+        of removals
       ) {
         await deviceGroupsApi
           .removeMember(
@@ -453,7 +923,57 @@ export function DeviceGroupsPage() {
   }
 
   async function sendGroupCommand() {
-    if (!selectedGroup) {
+    if (
+      !selectedGroup
+    ) {
+      return
+    }
+
+    if (
+      selectedGroup.members
+        .length ===
+      0
+    ) {
+      setError(
+        'El grupo no contiene dispositivos.',
+      )
+
+      return
+    }
+
+    if (
+      currentCommand
+        ?.windowsOnly
+    ) {
+      const nonWindows =
+        selectedGroup
+          .members
+          .filter(
+            member =>
+              member.platform !==
+              'Windows',
+          )
+
+      if (
+        nonWindows.length >
+        0
+      ) {
+        setError(
+          `El comando ${commandType} es exclusivo de Windows y el grupo contiene ${nonWindows.length} dispositivo(s) no Windows.`,
+        )
+
+        return
+      }
+    }
+
+    const confirmed =
+      window.confirm(
+        `¿Ejecutar ${commandType} sobre ${selectedGroup.members.length} dispositivo(s) del grupo "${selectedGroup.name}"?`,
+      )
+
+    if (
+      !confirmed
+    ) {
       return
     }
 
@@ -468,7 +988,10 @@ export function DeviceGroupsPage() {
             selectedGroup.id,
             {
               commandType,
-              payloadJson: '{}',
+
+              payloadJson:
+                '{}',
+
               expiresInMinutes:
                 60,
             },
@@ -487,7 +1010,9 @@ export function DeviceGroupsPage() {
   }
 
   async function deleteGroup() {
-    if (!selectedGroup) {
+    if (
+      !selectedGroup
+    ) {
       return
     }
 
@@ -496,7 +1021,9 @@ export function DeviceGroupsPage() {
         `¿Eliminar el grupo "${selectedGroup.name}"? Los dispositivos no serán eliminados.`,
       )
 
-    if (!confirmed) {
+    if (
+      !confirmed
+    ) {
       return
     }
 
@@ -504,9 +1031,10 @@ export function DeviceGroupsPage() {
       setWorking(true)
       setError(null)
 
-      await deviceGroupsApi.delete(
-        selectedGroup.id,
-      )
+      await deviceGroupsApi
+        .delete(
+          selectedGroup.id,
+        )
 
       closeGroup()
 
@@ -537,21 +1065,27 @@ export function DeviceGroupsPage() {
           </h1>
 
           <p>
-            Organiza dispositivos y
-            ejecuta operaciones
-            centralizadas sobre la flota.
+            Organiza dispositivos,
+            filtra la flota y ejecuta
+            operaciones masivas.
           </p>
         </div>
 
         <button
           type="button"
           className="fleet-secondary"
-          onClick={() =>
-            void loadBase()
+          onClick={
+            () =>
+              void loadBase()
           }
-          disabled={loading}
+          disabled={
+            loading
+          }
         >
-          <RefreshCw size={16} />
+          <RefreshCw
+            size={16}
+          />
+
           Actualizar
         </button>
       </header>
@@ -561,6 +1095,7 @@ export function DeviceGroupsPage() {
           <CheckCircle2
             size={17}
           />
+
           {message}
         </div>
       )}
@@ -574,22 +1109,62 @@ export function DeviceGroupsPage() {
       <section className="fleet-stats">
         <Stat
           icon={
-            <UsersRound size={20} />
+            <UsersRound
+              size={20}
+            />
           }
           label="Grupos"
-          value={groups.length}
+          value={
+            groups.length
+          }
         />
 
         <Stat
-          icon={<Cpu size={20} />}
+          icon={
+            <Cpu
+              size={20}
+            />
+          }
           label="Dispositivos"
-          value={devices.length}
+          value={
+            devices.length
+          }
         />
 
         <Stat
-          icon={<Wifi size={20} />}
+          icon={
+            <Laptop
+              size={20}
+            />
+          }
+          label="Windows"
+          value={
+            windowsDevices
+          }
+        />
+
+        <Stat
+          icon={
+            <Smartphone
+              size={20}
+            />
+          }
+          label="Android"
+          value={
+            androidDevices
+          }
+        />
+
+        <Stat
+          icon={
+            <Wifi
+              size={20}
+            />
+          }
           label="En línea"
-          value={onlineDevices}
+          value={
+            onlineDevices
+          }
         />
 
         <Stat
@@ -599,15 +1174,21 @@ export function DeviceGroupsPage() {
             />
           }
           label="Conformes"
-          value={compliantDevices}
+          value={
+            compliantDevices
+          }
         />
 
         <Stat
           icon={
-            <Activity size={20} />
+            <Activity
+              size={20}
+            />
           }
           label="Membresías"
-          value={totalMembers}
+          value={
+            totalMembers
+          }
         />
       </section>
 
@@ -618,6 +1199,7 @@ export function DeviceGroupsPage() {
               <UsersRound
                 size={18}
               />
+
               <strong>
                 Grupos
               </strong>
@@ -628,26 +1210,31 @@ export function DeviceGroupsPage() {
             </span>
           </div>
 
-          {groups.length === 0 ? (
+          {groups.length ===
+          0 ? (
             <div className="fleet-empty">
               No existen grupos.
             </div>
           ) : (
             groups.map(
-              (group) => (
+              group => (
                 <button
                   type="button"
-                  key={group.id}
+                  key={
+                    group.id
+                  }
                   className={
-                    selectedGroup?.id ===
+                    selectedGroup
+                      ?.id ===
                     group.id
                       ? 'fleet-group selected'
                       : 'fleet-group'
                   }
-                  onClick={() =>
-                    void openGroup(
-                      group.id,
-                    )
+                  onClick={
+                    () =>
+                      void openGroup(
+                        group.id,
+                      )
                   }
                 >
                   <div>
@@ -659,7 +1246,9 @@ export function DeviceGroupsPage() {
                       {group.isDynamic
                         ? 'Dinámico'
                         : 'Estático'}
+
                       {' · '}
+
                       {
                         group.deviceCount
                       }{' '}
@@ -680,7 +1269,10 @@ export function DeviceGroupsPage() {
           <section className="fleet-builder">
             <div className="fleet-panel-title">
               <div>
-                <Plus size={18} />
+                <Plus
+                  size={18}
+                />
+
                 <strong>
                   Crear grupo
                 </strong>
@@ -690,31 +1282,38 @@ export function DeviceGroupsPage() {
             <div className="fleet-form-grid">
               <label>
                 Nombre
+
                 <input
-                  value={name}
-                  onChange={(
-                    event,
-                  ) =>
-                    setName(
-                      event.target
-                        .value,
-                    )
+                  value={
+                    name
                   }
-                  placeholder="Android - Operaciones"
+                  onChange={
+                    event =>
+                      setName(
+                        event
+                          .target
+                          .value,
+                      )
+                  }
+                  placeholder="Windows - Operaciones"
                 />
               </label>
 
               <label>
                 Tipo
+
                 <select
-                  value={mode}
-                  onChange={(
-                    event,
-                  ) =>
-                    setMode(
-                      event.target
-                        .value as GroupMode,
-                    )
+                  value={
+                    mode
+                  }
+                  onChange={
+                    event =>
+                      setMode(
+                        event
+                          .target
+                          .value
+                          as GroupMode,
+                      )
                   }
                 >
                   <option value="static">
@@ -730,17 +1329,20 @@ export function DeviceGroupsPage() {
 
             <label>
               Descripción
+
               <input
-                value={description}
-                onChange={(
-                  event,
-                ) =>
-                  setDescription(
-                    event.target
-                      .value,
-                  )
+                value={
+                  description
                 }
-                placeholder="Flota administrada por TitanMDM"
+                onChange={
+                  event =>
+                    setDescription(
+                      event
+                        .target
+                        .value,
+                    )
+                }
+                placeholder="Flota Windows administrada por TitanMDM"
               />
             </label>
 
@@ -753,42 +1355,44 @@ export function DeviceGroupsPage() {
 
                 <label>
                   Plataforma
+
                   <select
                     value={
                       dynamicPlatform
                     }
-                    onChange={(
-                      event,
-                    ) =>
-                      setDynamicPlatform(
-                        event.target
-                          .value,
-                      )
+                    onChange={
+                      event =>
+                        setDynamicPlatform(
+                          event
+                            .target
+                            .value,
+                        )
                     }
                   >
-                    <option value="Android">
-                      Android
-                    </option>
-
                     <option value="Windows">
                       Windows
+                    </option>
+
+                    <option value="Android">
+                      Android
                     </option>
                   </select>
                 </label>
 
                 <label>
                   Estado
+
                   <select
                     value={
                       dynamicStatus
                     }
-                    onChange={(
-                      event,
-                    ) =>
-                      setDynamicStatus(
-                        event.target
-                          .value,
-                      )
+                    onChange={
+                      event =>
+                        setDynamicStatus(
+                          event
+                            .target
+                            .value,
+                        )
                     }
                   >
                     <option value="Online">
@@ -810,44 +1414,151 @@ export function DeviceGroupsPage() {
             <button
               type="button"
               className="fleet-primary"
-              onClick={() =>
-                void createGroup()
+              onClick={
+                () =>
+                  void createGroup()
               }
-              disabled={working}
+              disabled={
+                working
+              }
             >
-              <Plus size={16} />
+              <Plus
+                size={16}
+              />
+
               Crear grupo
             </button>
           </section>
 
           {selectedGroup && (
             <section className="fleet-selected-group">
+              {!editingGroup ? (
+                <div>
+                  <span>
+                    GRUPO ACTIVO
+                  </span>
+
+                  <h2>
+                    {
+                      selectedGroup.name
+                    }
+                  </h2>
+
+                  <p>
+                    {
+                      selectedGroup
+                        .description
+                      ??
+                      'Sin descripción'
+                    }
+                  </p>
+
+                  <small>
+                    {
+                      selectedGroup
+                        .isDynamic
+                        ? 'Grupo dinámico'
+                        : 'Grupo estático'
+                    }
+                    {' · '}
+                    {
+                      selectedGroup
+                        .members
+                        .length
+                    }{' '}
+                    miembro(s)
+                  </small>
+                </div>
+              ) : (
+                <div className="fleet-form-grid">
+                  <label>
+                    Nombre
+
+                    <input
+                      value={
+                        editName
+                      }
+                      onChange={
+                        event =>
+                          setEditName(
+                            event
+                              .target
+                              .value,
+                          )
+                      }
+                    />
+                  </label>
+
+                  <label>
+                    Descripción
+
+                    <input
+                      value={
+                        editDescription
+                      }
+                      onChange={
+                        event =>
+                          setEditDescription(
+                            event
+                              .target
+                              .value,
+                          )
+                      }
+                    />
+                  </label>
+                </div>
+              )}
+
               <div>
-                <span>
-                  GRUPO ACTIVO
-                </span>
+                {!editingGroup ? (
+                  <button
+                    type="button"
+                    className="fleet-secondary"
+                    onClick={
+                      () =>
+                        setEditingGroup(
+                          true,
+                        )
+                    }
+                  >
+                    <Edit3
+                      size={16}
+                    />
 
-                <h2>
-                  {
-                    selectedGroup.name
-                  }
-                </h2>
+                    Editar
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className="fleet-primary"
+                    disabled={
+                      working
+                    }
+                    onClick={
+                      () =>
+                        void updateGroup()
+                    }
+                  >
+                    <Save
+                      size={16}
+                    />
 
-                <p>
-                  {
-                    selectedGroup.description ??
-                    'Sin descripción'
+                    Guardar
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  className="fleet-close"
+                  onClick={
+                    closeGroup
                   }
-                </p>
+                >
+                  <X
+                    size={17}
+                  />
+                </button>
               </div>
-
-              <button
-                type="button"
-                className="fleet-close"
-                onClick={closeGroup}
-              >
-                <X size={17} />
-              </button>
             </section>
           )}
 
@@ -855,8 +1566,7 @@ export function DeviceGroupsPage() {
             <div className="fleet-devices-header">
               <div>
                 <strong>
-                  Selección de
-                  dispositivos
+                  Selección de dispositivos
                 </strong>
 
                 <span>
@@ -865,25 +1575,146 @@ export function DeviceGroupsPage() {
                       .size
                   }{' '}
                   seleccionado(s)
+                  {' · '}
+                  {
+                    selectedWindowsCount
+                  }{' '}
+                  Windows
                 </span>
               </div>
 
               <div className="fleet-search">
-                <Search size={16} />
+                <Search
+                  size={16}
+                />
 
                 <input
-                  value={search}
-                  onChange={(
-                    event,
-                  ) =>
-                    setSearch(
-                      event.target
-                        .value,
-                    )
+                  value={
+                    search
+                  }
+                  onChange={
+                    event =>
+                      setSearch(
+                        event
+                          .target
+                          .value,
+                      )
                   }
                   placeholder="Buscar dispositivo..."
                 />
               </div>
+            </div>
+
+            <div className="fleet-form-grid">
+              <label>
+                Plataforma
+
+                <select
+                  value={
+                    platformFilter
+                  }
+                  onChange={
+                    event =>
+                      setPlatformFilter(
+                        event
+                          .target
+                          .value
+                          as PlatformFilter,
+                      )
+                  }
+                >
+                  <option value="All">
+                    Todas
+                  </option>
+
+                  <option value="Windows">
+                    Windows
+                  </option>
+
+                  <option value="Android">
+                    Android
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                Estado
+
+                <select
+                  value={
+                    statusFilter
+                  }
+                  onChange={
+                    event =>
+                      setStatusFilter(
+                        event
+                          .target
+                          .value
+                          as StatusFilter,
+                      )
+                  }
+                >
+                  <option value="All">
+                    Todos
+                  </option>
+
+                  <option value="Online">
+                    Online
+                  </option>
+
+                  <option value="Offline">
+                    Offline
+                  </option>
+
+                  <option value="Quarantined">
+                    Quarantined
+                  </option>
+                </select>
+              </label>
+            </div>
+
+            <div className="fleet-members-action">
+              <button
+                type="button"
+                className="fleet-secondary"
+                onClick={
+                  selectWindows
+                }
+              >
+                <Laptop
+                  size={16}
+                />
+
+                Seleccionar Windows
+              </button>
+
+              <button
+                type="button"
+                className="fleet-secondary"
+                onClick={
+                  selectOnline
+                }
+              >
+                <Wifi
+                  size={16}
+                />
+
+                Seleccionar Online
+              </button>
+
+              <button
+                type="button"
+                className="fleet-secondary"
+                onClick={
+                  clearSelection
+                }
+              >
+                <X
+                  size={16}
+                />
+
+                Limpiar
+              </button>
             </div>
 
             <div className="fleet-table-wrapper">
@@ -896,12 +1727,11 @@ export function DeviceGroupsPage() {
                         checked={
                           filteredDevices
                             .length >
-                            0 &&
+                            0
+                          &&
                           filteredDevices
                             .every(
-                              (
-                                device,
-                              ) =>
+                              device =>
                                 selectedDeviceIds
                                   .has(
                                     device.id,
@@ -917,15 +1747,19 @@ export function DeviceGroupsPage() {
                     <th>
                       DISPOSITIVO
                     </th>
+
                     <th>
                       PLATAFORMA
                     </th>
+
                     <th>
                       ESTADO
                     </th>
+
                     <th>
                       CUMPLIMIENTO
                     </th>
+
                     <th>
                       USUARIO
                     </th>
@@ -934,7 +1768,7 @@ export function DeviceGroupsPage() {
 
                 <tbody>
                   {filteredDevices.map(
-                    (device) => (
+                    device => (
                       <tr
                         key={
                           device.id
@@ -943,13 +1777,17 @@ export function DeviceGroupsPage() {
                         <td>
                           <input
                             type="checkbox"
-                            checked={selectedDeviceIds.has(
-                              device.id,
-                            )}
-                            onChange={() =>
-                              toggleDevice(
-                                device.id,
-                              )
+                            checked={
+                              selectedDeviceIds
+                                .has(
+                                  device.id,
+                                )
+                            }
+                            onChange={
+                              () =>
+                                toggleDevice(
+                                  device.id,
+                                )
                             }
                           />
                         </td>
@@ -970,14 +1808,16 @@ export function DeviceGroupsPage() {
                             <div>
                               <strong>
                                 {
-                                  device.deviceName
+                                  device
+                                    .deviceName
                                 }
                               </strong>
 
                               <span>
                                 SN:{' '}
                                 {
-                                  device.serialNumber
+                                  device
+                                    .serialNumber
                                 }
                               </span>
                             </div>
@@ -1011,13 +1851,18 @@ export function DeviceGroupsPage() {
 
                         <td>
                           {
-                            device.complianceStatus
+                            device
+                              .complianceStatus
                           }
                         </td>
 
                         <td>
-                          {device.assignedUser ??
-                            'Sin asignar'}
+                          {
+                            device
+                              .assignedUser
+                            ??
+                            'Sin asignar'
+                          }
                         </td>
                       </tr>
                     ),
@@ -1026,19 +1871,24 @@ export function DeviceGroupsPage() {
               </table>
             </div>
 
-            {selectedGroup && (
+            {selectedGroup &&
+              !selectedGroup.isDynamic && (
               <div className="fleet-members-action">
                 <button
                   type="button"
                   className="fleet-secondary"
-                  disabled={working}
-                  onClick={() =>
-                    void synchronizeMembers()
+                  disabled={
+                    working
+                  }
+                  onClick={
+                    () =>
+                      void synchronizeMembers()
                   }
                 >
                   <UserPlus
                     size={16}
                   />
+
                   Guardar miembros
                 </button>
               </div>
@@ -1058,18 +1908,20 @@ export function DeviceGroupsPage() {
               </div>
 
               <select
-                value={commandType}
-                onChange={(
-                  event,
-                ) =>
-                  setCommandType(
-                    event.target
-                      .value,
-                  )
+                value={
+                  commandType
+                }
+                onChange={
+                  event =>
+                    setCommandType(
+                      event
+                        .target
+                        .value,
+                    )
                 }
               >
                 {commandOptions.map(
-                  (command) => (
+                  command => (
                     <option
                       key={
                         command.value
@@ -1081,6 +1933,9 @@ export function DeviceGroupsPage() {
                       {
                         command.label
                       }
+                      {command.windowsOnly
+                        ? ' · Windows'
+                        : ''}
                     </option>
                   ),
                 )}
@@ -1089,26 +1944,36 @@ export function DeviceGroupsPage() {
               <button
                 type="button"
                 className="fleet-primary"
-                disabled={working}
-                onClick={() =>
-                  void sendGroupCommand()
+                disabled={
+                  working
+                }
+                onClick={
+                  () =>
+                    void sendGroupCommand()
                 }
               >
-                <Send size={16} />
+                <Send
+                  size={16}
+                />
+
                 Ejecutar en grupo
               </button>
 
               <button
                 type="button"
                 className="fleet-danger"
-                disabled={working}
-                onClick={() =>
-                  void deleteGroup()
+                disabled={
+                  working
+                }
+                onClick={
+                  () =>
+                    void deleteGroup()
                 }
               >
                 <Trash2
                   size={16}
                 />
+
                 Eliminar grupo
               </button>
             </section>
@@ -1130,11 +1995,17 @@ function Stat({
 }) {
   return (
     <article className="fleet-stat">
-      <div>{icon}</div>
+      <div>
+        {icon}
+      </div>
 
-      <span>{label}</span>
+      <span>
+        {label}
+      </span>
 
-      <strong>{value}</strong>
+      <strong>
+        {value}
+      </strong>
     </article>
   )
 }
