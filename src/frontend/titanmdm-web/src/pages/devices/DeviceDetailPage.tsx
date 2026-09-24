@@ -48,6 +48,10 @@ import type {
 
 import './DeviceDetailPage.css'
 
+import {
+  DeviceOperationalPanel,
+} from './components/DeviceOperationalPanel'
+
 type TabName =
   | 'overview'
   | 'enterprise'
@@ -528,6 +532,12 @@ const loadDevice = useCallback(
           <XCircle size={17} />
           <span>{error}</span>
         </div>
+      )}
+
+            {deviceId && (
+        <DeviceOperationalPanel
+          deviceId={deviceId}
+        />
       )}
 
       {message !== null && (

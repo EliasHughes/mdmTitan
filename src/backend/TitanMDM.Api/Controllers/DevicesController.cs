@@ -47,6 +47,9 @@ public sealed class DevicesController
         [FromQuery] string? platform,
         [FromQuery] string? status,
         [FromQuery] string? compliance,
+        [FromQuery] bool? managed,
+        [FromQuery] string? sortBy,
+        [FromQuery] string? sortDirection,
         [FromQuery] int page = 1,
         [FromQuery] int pageSize = 25,
         CancellationToken cancellationToken = default)
@@ -163,6 +166,9 @@ public sealed class DevicesController
                     normalizedPlatform,
                     status,
                     compliance,
+                    managed,
+                    sortBy,
+                    sortDirection,
                     page,
                     pageSize,
                     cancellationToken);
@@ -313,6 +319,85 @@ public sealed class DevicesController
         return Ok(
             android);
     }
+
+    /*
+ * ============================================================
+ * OPERATIONAL SNAPSHOT
+ * ============================================================
+ */
+
+[HttpGet("{deviceId:guid}/snapshot")]
+public async Task<IActionResult>
+    GetOperationalSnapshot(
+        Guid deviceId,
+        CancellationToken cancellationToken = default)
+{
+    if (
+        !HasPermission(
+            DevicesViewPermission))
+    {
+        return Forbid();
+    }
+
+    var organizationId =
+        GetOrganizationId();
+
+    if (
+        organizationId is null)
+    {
+        return Unauthorized(
+            new
+            {
+                message =
+                    "El token no contiene una organización válida."
+            });
+    }
+
+    var snapshot =
+        await _deviceQueryService
+            .GetOperationalSnapshotAsync(
+                organizationId.Value,
+                deviceId,
+                cancellationToken);
+
+    if (
+        snapshot is null)
+    {
+        return NotFound(
+            new
+            {
+                message =
+                    "El dispositivo no existe."
+            });
+    }
+
+    if (
+        string.Equals(
+            snapshot.Device.Platform,
+            "Windows",
+            StringComparison.OrdinalIgnoreCase)
+        &&
+        !HasPermission(
+            WindowsWorkspacePermission))
+    {
+        return Forbid();
+    }
+
+    if (
+        string.Equals(
+            snapshot.Device.Platform,
+            "Android",
+            StringComparison.OrdinalIgnoreCase)
+        &&
+        !HasPermission(
+            AndroidWorkspacePermission))
+    {
+        return Forbid();
+    }
+
+    return Ok(
+        snapshot);
+}
 
     /*
      * ============================================================
