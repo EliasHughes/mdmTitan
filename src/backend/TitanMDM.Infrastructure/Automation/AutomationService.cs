@@ -420,6 +420,74 @@ public sealed class AutomationService
                     "APP_INVENTORY",
                     "{}",
                     cancellationToken);
+            
+            case AutomationActionType
+    .WindowsInventory:
+
+    return await QueueCommandAsync(
+        rule,
+        deviceId,
+        userId,
+        "DEVICE_INVENTORY",
+        "{}",
+        cancellationToken);
+
+case AutomationActionType
+    .WindowsUpdateScan:
+
+    return await QueueCommandAsync(
+        rule,
+        deviceId,
+        userId,
+        "WINDOWS_UPDATE_SCAN",
+        "{}",
+        cancellationToken);
+
+case AutomationActionType
+    .WindowsUpdateInstall:
+{
+    var payload =
+        DeserializeActionPayload(
+            rule.ActionPayloadJson);
+
+    return await QueueCommandAsync(
+        rule,
+        deviceId,
+        userId,
+        "WINDOWS_UPDATE_INSTALL",
+        payload.PayloadJson
+        ??
+        """
+        {
+          "kbArticleIds": [],
+          "acceptEula": true,
+          "downloadOnly": false
+        }
+        """,
+        cancellationToken);
+}
+
+case AutomationActionType
+    .RestartDevice:
+
+    return await QueueCommandAsync(
+        rule,
+        deviceId,
+        userId,
+        "RESTART_DEVICE",
+        "{}",
+        cancellationToken);
+
+case AutomationActionType
+    .LockDevice:
+
+    return await QueueCommandAsync(
+        rule,
+        deviceId,
+        userId,
+        "LOCK_DEVICE",
+        "{}",
+        cancellationToken);
 
             case AutomationActionType
                 .SendCommand:

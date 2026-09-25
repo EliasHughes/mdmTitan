@@ -1,5 +1,7 @@
 using System.Text.Json;
+
 using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Security;
 using TitanMDM.Domain.Entities;
@@ -17,20 +19,22 @@ public sealed class SecurityPostureService
     private readonly IAutomationEventDispatcher
         _automation;
 
-    private static readonly
-        JsonSerializerOptions JsonOptions =
+    private static readonly JsonSerializerOptions
+        JsonOptions =
             new()
             {
-                PropertyNameCaseInsensitive =
-                    true
+                PropertyNameCaseInsensitive = true
             };
 
     public SecurityPostureService(
         TitanMdmDbContext dbContext,
         IAutomationEventDispatcher automation)
     {
-        _dbContext = dbContext;
-        _automation = automation;
+        _dbContext =
+            dbContext;
+
+        _automation =
+            automation;
     }
 
     public async Task ProcessSecurityStatusAsync(
@@ -43,76 +47,29 @@ public sealed class SecurityPostureService
                 deviceId,
                 cancellationToken);
 
-        var payload =
-            JsonSerializer.Deserialize<
-                SecurityPayload>(
-                    resultJson,
-                    JsonOptions)
-            ?? throw new InvalidOperationException(
-                "SECURITY_STATUS contiene JSON inválido.");
-
         var posture =
             await GetOrCreateAsync(
                 device,
                 cancellationToken);
 
-        ApplySecurity(
-            posture,
-            payload);
-
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
-
-        var hasSecurityRisk =
-            payload.RootDetected ||
-            payload.AdbEnabled ||
-            payload.DeveloperOptionsEnabled ||
-            !payload.DeviceSecure ||
-            payload.BootloaderLocked == false ||
-            payload.SelinuxEnforced == false ||
-            payload.UnknownSourcesAllowed == true;
-
-        if (hasSecurityRisk)
+        if (
+            device.Platform ==
+            DevicePlatform.Windows)
         {
-            await _automation.DispatchAsync(
-                device.OrganizationId,
-                device.Id,
-                "SecurityRisk",
-                new
-                {
-                    platform =
-                        device.Platform.ToString(),
+            await ProcessWindowsSecurityAsync(
+                device,
+                posture,
+                resultJson,
+                cancellationToken);
 
-                    deviceName =
-                        device.DeviceName,
-
-                    rootDetected =
-                        payload.RootDetected,
-
-                    adbEnabled =
-                        payload.AdbEnabled,
-
-                    developerOptionsEnabled =
-                        payload.DeveloperOptionsEnabled,
-
-                    deviceSecure =
-                        payload.DeviceSecure,
-
-                    bootloaderLocked =
-                        payload.BootloaderLocked,
-
-                    selinuxEnforced =
-                        payload.SelinuxEnforced,
-
-                    unknownSourcesAllowed =
-                        payload.UnknownSourcesAllowed,
-
-                    securityPatchLevel =
-                        payload.SecurityPatchLevel
-                },
-                cancellationToken:
-                    cancellationToken);
+            return;
         }
+
+        await ProcessAndroidSecurityAsync(
+            device,
+            posture,
+            resultJson,
+            cancellationToken);
     }
 
     public async Task ProcessComplianceAsync(
@@ -125,123 +82,29 @@ public sealed class SecurityPostureService
                 deviceId,
                 cancellationToken);
 
-        var payload =
-            JsonSerializer.Deserialize<
-                CompliancePayload>(
-                    resultJson,
-                    JsonOptions)
-            ?? throw new InvalidOperationException(
-                "COMPLIANCE_CHECK contiene JSON inválido.");
-
         var posture =
             await GetOrCreateAsync(
                 device,
                 cancellationToken);
 
-        if (payload.Posture is not null)
-        {
-            ApplySecurity(
-                posture,
-                payload.Posture);
-        }
-
-        var findingsJson =
-            JsonSerializer.Serialize(
-                payload.Findings ?? []);
-
-        posture.UpdateCompliance(
-            payload.Score,
-            payload.RiskLevel,
-            payload.Status,
-            payload.TotalChecks,
-            payload.PassedChecks,
-            payload.FailedChecks,
-            findingsJson);
-
-        var compliant =
-            payload.Status.Equals(
-                "Compliant",
-                StringComparison.OrdinalIgnoreCase);
-
-        device.SetCompliance(
-            compliant
-                ? ComplianceStatus.Compliant
-                : ComplianceStatus.NonCompliant);
-
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
-
-        if (!compliant)
-        {
-            await _automation.DispatchAsync(
-                device.OrganizationId,
-                device.Id,
-                "DeviceNonCompliant",
-                new
-                {
-                    platform =
-                        device.Platform.ToString(),
-
-                    deviceName =
-                        device.DeviceName,
-
-                    status =
-                        payload.Status,
-
-                    score =
-                        payload.Score,
-
-                    riskLevel =
-                        payload.RiskLevel,
-
-                    totalChecks =
-                        payload.TotalChecks,
-
-                    passedChecks =
-                        payload.PassedChecks,
-
-                    failedChecks =
-                        payload.FailedChecks
-                },
-                cancellationToken:
-                    cancellationToken);
-        }
-
         if (
-            payload.Posture is not null &&
-            (
-                payload.Posture.RootDetected ||
-                payload.Posture.AdbEnabled ||
-                payload.Posture
-                    .DeveloperOptionsEnabled ||
-                !payload.Posture.DeviceSecure ||
-                payload.Posture
-                    .BootloaderLocked == false ||
-                payload.Posture
-                    .SelinuxEnforced == false
-            ))
+            device.Platform ==
+            DevicePlatform.Windows)
         {
-            await _automation.DispatchAsync(
-                device.OrganizationId,
-                device.Id,
-                "SecurityRisk",
-                new
-                {
-                    platform =
-                        device.Platform.ToString(),
+            await ProcessWindowsComplianceAsync(
+                device,
+                posture,
+                resultJson,
+                cancellationToken);
 
-                    deviceName =
-                        device.DeviceName,
-
-                    riskLevel =
-                        payload.RiskLevel,
-
-                    source =
-                        "ComplianceCheck"
-                },
-                cancellationToken:
-                    cancellationToken);
+            return;
         }
+
+        await ProcessAndroidComplianceAsync(
+            device,
+            posture,
+            resultJson,
+            cancellationToken);
     }
 
     public async Task<SecurityDashboardDto>
@@ -250,21 +113,24 @@ public sealed class SecurityPostureService
             CancellationToken cancellationToken = default)
     {
         var totalDevices =
-            await _dbContext.Devices
+            await _dbContext
+                .Devices
                 .CountAsync(
                     x =>
                         x.OrganizationId ==
-                            organizationId &&
+                            organizationId
+                        &&
                         !x.IsDeleted,
                     cancellationToken);
 
         var postures =
             await _dbContext
                 .DeviceSecurityPostures
+                .AsNoTracking()
                 .Where(
                     x =>
                         x.OrganizationId ==
-                            organizationId)
+                        organizationId)
                 .ToListAsync(
                     cancellationToken);
 
@@ -274,14 +140,16 @@ public sealed class SecurityPostureService
         var compliant =
             postures.Count(
                 x =>
-                    x.ComplianceStatus ==
-                    "Compliant");
+                    x.ComplianceStatus.Equals(
+                        "Compliant",
+                        StringComparison.OrdinalIgnoreCase));
 
         var nonCompliant =
             postures.Count(
                 x =>
-                    x.ComplianceStatus ==
-                    "NonCompliant");
+                    x.ComplianceStatus.Equals(
+                        "NonCompliant",
+                        StringComparison.OrdinalIgnoreCase));
 
         var average =
             evaluated == 0
@@ -299,10 +167,12 @@ public sealed class SecurityPostureService
             nonCompliant,
 
             postures.Count(
-                x => x.RootDetected),
+                x =>
+                    x.RootDetected),
 
             postures.Count(
-                x => x.AdbEnabled),
+                x =>
+                    x.AdbEnabled),
 
             postures.Count(
                 x =>
@@ -314,8 +184,9 @@ public sealed class SecurityPostureService
 
             postures.Count(
                 x =>
-                    x.RiskLevel ==
-                        "Critical"),
+                    x.RiskLevel.Equals(
+                        "Critical",
+                        StringComparison.OrdinalIgnoreCase)),
 
             average);
     }
@@ -327,18 +198,23 @@ public sealed class SecurityPostureService
             CancellationToken cancellationToken = default)
     {
         var query =
-            from posture in
-                _dbContext.DeviceSecurityPostures
+            from posture
+                in _dbContext
+                    .DeviceSecurityPostures
+                    .AsNoTracking()
 
-            join device in
-                _dbContext.Devices
+            join device
+                in _dbContext
+                    .Devices
+                    .AsNoTracking()
 
-            on posture.DeviceId
+                on posture.DeviceId
                 equals device.Id
 
             where
                 posture.OrganizationId ==
-                    organizationId &&
+                    organizationId
+                &&
                 !device.IsDeleted
 
             orderby
@@ -376,22 +252,471 @@ public sealed class SecurityPostureService
                 cancellationToken);
     }
 
-    private async Task<Device>
-        GetDeviceAsync(
-            Guid deviceId,
-            CancellationToken cancellationToken)
-    {
-        var device =
-            await _dbContext.Devices
-                .SingleOrDefaultAsync(
-                    x =>
-                        x.Id ==
-                            deviceId &&
-                        !x.IsDeleted,
-                    cancellationToken);
+    // =========================================================
+    // WINDOWS
+    // =========================================================
 
-        return device
-            ?? throw new InvalidOperationException(
+    private async Task ProcessWindowsSecurityAsync(
+        Device device,
+        DeviceSecurityPosture posture,
+        string resultJson,
+        CancellationToken cancellationToken)
+    {
+        var payload =
+            JsonSerializer.Deserialize<
+                WindowsSecurityPayload>(
+                    resultJson,
+                    JsonOptions)
+            ??
+            throw new InvalidOperationException(
+                "SECURITY_STATUS Windows contiene JSON inválido.");
+
+        ApplyWindowsSecurity(
+            device,
+            posture,
+            payload);
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        var securityRisk =
+            !payload.Defender.Available
+            ||
+            !payload.Firewall.Available
+            ||
+            !payload.UacEnabled
+            ||
+            payload.SecureBootEnabled == false;
+
+        if (securityRisk)
+        {
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "SecurityRisk",
+                    new
+                    {
+                        platform =
+                            "Windows",
+
+                        deviceName =
+                            device.DeviceName,
+
+                        defenderAvailable =
+                            payload.Defender.Available,
+
+                        firewallAvailable =
+                            payload.Firewall.Available,
+
+                        uacEnabled =
+                            payload.UacEnabled,
+
+                        secureBootEnabled =
+                            payload.SecureBootEnabled,
+
+                        remoteDesktopEnabled =
+                            payload.RemoteDesktopEnabled,
+
+                        pendingReboot =
+                            payload.PendingReboot
+                    },
+                    cancellationToken:
+                        cancellationToken);
+        }
+    }
+
+    private async Task ProcessWindowsComplianceAsync(
+        Device device,
+        DeviceSecurityPosture posture,
+        string resultJson,
+        CancellationToken cancellationToken)
+    {
+        var payload =
+            JsonSerializer.Deserialize<
+                WindowsCompliancePayload>(
+                    resultJson,
+                    JsonOptions)
+            ??
+            throw new InvalidOperationException(
+                "COMPLIANCE_CHECK Windows contiene JSON inválido.");
+
+        if (payload.Security is not null)
+        {
+            ApplyWindowsSecurity(
+                device,
+                posture,
+                payload.Security);
+        }
+
+        var findings =
+            payload.Checks
+                .Select(
+                    check =>
+                        new ComplianceFindingDto
+                        {
+                            Code =
+                                check.Code,
+
+                            Title =
+                                check.Name,
+
+                            Description =
+                                check.Message,
+
+                            Category =
+                                "Windows",
+
+                            Severity =
+                                check.Passed
+                                    ? "Info"
+                                    : DetermineSeverity(
+                                        check.Code),
+
+                            Compliant =
+                                check.Passed
+                        })
+                .ToArray();
+
+        posture.UpdateCompliance(
+            payload.Score,
+            payload.RiskLevel,
+            payload.Status,
+            payload.TotalChecks,
+            payload.PassedChecks,
+            payload.FailedChecks,
+            JsonSerializer.Serialize(
+                findings));
+
+        var compliant =
+            payload.Status.Equals(
+                "Compliant",
+                StringComparison.OrdinalIgnoreCase);
+
+        device.SetCompliance(
+            compliant
+                ? ComplianceStatus.Compliant
+                : ComplianceStatus.NonCompliant);
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        if (!compliant)
+        {
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "DeviceNonCompliant",
+                    new
+                    {
+                        platform =
+                            "Windows",
+
+                        deviceName =
+                            device.DeviceName,
+
+                        status =
+                            payload.Status,
+
+                        score =
+                            payload.Score,
+
+                        riskLevel =
+                            payload.RiskLevel,
+
+                        totalChecks =
+                            payload.TotalChecks,
+
+                        passedChecks =
+                            payload.PassedChecks,
+
+                        failedChecks =
+                            payload.FailedChecks,
+
+                        findings =
+                            findings
+                    },
+                    cancellationToken:
+                        cancellationToken);
+        }
+    }
+
+    private static void ApplyWindowsSecurity(
+        Device device,
+        DeviceSecurityPosture posture,
+        WindowsSecurityPayload payload)
+    {
+        var secure =
+            payload.Defender.Available
+            &&
+            payload.Firewall.Available
+            &&
+            payload.UacEnabled;
+
+        var encryption =
+            payload.BitLocker.Available
+                ? "Evaluated"
+                : "Unknown";
+
+        posture.UpdateSecurity(
+            androidVersion:
+                string.Empty,
+
+            apiLevel:
+                0,
+
+            securityPatchLevel:
+                null,
+
+            deviceSecure:
+                secure,
+
+            encryptionStatus:
+                encryption,
+
+            adbEnabled:
+                false,
+
+            developerOptionsEnabled:
+                false,
+
+            rootDetected:
+                false,
+
+            rootSignalsJson:
+                "[]",
+
+            emulatorDetected:
+                false,
+
+            verifiedBootState:
+                payload.SecureBootEnabled
+                    ?.ToString(),
+
+            bootloaderLocked:
+                payload.SecureBootEnabled,
+
+            selinuxEnforced:
+                null,
+
+            agentInstalled:
+                true,
+
+            agentVersionName:
+                device.AgentVersion
+                ??
+                string.Empty,
+
+            agentVersionCode:
+                0,
+
+            unknownSourcesAllowed:
+                null);
+    }
+
+    // =========================================================
+    // ANDROID
+    // =========================================================
+
+    private async Task ProcessAndroidSecurityAsync(
+        Device device,
+        DeviceSecurityPosture posture,
+        string resultJson,
+        CancellationToken cancellationToken)
+    {
+        var payload =
+            JsonSerializer.Deserialize<
+                AndroidSecurityPayload>(
+                    resultJson,
+                    JsonOptions)
+            ??
+            throw new InvalidOperationException(
+                "SECURITY_STATUS Android contiene JSON inválido.");
+
+        ApplyAndroidSecurity(
+            posture,
+            payload);
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        var securityRisk =
+            payload.RootDetected
+            ||
+            payload.AdbEnabled
+            ||
+            payload.DeveloperOptionsEnabled
+            ||
+            !payload.DeviceSecure
+            ||
+            payload.BootloaderLocked == false
+            ||
+            payload.SelinuxEnforced == false
+            ||
+            payload.UnknownSourcesAllowed == true;
+
+        if (securityRisk)
+        {
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "SecurityRisk",
+                    new
+                    {
+                        platform =
+                            "Android",
+
+                        deviceName =
+                            device.DeviceName,
+
+                        rootDetected =
+                            payload.RootDetected,
+
+                        adbEnabled =
+                            payload.AdbEnabled,
+
+                        developerOptionsEnabled =
+                            payload.DeveloperOptionsEnabled,
+
+                        deviceSecure =
+                            payload.DeviceSecure
+                    },
+                    cancellationToken:
+                        cancellationToken);
+        }
+    }
+
+    private async Task ProcessAndroidComplianceAsync(
+        Device device,
+        DeviceSecurityPosture posture,
+        string resultJson,
+        CancellationToken cancellationToken)
+    {
+        var payload =
+            JsonSerializer.Deserialize<
+                AndroidCompliancePayload>(
+                    resultJson,
+                    JsonOptions)
+            ??
+            throw new InvalidOperationException(
+                "COMPLIANCE_CHECK Android contiene JSON inválido.");
+
+        if (payload.Posture is not null)
+        {
+            ApplyAndroidSecurity(
+                posture,
+                payload.Posture);
+        }
+
+        var findingsJson =
+            JsonSerializer.Serialize(
+                payload.Findings
+                ??
+                []);
+
+        posture.UpdateCompliance(
+            payload.Score,
+            payload.RiskLevel,
+            payload.Status,
+            payload.TotalChecks,
+            payload.PassedChecks,
+            payload.FailedChecks,
+            findingsJson);
+
+        var compliant =
+            payload.Status.Equals(
+                "Compliant",
+                StringComparison.OrdinalIgnoreCase);
+
+        device.SetCompliance(
+            compliant
+                ? ComplianceStatus.Compliant
+                : ComplianceStatus.NonCompliant);
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        if (!compliant)
+        {
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "DeviceNonCompliant",
+                    new
+                    {
+                        platform =
+                            "Android",
+
+                        deviceName =
+                            device.DeviceName,
+
+                        status =
+                            payload.Status,
+
+                        score =
+                            payload.Score,
+
+                        riskLevel =
+                            payload.RiskLevel
+                    },
+                    cancellationToken:
+                        cancellationToken);
+        }
+    }
+
+    private static void ApplyAndroidSecurity(
+        DeviceSecurityPosture posture,
+        AndroidSecurityPayload payload)
+    {
+        posture.UpdateSecurity(
+            payload.AndroidVersion,
+            payload.ApiLevel,
+            payload.SecurityPatchLevel,
+            payload.DeviceSecure,
+            payload.EncryptionStatus,
+            payload.AdbEnabled,
+            payload.DeveloperOptionsEnabled,
+            payload.RootDetected,
+            JsonSerializer.Serialize(
+                payload.RootSignals
+                ??
+                []),
+            payload.EmulatorDetected,
+            payload.VerifiedBootState,
+            payload.BootloaderLocked,
+            payload.SelinuxEnforced,
+            payload.AgentInstalled,
+            payload.AgentVersionName,
+            payload.AgentVersionCode,
+            payload.UnknownSourcesAllowed);
+    }
+
+    // =========================================================
+    // COMMON
+    // =========================================================
+
+    private async Task<Device> GetDeviceAsync(
+        Guid deviceId,
+        CancellationToken cancellationToken)
+    {
+        return await _dbContext
+            .Devices
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id ==
+                        deviceId
+                    &&
+                    !x.IsDeleted,
+                cancellationToken)
+            ??
+            throw new InvalidOperationException(
                 "El dispositivo no existe.");
     }
 
@@ -406,11 +731,13 @@ public sealed class SecurityPostureService
                 .SingleOrDefaultAsync(
                     x =>
                         x.DeviceId ==
-                            device.Id,
+                        device.Id,
                     cancellationToken);
 
         if (posture is not null)
+        {
             return posture;
+        }
 
         posture =
             new DeviceSecurityPosture(
@@ -425,91 +752,395 @@ public sealed class SecurityPostureService
         return posture;
     }
 
-    private static void ApplySecurity(
-        DeviceSecurityPosture posture,
-        SecurityPayload payload)
+    private static string DetermineSeverity(
+        string code)
     {
-        posture.UpdateSecurity(
-            payload.AndroidVersion,
-            payload.ApiLevel,
-            payload.SecurityPatchLevel,
-            payload.DeviceSecure,
-            payload.EncryptionStatus,
-            payload.AdbEnabled,
-            payload.DeveloperOptionsEnabled,
-            payload.RootDetected,
-            JsonSerializer.Serialize(
-                payload.RootSignals ?? []),
-            payload.EmulatorDetected,
-            payload.VerifiedBootState,
-            payload.BootloaderLocked,
-            payload.SelinuxEnforced,
-            payload.AgentInstalled,
-            payload.AgentVersionName,
-            payload.AgentVersionCode,
-            payload.UnknownSourcesAllowed);
+        return code.ToUpperInvariant()
+            switch
+            {
+                "DEFENDER_AVAILABLE" =>
+                    "Critical",
+
+                "FIREWALL_AVAILABLE" =>
+                    "High",
+
+                "UAC_ENABLED" =>
+                    "High",
+
+                "SECURE_BOOT" =>
+                    "High",
+
+                "BITLOCKER_STATUS" =>
+                    "High",
+
+                "TPM_STATUS" =>
+                    "Medium",
+
+                "NO_PENDING_REBOOT" =>
+                    "Medium",
+
+                _ =>
+                    "Medium"
+            };
     }
 
-    private sealed class SecurityPayload
+    // =========================================================
+    // WINDOWS DTO
+    // =========================================================
+
+    private sealed class WindowsSecurityPayload
     {
-        public string AndroidVersion { get; set; } =
-            string.Empty;
+        public AvailabilityPayload Defender
+        {
+            get;
+            set;
+        } = new();
 
-        public int ApiLevel { get; set; }
+        public AvailabilityPayload Firewall
+        {
+            get;
+            set;
+        } = new();
 
-        public string? SecurityPatchLevel { get; set; }
+        public AvailabilityPayload BitLocker
+        {
+            get;
+            set;
+        } = new();
 
-        public bool DeviceSecure { get; set; }
+        public AvailabilityPayload Tpm
+        {
+            get;
+            set;
+        } = new();
 
-        public string EncryptionStatus { get; set; } =
-            "Unknown";
+        public bool? SecureBootEnabled
+        {
+            get;
+            set;
+        }
 
-        public bool AdbEnabled { get; set; }
+        public bool UacEnabled
+        {
+            get;
+            set;
+        }
 
-        public bool DeveloperOptionsEnabled { get; set; }
+        public bool PendingReboot
+        {
+            get;
+            set;
+        }
 
-        public bool RootDetected { get; set; }
+        public bool RemoteDesktopEnabled
+        {
+            get;
+            set;
+        }
 
-        public List<string> RootSignals { get; set; } =
-            [];
-
-        public bool EmulatorDetected { get; set; }
-
-        public string? VerifiedBootState { get; set; }
-
-        public bool? BootloaderLocked { get; set; }
-
-        public bool? SelinuxEnforced { get; set; }
-
-        public bool AgentInstalled { get; set; }
-
-        public string AgentVersionName { get; set; } =
-            string.Empty;
-
-        public long AgentVersionCode { get; set; }
-
-        public bool? UnknownSourcesAllowed { get; set; }
+        public DateTime CollectedAtUtc
+        {
+            get;
+            set;
+        }
     }
 
-    private sealed class CompliancePayload
+    private sealed class AvailabilityPayload
     {
-        public string Status { get; set; } =
-            "Unknown";
+        public bool Available
+        {
+            get;
+            set;
+        }
 
-        public int Score { get; set; }
+        public string RawJson
+        {
+            get;
+            set;
+        } = string.Empty;
 
-        public string RiskLevel { get; set; } =
-            "Unknown";
+        public string? Error
+        {
+            get;
+            set;
+        }
+    }
 
-        public int TotalChecks { get; set; }
+    private sealed class WindowsCompliancePayload
+    {
+        public string Status
+        {
+            get;
+            set;
+        } = "Unknown";
 
-        public int PassedChecks { get; set; }
+        public int Score
+        {
+            get;
+            set;
+        }
 
-        public int FailedChecks { get; set; }
+        public string RiskLevel
+        {
+            get;
+            set;
+        } = "Unknown";
 
-        public List<object> Findings { get; set; } =
-            [];
+        public int TotalChecks
+        {
+            get;
+            set;
+        }
 
-        public SecurityPayload? Posture { get; set; }
+        public int PassedChecks
+        {
+            get;
+            set;
+        }
+
+        public int FailedChecks
+        {
+            get;
+            set;
+        }
+
+        public List<WindowsComplianceCheckPayload>
+            Checks
+        {
+            get;
+            set;
+        } = [];
+
+        public WindowsSecurityPayload? Security
+        {
+            get;
+            set;
+        }
+    }
+
+    private sealed class WindowsComplianceCheckPayload
+    {
+        public string Code
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public string Name
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public bool Passed
+        {
+            get;
+            set;
+        }
+
+        public string Message
+        {
+            get;
+            set;
+        } = string.Empty;
+    }
+
+    // =========================================================
+    // ANDROID DTO
+    // =========================================================
+
+    private sealed class AndroidSecurityPayload
+    {
+        public string AndroidVersion
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public int ApiLevel
+        {
+            get;
+            set;
+        }
+
+        public string? SecurityPatchLevel
+        {
+            get;
+            set;
+        }
+
+        public bool DeviceSecure
+        {
+            get;
+            set;
+        }
+
+        public string EncryptionStatus
+        {
+            get;
+            set;
+        } = "Unknown";
+
+        public bool AdbEnabled
+        {
+            get;
+            set;
+        }
+
+        public bool DeveloperOptionsEnabled
+        {
+            get;
+            set;
+        }
+
+        public bool RootDetected
+        {
+            get;
+            set;
+        }
+
+        public List<string> RootSignals
+        {
+            get;
+            set;
+        } = [];
+
+        public bool EmulatorDetected
+        {
+            get;
+            set;
+        }
+
+        public string? VerifiedBootState
+        {
+            get;
+            set;
+        }
+
+        public bool? BootloaderLocked
+        {
+            get;
+            set;
+        }
+
+        public bool? SelinuxEnforced
+        {
+            get;
+            set;
+        }
+
+        public bool AgentInstalled
+        {
+            get;
+            set;
+        }
+
+        public string AgentVersionName
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public long AgentVersionCode
+        {
+            get;
+            set;
+        }
+
+        public bool? UnknownSourcesAllowed
+        {
+            get;
+            set;
+        }
+    }
+
+    private sealed class AndroidCompliancePayload
+    {
+        public string Status
+        {
+            get;
+            set;
+        } = "Unknown";
+
+        public int Score
+        {
+            get;
+            set;
+        }
+
+        public string RiskLevel
+        {
+            get;
+            set;
+        } = "Unknown";
+
+        public int TotalChecks
+        {
+            get;
+            set;
+        }
+
+        public int PassedChecks
+        {
+            get;
+            set;
+        }
+
+        public int FailedChecks
+        {
+            get;
+            set;
+        }
+
+        public List<object> Findings
+        {
+            get;
+            set;
+        } = [];
+
+        public AndroidSecurityPayload? Posture
+        {
+            get;
+            set;
+        }
+    }
+
+    private sealed class ComplianceFindingDto
+    {
+        public string Code
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public string Title
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public string Description
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public string Category
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public string Severity
+        {
+            get;
+            set;
+        } = string.Empty;
+
+        public bool Compliant
+        {
+            get;
+            set;
+        }
     }
 }

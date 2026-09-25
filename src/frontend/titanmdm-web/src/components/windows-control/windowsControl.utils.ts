@@ -867,19 +867,128 @@ function normalizeUpdateHistory(
   )
 }
 
+function normalizeAvailableUpdates(
+  raw:
+    string | null,
+): import(
+  './windowsControl.types'
+).AvailableWindowsUpdate[] {
+  const parsed =
+    safeParseJson(
+      raw,
+    )
+
+  const items =
+    Array.isArray(
+      parsed,
+    )
+      ? parsed
+      : parsed
+        ? [parsed]
+        : []
+
+  return items.map(
+    value => {
+      const item =
+        asObject(
+          value,
+        )
+
+      const kbValue =
+        property(
+          item,
+          'kbArticleIds',
+          'KbArticleIds',
+        )
+
+      const kbArticleIds =
+        Array.isArray(
+          kbValue,
+        )
+          ? kbValue.map(
+              value =>
+                String(
+                  value,
+                ),
+            )
+          : []
+
+      return {
+        title:
+          stringValue(
+            item,
+            'title',
+            'Title',
+          )
+          ??
+          'Windows Update',
+
+        kbArticleIds,
+
+        severity:
+          stringValue(
+            item,
+            'severity',
+            'Severity',
+          ),
+
+        rebootRequired:
+          booleanValue(
+            item,
+            'rebootRequired',
+            'RebootRequired',
+          ),
+
+        isDownloaded:
+          booleanValue(
+            item,
+            'isDownloaded',
+            'IsDownloaded',
+          ),
+
+        eulaAccepted:
+          booleanValue(
+            item,
+            'eulaAccepted',
+            'EulaAccepted',
+          ),
+      }
+    },
+  )
+}
+
 export function parseUpdate(
   command:
     DeviceCommand | null,
 ): UpdateView {
   const empty:
     UpdateView = {
-      available: false,
-      serviceStatus: 'Unknown',
-      serviceQuerySucceeded: false,
-      pendingReboot: null,
-      historyAvailable: false,
-      history: [],
-      collectedAtUtc: null,
+      available:
+        false,
+
+      serviceStatus:
+        'Unknown',
+
+      serviceQuerySucceeded:
+        false,
+
+      pendingReboot:
+        null,
+
+      historyAvailable:
+        false,
+
+      history:
+        [],
+
+      availableUpdatesAvailable:
+        false,
+
+      availableUpdates:
+        [],
+
+      collectedAtUtc:
+        null,
     }
 
   if (
@@ -910,7 +1019,8 @@ export function parseUpdate(
     )
 
   return {
-    available: true,
+    available:
+      true,
 
     serviceStatus:
       stringValue(
@@ -952,6 +1062,24 @@ export function parseUpdate(
           root,
           'UpdateHistoryJson',
           'updateHistoryJson',
+        ),
+      ),
+
+    availableUpdatesAvailable:
+      booleanValue(
+        root,
+        'AvailableUpdatesAvailable',
+        'availableUpdatesAvailable',
+      )
+      ??
+      false,
+
+    availableUpdates:
+      normalizeAvailableUpdates(
+        stringValue(
+          root,
+          'AvailableUpdatesJson',
+          'availableUpdatesJson',
         ),
       ),
 

@@ -22,6 +22,11 @@ export type AutomationActionType =
   | 'EnableLostMode'
   | 'DisableLostMode'
   | 'Notification'
+  | 'WindowsInventory'
+  | 'WindowsUpdateScan'
+  | 'WindowsUpdateInstall'
+  | 'RestartDevice'
+  | 'LockDevice'
 
 export interface AutomationRule {
   id: string

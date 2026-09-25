@@ -173,6 +173,60 @@ const actionOptions: ActionOption[] = [
     description:
       'Genera una acción de notificación.',
   },
+  {
+  value:
+    'WindowsInventory',
+
+  label:
+    'Inventario Windows',
+
+  description:
+    'Actualiza el inventario completo del endpoint Windows.',
+},
+
+{
+  value:
+    'WindowsUpdateScan',
+
+  label:
+    'Buscar Windows Update',
+
+  description:
+    'Solicita una nueva búsqueda de actualizaciones.',
+},
+
+{
+  value:
+    'WindowsUpdateInstall',
+
+  label:
+    'Instalar Windows Update',
+
+  description:
+    'Instala las actualizaciones disponibles del endpoint.',
+},
+
+{
+  value:
+    'LockDevice',
+
+  label:
+    'Bloquear dispositivo',
+
+  description:
+    'Bloquea la sesión interactiva del endpoint Windows.',
+},
+
+{
+  value:
+    'RestartDevice',
+
+  label:
+    'Reiniciar dispositivo',
+
+  description:
+    'Solicita el reinicio remoto del endpoint.',
+},
 ]
 
 export function AutomationPage() {
@@ -406,6 +460,21 @@ export function AutomationPage() {
             notificationMessage.trim() ||
             'Evento detectado por TitanMDM.',
         })
+
+        case 'WindowsUpdateInstall':
+          return JSON.stringify({
+            payloadJson:
+              JSON.stringify({
+                kbArticleIds:
+                  [],
+
+                acceptEula:
+                  true,
+
+                downloadOnly:
+                  false,
+              }),
+          })
 
       default:
         return '{}'
