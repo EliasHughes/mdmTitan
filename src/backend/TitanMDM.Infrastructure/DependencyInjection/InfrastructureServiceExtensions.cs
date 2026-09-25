@@ -46,7 +46,11 @@ using TitanMDM.Infrastructure.LostMode;
 using TitanMDM.Application.Automation;
 using TitanMDM.Infrastructure.Automation;
 
+using TitanMDM.Application.Audit;
+using TitanMDM.Application.Reports;
 
+using TitanMDM.Infrastructure.Audit;
+using TitanMDM.Infrastructure.Reports;
 
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
@@ -346,6 +350,18 @@ public static class InfrastructureServiceExtensions
 
         services.AddHostedService<
             DeviceOfflineMonitor>();
+
+        // ============================================================
+        // AUDIT / REPORTING
+        // ============================================================
+
+        services.AddScoped<
+            IAuditQueryService,
+            AuditQueryService>();
+
+        services.AddScoped<
+            IReportsService,
+            ReportsService>();
 
         // ============================================================
         // DATABASE SEED
