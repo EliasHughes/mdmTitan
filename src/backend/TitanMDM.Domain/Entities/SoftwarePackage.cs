@@ -17,51 +17,85 @@ public sealed class SoftwarePackage
         string sha256,
         long sizeBytes,
         string? installArguments,
-        Guid createdByUserId)
+        Guid createdByUserId,
+        Guid? id = null)
     {
         if (organizationId == Guid.Empty)
+        {
             throw new ArgumentException(
-                "OrganizationId is required.");
+                "OrganizationId is required.",
+                nameof(organizationId));
+        }
 
         if (createdByUserId == Guid.Empty)
+        {
             throw new ArgumentException(
-                "CreatedByUserId is required.");
+                "CreatedByUserId is required.",
+                nameof(createdByUserId));
+        }
 
         if (string.IsNullOrWhiteSpace(name))
+        {
             throw new ArgumentException(
-                "Name is required.");
+                "Name is required.",
+                nameof(name));
+        }
 
         if (string.IsNullOrWhiteSpace(version))
+        {
             throw new ArgumentException(
-                "Version is required.");
+                "Version is required.",
+                nameof(version));
+        }
 
         if (string.IsNullOrWhiteSpace(packageType))
+        {
             throw new ArgumentException(
-                "PackageType is required.");
+                "PackageType is required.",
+                nameof(packageType));
+        }
 
         if (string.IsNullOrWhiteSpace(originalFileName))
+        {
             throw new ArgumentException(
-                "OriginalFileName is required.");
+                "OriginalFileName is required.",
+                nameof(originalFileName));
+        }
 
         if (string.IsNullOrWhiteSpace(storedFileName))
+        {
             throw new ArgumentException(
-                "StoredFileName is required.");
+                "StoredFileName is required.",
+                nameof(storedFileName));
+        }
 
         if (string.IsNullOrWhiteSpace(relativePath))
+        {
             throw new ArgumentException(
-                "RelativePath is required.");
+                "RelativePath is required.",
+                nameof(relativePath));
+        }
 
         if (string.IsNullOrWhiteSpace(sha256))
+        {
             throw new ArgumentException(
-                "Sha256 is required.");
+                "Sha256 is required.",
+                nameof(sha256));
+        }
 
-        Id = Guid.NewGuid();
+        Id =
+            id
+            ??
+            Guid.NewGuid();
 
-        OrganizationId = organizationId;
+        OrganizationId =
+            organizationId;
 
-        Name = name.Trim();
+        Name =
+            name.Trim();
 
-        Version = version.Trim();
+        Version =
+            version.Trim();
 
         PackageType =
             packageType
@@ -94,7 +128,8 @@ public sealed class SoftwarePackage
         CreatedByUserId =
             createdByUserId;
 
-        IsActive = true;
+        IsActive =
+            true;
 
         CreatedAtUtc =
             DateTime.UtcNow;
@@ -103,7 +138,11 @@ public sealed class SoftwarePackage
             DateTime.UtcNow;
     }
 
-    public Guid Id { get; private set; }
+    public Guid Id
+    {
+        get;
+        private set;
+    }
 
     public Guid OrganizationId
     {
@@ -189,22 +228,62 @@ public sealed class SoftwarePackage
         private set;
     }
 
+    public void UpdateMetadata(
+        string name,
+        string version,
+        string? installArguments)
+    {
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new ArgumentException(
+                "Name is required.",
+                nameof(name));
+        }
+
+        if (string.IsNullOrWhiteSpace(version))
+        {
+            throw new ArgumentException(
+                "Version is required.",
+                nameof(version));
+        }
+
+        Name =
+            name.Trim();
+
+        Version =
+            version.Trim();
+
+        InstallArguments =
+            Normalize(
+                installArguments);
+
+        UpdatedAtUtc =
+            DateTime.UtcNow;
+    }
+
     public void Disable()
     {
-        IsActive = false;
-        UpdatedAtUtc = DateTime.UtcNow;
+        IsActive =
+            false;
+
+        UpdatedAtUtc =
+            DateTime.UtcNow;
     }
 
     public void Enable()
     {
-        IsActive = true;
-        UpdatedAtUtc = DateTime.UtcNow;
+        IsActive =
+            true;
+
+        UpdatedAtUtc =
+            DateTime.UtcNow;
     }
 
     private static string? Normalize(
         string? value)
     {
-        return string.IsNullOrWhiteSpace(value)
+        return string.IsNullOrWhiteSpace(
+            value)
             ? null
             : value.Trim();
     }
