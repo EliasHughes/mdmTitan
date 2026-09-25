@@ -1,16 +1,8 @@
 import {
   Activity,
-  AppWindow,
-  Boxes,
   CheckCircle2,
-  Cpu,
-  HardDrive,
   Layers3,
-  LockKeyhole,
-  Network,
-  Power,
   RefreshCw,
-  RotateCcw,
   ShieldCheck,
   UsersRound,
   Wifi,
@@ -36,6 +28,26 @@ import type {
   DeviceOperationalSnapshot,
 } from '../../../types/device'
 
+import {
+  DeviceActionsPanel,
+} from './operational/DeviceActionsPanel'
+
+import {
+  DeviceHistoryPanel,
+} from './operational/DeviceHistoryPanel'
+
+import {
+  DeviceInventoryView,
+} from './operational/DeviceInventoryView'
+
+import {
+  DeviceSoftwarePanel,
+} from './operational/DeviceSoftwarePanel'
+
+import {
+  formatDate,
+} from './operational/deviceOperational.utils'
+
 import './DeviceOperationalPanel.css'
 
 interface Props {
@@ -50,61 +62,6 @@ const INVENTORY_COMMANDS = [
   'COMPLIANCE_CHECK',
   'WINDOWS_UPDATE_STATUS',
 ] as const
-
-const LABELS: Record<string, string> = {
-  DEVICE_INFO:
-    'Información del dispositivo',
-
-  DEVICE_INVENTORY:
-    'Hardware e inventario',
-
-  APP_INVENTORY:
-    'Aplicaciones instaladas',
-
-  PROCESS_INVENTORY:
-    'Procesos',
-
-  SERVICE_INVENTORY:
-    'Servicios',
-
-  NETWORK_INFO:
-    'Red',
-
-  SECURITY_STATUS:
-    'Seguridad',
-
-  COMPLIANCE_CHECK:
-    'Cumplimiento',
-
-  WINDOWS_UPDATE_STATUS:
-    'Windows Update',
-}
-
-function parseJson(
-  value: string | null,
-): unknown {
-  if (!value) {
-    return null
-  }
-
-  try {
-    return JSON.parse(value)
-  } catch {
-    return value
-  }
-}
-
-function formatDate(
-  value: string | null,
-): string {
-  if (!value) {
-    return 'N/D'
-  }
-
-  return new Date(
-    value,
-  ).toLocaleString()
-}
 
 function isTerminal(
   status: string,
@@ -136,12 +93,13 @@ async function waitForCommand(
       return current
     }
 
-    await new Promise(
-      resolve =>
+    await new Promise<void>(
+      resolve => {
         window.setTimeout(
           resolve,
           2000,
-        ),
+        )
+      },
     )
 
     current =
@@ -157,22 +115,27 @@ async function waitForCommand(
 function calculateHealth(
   snapshot:
     DeviceOperationalSnapshot,
-) {
-  let score = 0
+): {
+  score: number
 
-  const checks: {
+  checks: Array<{
     label: string
     ok: boolean
     value: string
-  }[] = []
+  }>
+} {
+  let score = 0
 
-  /*
-   * Administración
-   * 25 puntos
-   */
+  const checks:
+    Array<{
+      label: string
+      ok: boolean
+      value: string
+    }> =
+      []
+
   const managed =
-    snapshot.device
-      .isManaged
+    snapshot.device.isManaged
 
   score +=
     managed
@@ -192,10 +155,6 @@ function calculateHealth(
         : 'No administrado',
   })
 
-  /*
-   * Cumplimiento
-   * 25 puntos
-   */
   const compliance =
     snapshot.device
       .complianceStatus
@@ -204,14 +163,11 @@ function calculateHealth(
     compliance ===
     'Compliant'
 
-  const unknownCompliance =
-    compliance ===
-    'Unknown'
-
   score +=
     compliant
       ? 25
-      : unknownCompliance
+      : compliance ===
+          'Unknown'
         ? 10
         : 0
 
@@ -226,10 +182,6 @@ function calculateHealth(
       compliance,
   })
 
-  /*
-   * Agente
-   * 20 puntos
-   */
   const agent =
     Boolean(
       snapshot.device
@@ -263,10 +215,6 @@ function calculateHealth(
       'No detectado',
   })
 
-  /*
-   * Telemetría
-   * 15 puntos
-   */
   const lastSeen =
     snapshot.device
       .lastSeenAtUtc
@@ -279,13 +227,17 @@ function calculateHealth(
   const recent =
     lastSeen !== null
     &&
-    Date.now() -
-      lastSeen.getTime()
-      <
-      24 *
-        60 *
-        60 *
-        1000
+    Date.now()
+    -
+    lastSeen.getTime()
+    <
+    24
+    *
+    60
+    *
+    60
+    *
+    1000
 
   score +=
     recent
@@ -306,10 +258,6 @@ function calculateHealth(
       ),
   })
 
-  /*
-   * Seguridad
-   * 15 puntos
-   */
   const securityScore =
     snapshot.security
       ?.complianceScore
@@ -318,7 +266,7 @@ function calculateHealth(
     securityScore !==
     undefined
   ) {
-    const normalizedSecurity =
+    const normalized =
       Math.max(
         0,
         Math.min(
@@ -329,15 +277,11 @@ function calculateHealth(
 
     score +=
       Math.round(
-        normalizedSecurity *
+        normalized
+        *
         0.15,
       )
   } else {
-    /*
-     * No castigamos excesivamente
-     * un equipo que todavía no ha
-     * sido evaluado.
-     */
     score += 7
   }
 
@@ -346,11 +290,11 @@ function calculateHealth(
       'Seguridad',
 
     ok:
-      securityScore !==
+      securityScore ===
         undefined
-        ? securityScore >=
-          70
-        : true,
+        ||
+        securityScore >=
+          70,
 
     value:
       securityScore !==
@@ -359,18 +303,9 @@ function calculateHealth(
         : 'Sin evaluación',
   })
 
-  /*
-   * La conectividad se muestra como
-   * indicador operacional, pero no
-   * modifica el Health Score.
-   *
-   * Un equipo apagado no equivale
-   * necesariamente a un equipo enfermo.
-   */
   const online =
-    snapshot.device
-      .status ===
-      'Online'
+    snapshot.device.status ===
+    'Online'
 
   checks.push({
     label:
@@ -380,8 +315,7 @@ function calculateHealth(
       online,
 
     value:
-      snapshot.device
-        .status,
+      snapshot.device.status,
   })
 
   return {
@@ -396,45 +330,6 @@ function calculateHealth(
 
     checks,
   }
-}
-
-function JsonPreview({
-  value,
-}: {
-  value: unknown
-}) {
-  if (
-    value === null
-    ||
-    value === undefined
-  ) {
-    return (
-      <div className="device-op-empty">
-        Sin datos.
-      </div>
-    )
-  }
-
-  if (
-    typeof value ===
-    'string'
-  ) {
-    return (
-      <pre className="device-op-json">
-        {value}
-      </pre>
-    )
-  }
-
-  return (
-    <pre className="device-op-json">
-      {JSON.stringify(
-        value,
-        null,
-        2,
-      )}
-    </pre>
-  )
 }
 
 export function DeviceOperationalPanel({
@@ -478,9 +373,15 @@ export function DeviceOperationalPanel({
       string | null
     >(null)
 
+  const [
+    historyRefreshKey,
+    setHistoryRefreshKey,
+  ] =
+    useState(0)
+
   const load =
     useCallback(
-      async () => {
+      async (): Promise<void> => {
         try {
           setLoading(true)
 
@@ -490,21 +391,14 @@ export function DeviceOperationalPanel({
                 deviceId,
               )
 
-          setSnapshot(
-            data,
-          )
-
-          setError(
-            null,
-          )
+          setSnapshot(data)
+          setError(null)
         } catch {
           setError(
-            'No fue posible cargar el snapshot operacional.',
+            'No fue posible cargar la información operacional.',
           )
         } finally {
-          setLoading(
-            false,
-          )
+          setLoading(false)
         }
       },
       [
@@ -536,7 +430,8 @@ export function DeviceOperationalPanel({
 
   async function execute(
     commandType: string,
-  ) {
+    payloadJson = '{}',
+  ): Promise<void> {
     if (working) {
       return
     }
@@ -546,21 +441,15 @@ export function DeviceOperationalPanel({
         commandType,
       )
 
-      setError(
-        null,
-      )
-
-      setMessage(
-        null,
-      )
+      setError(null)
+      setMessage(null)
 
       const command =
         await deviceCommandsApi
           .create({
             deviceId,
             commandType,
-            payloadJson:
-              '{}',
+            payloadJson,
             expirationMinutes:
               30,
           })
@@ -586,18 +475,22 @@ export function DeviceOperationalPanel({
       }
 
       await load()
+
+      setHistoryRefreshKey(
+        current =>
+          current + 1,
+      )
     } catch {
       setError(
         `No fue posible ejecutar ${commandType}.`,
       )
     } finally {
-      setWorking(
-        null,
-      )
+      setWorking(null)
     }
   }
 
-  async function fullRefresh() {
+  async function fullRefresh():
+    Promise<void> {
     if (
       working
       ||
@@ -607,8 +500,7 @@ export function DeviceOperationalPanel({
     }
 
     if (
-      snapshot.device
-        .platform !==
+      snapshot.device.platform !==
       'Windows'
     ) {
       await execute(
@@ -623,71 +515,79 @@ export function DeviceOperationalPanel({
         'FULL_REFRESH',
       )
 
-      setError(
-        null,
-      )
+      setError(null)
 
       setMessage(
         'Solicitando inventario completo...',
       )
 
-      const commands =
-        await Promise.all(
-          INVENTORY_COMMANDS.map(
-            commandType =>
-              deviceCommandsApi
-                .create({
-                  deviceId,
-                  commandType,
-                  payloadJson:
-                    '{}',
-                  expirationMinutes:
-                    30,
-                }),
-          ),
-        )
-
-      await Promise.all(
-        commands.map(
-          command =>
-            waitForCommand(
-              command,
+      const commands:
+        DeviceCommand[] =
+          await Promise.all(
+            INVENTORY_COMMANDS.map(
+              commandType =>
+                deviceCommandsApi
+                  .create({
+                    deviceId,
+                    commandType,
+                    payloadJson:
+                      '{}',
+                    expirationMinutes:
+                      30,
+                  }),
             ),
-        ),
-      )
+          )
+
+      const results:
+        DeviceCommand[] =
+          await Promise.all(
+            commands.map(
+              (
+                command:
+                  DeviceCommand,
+              ) =>
+                waitForCommand(
+                  command,
+                ),
+            ),
+          )
+
+      const failures =
+        results.filter(
+          (
+            result:
+              DeviceCommand,
+          ) =>
+            result.status !==
+            'Success',
+        )
 
       await load()
 
-      setMessage(
-        'Inventario actualizado.',
+      setHistoryRefreshKey(
+        current =>
+          current + 1,
       )
+
+      if (
+        failures.length >
+        0
+      ) {
+        setError(
+          `${failures.length} operación(es) del inventario no finalizaron correctamente.`,
+        )
+      } else {
+        setMessage(
+          'Inventario actualizado correctamente.',
+        )
+      }
     } catch {
       setError(
-        'No fue posible completar el refresh integral.',
+        'No fue posible completar la actualización integral.',
       )
     } finally {
-      setWorking(
-        null,
-      )
+      setWorking(null)
     }
-  }
-
-  async function destructiveAction(
-    commandType: string,
-    label: string,
-  ) {
-    const confirmed =
-      window.confirm(
-        `${label}\n\n¿Deseas continuar?`,
-      )
-
-    if (!confirmed) {
-      return
-    }
-
-    await execute(
-      commandType,
-    )
   }
 
   if (
@@ -710,15 +610,15 @@ export function DeviceOperationalPanel({
   if (!snapshot) {
     return (
       <section className="device-op-error">
-        {error ??
-          'Snapshot no disponible.'}
+        {error
+        ??
+        'Información operacional no disponible.'}
       </section>
     )
   }
 
   const windows =
-    snapshot.device
-      .platform ===
+    snapshot.device.platform ===
     'Windows'
 
   return (
@@ -730,7 +630,7 @@ export function DeviceOperationalPanel({
           </span>
 
           <strong>
-            Inventario y salud
+            Inventario y administración
           </strong>
 
           <small>
@@ -742,103 +642,31 @@ export function DeviceOperationalPanel({
           </small>
         </div>
 
-        <div className="device-op-actions">
-          <button
-            type="button"
-            className="device-op-primary"
-            disabled={
-              Boolean(
-                working,
-              )
+        <button
+          type="button"
+          className="device-op-primary"
+          disabled={
+            Boolean(working)
+          }
+          onClick={() =>
+            void fullRefresh()
+          }
+        >
+          <RefreshCw
+            size={15}
+            className={
+              working ===
+              'FULL_REFRESH'
+                ? 'device-detail-spin'
+                : ''
             }
-            onClick={() =>
-              void fullRefresh()
-            }
-          >
-            <RefreshCw
-              size={15}
-              className={
-                working ===
-                'FULL_REFRESH'
-                  ? 'device-detail-spin'
-                  : ''
-              }
-            />
+          />
 
-            {working ===
-            'FULL_REFRESH'
-              ? 'Actualizando...'
-              : 'Actualizar inventario'}
-          </button>
-
-          {windows && (
-            <>
-              <button
-                type="button"
-                disabled={
-                  Boolean(
-                    working,
-                  )
-                }
-                onClick={() =>
-                  void destructiveAction(
-                    'LOCK_DEVICE',
-                    'Bloquear dispositivo',
-                  )
-                }
-              >
-                <LockKeyhole
-                  size={15}
-                />
-
-                Bloquear
-              </button>
-
-              <button
-                type="button"
-                disabled={
-                  Boolean(
-                    working,
-                  )
-                }
-                onClick={() =>
-                  void destructiveAction(
-                    'RESTART_DEVICE',
-                    'Reiniciar dispositivo',
-                  )
-                }
-              >
-                <RotateCcw
-                  size={15}
-                />
-
-                Reiniciar
-              </button>
-
-              <button
-                type="button"
-                className="device-op-danger"
-                disabled={
-                  Boolean(
-                    working,
-                  )
-                }
-                onClick={() =>
-                  void destructiveAction(
-                    'SHUTDOWN_DEVICE',
-                    'Apagar dispositivo',
-                  )
-                }
-              >
-                <Power
-                  size={15}
-                />
-
-                Apagar
-              </button>
-            </>
-          )}
-        </div>
+          {working ===
+          'FULL_REFRESH'
+            ? 'Actualizando...'
+            : 'Actualizar inventario'}
+        </button>
       </div>
 
       {message && (
@@ -861,8 +689,9 @@ export function DeviceOperationalPanel({
         <article className="device-op-health">
           <div className="device-op-health-score">
             <strong>
-              {health?.score ??
-                0}
+              {health?.score
+              ??
+              0}
             </strong>
 
             <span>
@@ -880,8 +709,7 @@ export function DeviceOperationalPanel({
             </h3>
 
             <p>
-              Score calculado con administración,
-              conectividad, cumplimiento,
+              Administración, cumplimiento,
               agente, telemetría y seguridad.
             </p>
           </div>
@@ -891,9 +719,7 @@ export function DeviceOperationalPanel({
           {health?.checks.map(
             check => (
               <div
-                key={
-                  check.label
-                }
+                key={check.label}
                 className={
                   check.ok
                     ? 'good'
@@ -938,8 +764,10 @@ export function DeviceOperationalPanel({
           </span>
 
           <strong>
-            {snapshot.device
-              .complianceStatus}
+            {
+              snapshot.device
+                .complianceStatus
+            }
           </strong>
         </article>
 
@@ -975,10 +803,10 @@ export function DeviceOperationalPanel({
         </article>
       </div>
 
-      <article className="device-op-card">
+      <article className="op-panel">
         <header>
           <Layers3
-            size={17}
+            size={18}
           />
 
           <div>
@@ -987,7 +815,7 @@ export function DeviceOperationalPanel({
             </strong>
 
             <span>
-              Membresía del dispositivo
+              Membresía del endpoint
             </span>
           </div>
         </header>
@@ -1012,7 +840,9 @@ export function DeviceOperationalPanel({
                     {group.isDynamic
                       ? 'Dinámico'
                       : 'Estático'}
+
                     {' · '}
+
                     {group.source}
                   </span>
                 </div>
@@ -1023,128 +853,63 @@ export function DeviceOperationalPanel({
       </article>
 
       {windows && (
-        <div className="device-op-inventory-grid">
-          {[
-            [
-              'DEVICE_INVENTORY',
-              Cpu,
-            ],
-            [
-              'APP_INVENTORY',
-              AppWindow,
-            ],
-            [
-              'NETWORK_INFO',
-              Network,
-            ],
-            [
-              'SECURITY_STATUS',
-              ShieldCheck,
-            ],
-            [
-              'COMPLIANCE_CHECK',
-              CheckCircle2,
-            ],
-            [
-              'WINDOWS_UPDATE_STATUS',
-              HardDrive,
-            ],
-          ].map(
-            ([
-              commandType,
-              Icon,
-            ]) => {
-              const result =
-                snapshot
-                  .latestResults[
-                  commandType as string
+        <>
+          <DeviceInventoryView
+            inventory={
+              snapshot
+                .latestResults[
+                  'DEVICE_INVENTORY'
                 ]
+            }
+            network={
+              snapshot
+                .latestResults[
+                  'NETWORK_INFO'
+                ]
+            }
+          />
 
-              return (
-                <article
-                  className="device-op-card"
-                  key={
-                    commandType as string
-                  }
-                >
-                  <header>
-                    <Icon
-                      size={17}
-                    />
-
-                    <div>
-                      <strong>
-                        {LABELS[
-                          commandType as string
-                        ]}
-                      </strong>
-
-                      <span>
-                        {result
-                          ? formatDate(
-                              result.completedAtUtc
-                              ??
-                              result.createdAtUtc,
-                            )
-                          : 'Sin snapshot'}
-                      </span>
-                    </div>
-
-                    <button
-                      type="button"
-                      disabled={
-                        Boolean(
-                          working,
-                        )
-                      }
-                      onClick={() =>
-                        void execute(
-                          commandType as string,
-                        )
-                      }
-                    >
-                      <RefreshCw
-                        size={14}
-                      />
-                    </button>
-                  </header>
-
-                  <JsonPreview
-                    value={
-                      parseJson(
-                        result
-                          ?.resultJson
-                        ??
-                        null,
-                      )
-                    }
-                  />
-                </article>
+          <DeviceSoftwarePanel
+            snapshot={
+              snapshot
+                .latestResults[
+                  'APP_INVENTORY'
+                ]
+            }
+            busy={
+              Boolean(working)
+            }
+            onRefresh={() =>
+              execute(
+                'APP_INVENTORY',
               )
-            },
-          )}
-        </div>
-      )}
+            }
+            onExecute={
+              execute
+            }
+          />
 
-      {!windows && (
-        <article className="device-op-card">
-          <header>
-            <Boxes
-              size={17}
-            />
+          <DeviceActionsPanel
+            busy={
+              Boolean(working)
+            }
+            onFullRefresh={
+              fullRefresh
+            }
+            onExecute={
+              execute
+            }
+          />
 
-            <div>
-              <strong>
-                Android Enterprise
-              </strong>
-
-              <span>
-                El detalle AMAPI permanece disponible
-                en las pestañas Android del dispositivo.
-              </span>
-            </div>
-          </header>
-        </article>
+          <DeviceHistoryPanel
+            deviceId={
+              deviceId
+            }
+            refreshKey={
+              historyRefreshKey
+            }
+          />
+        </>
       )}
     </section>
   )
