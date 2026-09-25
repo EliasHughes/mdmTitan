@@ -39,47 +39,47 @@ public sealed class CommandExecutor
         _softwareManager;
 
     public CommandExecutor(
-        ILogger<CommandExecutor> logger,
-        WindowsInventoryProvider inventoryProvider,
-        WindowsSecurityProvider securityProvider,
-        WindowsComplianceProvider complianceProvider,
-        WindowsUpdateProvider updateProvider,
-        WindowsActionExecutor actionExecutor,
-        WindowsServiceManager serviceManager,
-        WindowsScriptExecutor scriptExecutor,
-        WindowsSoftwareManager softwareManager)
-    {
-        _logger =
-            logger;
+    ILogger<CommandExecutor> logger,
+    WindowsInventoryProvider inventoryProvider,
+    WindowsSecurityProvider securityProvider,
+    WindowsComplianceProvider complianceProvider,
+    WindowsUpdateProvider updateProvider,
+    WindowsActionExecutor actionExecutor,
+    WindowsServiceManager serviceManager,
+    WindowsScriptExecutor scriptExecutor,
+    WindowsSoftwareManager softwareManager,
+    WindowsSoftwarePackageDownloader packageDownloader)
+{
+    _logger =
+        logger;
 
-        _inventoryProvider =
-            inventoryProvider;
+    _inventoryProvider =
+        inventoryProvider;
 
-        _securityProvider =
-            securityProvider;
+    _securityProvider =
+        securityProvider;
 
-        _complianceProvider =
-            complianceProvider;
+    _complianceProvider =
+        complianceProvider;
 
-        _updateProvider =
-            updateProvider;
+    _updateProvider =
+        updateProvider;
 
-        _actionExecutor =
-            actionExecutor;
+    _actionExecutor =
+        actionExecutor;
 
-        _serviceManager =
-            serviceManager;
+    _serviceManager =
+        serviceManager;
 
-        _scriptExecutor =
-            scriptExecutor;
+    _scriptExecutor =
+        scriptExecutor;
 
-        _softwareManager =
-            softwareManager;
-        
-        _packageDownloader =
-            packageDownloader;
-    }
+    _softwareManager =
+        softwareManager;
 
+    _packageDownloader =
+        packageDownloader;
+}
     public async Task<CommandExecutionResult>
         ExecuteAsync(
             AgentCommand command,
