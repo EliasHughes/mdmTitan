@@ -60,3 +60,29 @@ export const applicationsApi = {
     return response.data
   },
 }
+
+export interface SoftwarePackage {
+  id: string
+  name: string
+  version: string
+  packageType: string
+  originalFileName: string
+  sha256: string
+  sizeBytes: number
+  installArguments: string | null
+  isActive: boolean
+  createdAtUtc: string
+}
+
+export interface SoftwareDeployment {
+  id: string
+  packageId: string
+  packageName: string
+  packageVersion: string
+  targetType: string
+  targetId: string
+  targetName: string
+  status: string
+  queuedDevices: number
+  createdAtUtc: string
+}

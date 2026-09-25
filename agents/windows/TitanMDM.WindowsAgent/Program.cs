@@ -107,6 +107,13 @@ builder.Services
         WindowsScriptExecutor>();
 
 builder.Services
+    .AddHttpClient();
+
+builder.Services
+    .AddSingleton<
+        WindowsSoftwarePackageDownloader>();
+
+builder.Services
     .AddSingleton<
         WindowsSoftwareManager>();
 

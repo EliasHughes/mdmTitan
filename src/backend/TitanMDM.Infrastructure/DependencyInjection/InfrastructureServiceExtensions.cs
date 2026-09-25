@@ -254,6 +254,10 @@ public static class InfrastructureServiceExtensions
             IApplicationInventoryService,
             ApplicationInventoryService>();
 
+        services.AddScoped<
+            ISoftwareDeploymentService,
+            SoftwareDeploymentService>();
+
         // ============================================================
         // POLICY ENGINE
         // ============================================================
@@ -362,6 +366,8 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IReportsService,
             ReportsService>();
+
+
 
         // ============================================================
         // DATABASE SEED
