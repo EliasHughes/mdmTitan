@@ -716,57 +716,23 @@ public sealed class SoftwareDeploymentService
     }
 
     private async Task<
-        (
-            List<Guid> DeviceIds,
-            string TargetName
-        )>
-        ResolveDeploymentTargetsAsync(
-            Guid organizationId,
-            string targetType,
-            Guid targetId,
-            CancellationToken cancellationToken)
+    (
+        List<Guid> DeviceIds,
+        string TargetName
+    )>
+    ResolveDeploymentTargetsAsync(
+        Guid organizationId,
+        string targetType,
+        Guid targetId,
+        CancellationToken cancellationToken)
+{
+    if (
+        targetType ==
+        "Device")
     {
-        if (
-            targetType ==
-            "Device")
-        {
-            var device =
-                await _dbContext
-                    .Devices
-                    .AsNoTracking()
-                    .SingleOrDefaultAsync(
-                        x =>
-                            x.Id ==
-                                targetId
-                            &&
-                            x.OrganizationId ==
-                                organizationId
-                            &&
-                            !x.IsDeleted,
-                        cancellationToken)
-                ??
-                throw new InvalidOperationException(
-                    "El dispositivo no existe.");
-
-            if (
-                device.Platform !=
-                DevicePlatform.Windows)
-            {
-                throw new InvalidOperationException(
-                    "Los paquetes Windows solo pueden desplegarse a dispositivos Windows.");
-            }
-
-            return (
-                new List<Guid>
-                {
-                    device.Id
-                },
-                device.DeviceName);
-        }
-
-        var group =
+        var device =
             await _dbContext
-                .DeviceGroups
+                .Devices
                 .AsNoTracking()
                 .SingleOrDefaultAsync(
                     x =>
@@ -776,52 +742,86 @@ public sealed class SoftwareDeploymentService
                         x.OrganizationId ==
                             organizationId
                         &&
-                        x.IsEnabled,
+                        !x.IsDeleted,
                     cancellationToken)
             ??
             throw new InvalidOperationException(
-                "El grupo no existe o está deshabilitado.");
+                "El dispositivo no existe.");
 
-        var deviceIds =
-            await (
-                from member
-                    in _dbContext
-                        .DeviceGroupMembers
-                        .AsNoTracking()
-
-                join device
-                    in _dbContext
-                        .Devices
-                        .AsNoTracking()
-
-                    on member.DeviceId
-                    equals device.Id
-
-                where
-                    member.OrganizationId ==
-                        organizationId
-                    &&
-                    member.GroupId ==
-                        group.Id
-                    &&
-                    device.OrganizationId ==
-                        organizationId
-                    &&
-                    device.Platform ==
-                        DevicePlatform.Windows
-                    &&
-                    !device.IsDeleted
-
-                select device.Id
-            )
-            .Distinct()
-            .ToListAsync(
-                cancellationToken);
+        if (
+            device.Platform !=
+            DevicePlatform.Windows)
+        {
+            throw new InvalidOperationException(
+                "Los paquetes Windows solo pueden desplegarse a dispositivos Windows.");
+        }
 
         return (
-            deviceIds,
-            group.Name);
+            new List<Guid>
+            {
+                device.Id
+            },
+            device.DeviceName);
     }
+
+    var deviceGroup =
+        await _dbContext
+            .DeviceGroups
+            .AsNoTracking()
+            .SingleOrDefaultAsync(
+                x =>
+                    x.Id ==
+                        targetId
+                    &&
+                    x.OrganizationId ==
+                        organizationId
+                    &&
+                    x.IsEnabled,
+                cancellationToken)
+        ??
+        throw new InvalidOperationException(
+            "El grupo no existe o está deshabilitado.");
+
+    var deviceIds =
+        await (
+            from member
+                in _dbContext
+                    .DeviceGroupMembers
+                    .AsNoTracking()
+
+            join device
+                in _dbContext
+                    .Devices
+                    .AsNoTracking()
+
+                on member.DeviceId
+                equals device.Id
+
+            where
+                member.OrganizationId ==
+                    organizationId
+                &&
+                member.GroupId ==
+                    deviceGroup.Id
+                &&
+                device.OrganizationId ==
+                    organizationId
+                &&
+                device.Platform ==
+                    DevicePlatform.Windows
+                &&
+                !device.IsDeleted
+
+            select device.Id
+        )
+        .Distinct()
+        .ToListAsync(
+            cancellationToken);
+
+    return (
+        deviceIds,
+        deviceGroup.Name);
+}
 
     private static string
         ResolveTargetName(

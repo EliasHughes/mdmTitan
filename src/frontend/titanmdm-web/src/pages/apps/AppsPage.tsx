@@ -2,11 +2,11 @@ import {
   AppWindow,
   Boxes,
   MonitorSmartphone,
+  PackagePlus,
   RefreshCw,
-  Search,
   ShieldCheck,
-  Smartphone,
 } from 'lucide-react'
+
 import {
   useCallback,
   useEffect,
@@ -17,9 +17,46 @@ import {
 import {
   applicationsApi,
   type ApplicationSummary,
+  type SoftwareDeployment,
+  type SoftwarePackage,
+  type UploadSoftwarePackageRequest,
 } from '../../api/applicationsApi'
 
+import {
+  deviceGroupsApi,
+  type DeviceGroup,
+} from '../../api/deviceGroupsApi'
+
+import {
+  devicesApi,
+} from '../../api/devicesApi'
+
+import type {
+  DeviceListItem,
+} from '../../types/device'
+
+import {
+  ApplicationsInventoryTab,
+} from './components/ApplicationsInventoryTab'
+
+import {
+  SoftwareCatalogTab,
+} from './components/SoftwareCatalogTab'
+
+import {
+  SoftwareDeploymentsTab,
+} from './components/SoftwareDeploymentsTab'
+
+import {
+  SoftwarePackageModal,
+} from './components/SoftwarePackageModal'
+
 import './AppsPage.css'
+
+type MainTab =
+  | 'inventory'
+  | 'catalog'
+  | 'deployments'
 
 type FilterType =
   | 'all'
@@ -27,114 +64,415 @@ type FilterType =
   | 'system'
 
 export function AppsPage() {
-  const [applications, setApplications] =
-    useState<ApplicationSummary[]>([])
+  const [
+    activeTab,
+    setActiveTab,
+  ] =
+    useState<MainTab>(
+      'inventory',
+    )
 
-  const [search, setSearch] =
+  const [
+    applications,
+    setApplications,
+  ] =
+    useState<
+      ApplicationSummary[]
+    >([])
+
+  const [
+    packages,
+    setPackages,
+  ] =
+    useState<
+      SoftwarePackage[]
+    >([])
+
+  const [
+    deployments,
+    setDeployments,
+  ] =
+    useState<
+      SoftwareDeployment[]
+    >([])
+
+  const [
+    devices,
+    setDevices,
+  ] =
+    useState<
+      DeviceListItem[]
+    >([])
+
+  const [
+    groups,
+    setGroups,
+  ] =
+    useState<
+      DeviceGroup[]
+    >([])
+
+  const [
+    search,
+    setSearch,
+  ] =
     useState('')
 
-  const [filter, setFilter] =
-    useState<FilterType>('all')
+  const [
+    filter,
+    setFilter,
+  ] =
+    useState<FilterType>(
+      'all',
+    )
 
-  const [loading, setLoading] =
+  const [
+    loading,
+    setLoading,
+  ] =
     useState(true)
 
-  const [error, setError] =
-    useState<string | null>(null)
+  const [
+    busy,
+    setBusy,
+  ] =
+    useState(false)
 
-  const loadApplications =
-    useCallback(async () => {
-      try {
-        setLoading(true)
-        setError(null)
+  const [
+    error,
+    setError,
+  ] =
+    useState<
+      string | null
+    >(null)
 
+  const [
+    message,
+    setMessage,
+  ] =
+    useState<
+      string | null
+    >(null)
+
+  const [
+    showUpload,
+    setShowUpload,
+  ] =
+    useState(false)
+
+  const [
+    deployPackage,
+    setDeployPackage,
+  ] =
+    useState<
+      SoftwarePackage | null
+    >(null)
+
+  const [
+    targetType,
+    setTargetType,
+  ] =
+    useState<
+      'Device' |
+      'Group'
+    >('Device')
+
+  const [
+    targetId,
+    setTargetId,
+  ] =
+    useState('')
+
+  const loadInventory =
+    useCallback(
+      async () => {
         const systemApp =
-          filter === 'system'
+          filter ===
+          'system'
             ? true
-            : filter === 'user'
+            : filter ===
+                'user'
               ? false
               : undefined
 
         const result =
-          await applicationsApi.getAll({
-            search:
-              search.trim() || undefined,
-            systemApp,
-          })
+          await applicationsApi
+            .getAll({
+              search:
+                search.trim()
+                ||
+                undefined,
 
-        setApplications(result)
-      } catch {
-        setError(
-          'No fue posible obtener el inventario de aplicaciones.',
+              systemApp,
+            })
+
+        setApplications(
+          result,
         )
-      } finally {
-        setLoading(false)
-      }
-    }, [filter, search])
+      },
+      [
+        filter,
+        search,
+      ],
+    )
 
-  useEffect(() => {
-    const timeout =
-      window.setTimeout(() => {
-        void loadApplications()
-      }, 250)
+  const loadManagement =
+    useCallback(
+      async () => {
+        const [
+          packageResult,
+          deploymentResult,
+          deviceResult,
+          groupResult,
+        ] =
+          await Promise.all([
+            applicationsApi
+              .getPackages(),
 
-    return () =>
-      window.clearTimeout(timeout)
-  }, [loadApplications])
+            applicationsApi
+              .getDeployments(),
+
+            devicesApi
+              .getDevices({
+                platform:
+                  'Windows',
+
+                page:
+                  1,
+
+                pageSize:
+                  100,
+              }),
+
+            deviceGroupsApi
+              .getAll(),
+          ])
+
+        setPackages(
+          packageResult,
+        )
+
+        setDeployments(
+          deploymentResult,
+        )
+
+        setDevices(
+          deviceResult.items,
+        )
+
+        setGroups(
+          groupResult,
+        )
+      },
+      [],
+    )
+
+  const loadAll =
+    useCallback(
+      async () => {
+        try {
+          setLoading(true)
+          setError(null)
+
+          await Promise.all([
+            loadInventory(),
+            loadManagement(),
+          ])
+        } catch {
+          setError(
+            'No fue posible cargar la gestión de aplicaciones.',
+          )
+        } finally {
+          setLoading(false)
+        }
+      },
+      [
+        loadInventory,
+        loadManagement,
+      ],
+    )
+
+  useEffect(
+    () => {
+      const timer =
+        window.setTimeout(
+          () => {
+            void loadAll()
+          },
+          250,
+        )
+
+      return () =>
+        window.clearTimeout(
+          timer,
+        )
+    },
+    [
+      loadAll,
+    ],
+  )
 
   const statistics =
-    useMemo(() => {
-      const system =
-        applications.filter(
-          (item) =>
-            item.isSystemApp,
-        ).length
+    useMemo(
+      () => {
+        const installations =
+          applications.reduce(
+            (
+              total,
+              item,
+            ) =>
+              total
+              +
+              item.deviceCount,
+            0,
+          )
 
-      const user =
-        applications.length -
-        system
+        return {
+          inventory:
+            applications.length,
 
-      const devices =
-        applications.reduce(
-          (total, item) =>
-            total +
-            item.deviceCount,
-          0,
+          packages:
+            packages.length,
+
+          deployments:
+            deployments.length,
+
+          installations,
+        }
+      },
+      [
+        applications,
+        packages,
+        deployments,
+      ],
+    )
+
+  async function uploadPackage(
+    request:
+      UploadSoftwarePackageRequest,
+  ) {
+    try {
+      setBusy(true)
+      setError(null)
+      setMessage(null)
+
+      await applicationsApi
+        .uploadPackage(
+          request,
         )
 
-      return {
-        total: applications.length,
-        system,
-        user,
-        devices,
-      }
-    }, [applications])
+      setShowUpload(false)
+
+      setMessage(
+        'Paquete agregado correctamente al catálogo.',
+      )
+
+      await loadManagement()
+
+      setActiveTab(
+        'catalog',
+      )
+    } catch {
+      setError(
+        'No fue posible cargar el paquete.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
+
+  async function runDeployment() {
+    if (
+      !deployPackage
+      ||
+      !targetId
+    ) {
+      window.alert(
+        'Selecciona un destino.',
+      )
+
+      return
+    }
+
+    const confirmed =
+      window.confirm(
+        `¿Desplegar ${deployPackage.name} ${deployPackage.version} al destino seleccionado?`,
+      )
+
+    if (!confirmed) {
+      return
+    }
+
+    try {
+      setBusy(true)
+      setError(null)
+      setMessage(null)
+
+      const result =
+        await applicationsApi
+          .deployPackage(
+            deployPackage.id,
+            {
+              targetType,
+              targetId,
+            },
+          )
+
+      setMessage(
+        `Deployment creado. ${result.queuedDevices} dispositivo(s) en cola.`,
+      )
+
+      setDeployPackage(null)
+      setTargetId('')
+
+      await loadManagement()
+
+      setActiveTab(
+        'deployments',
+      )
+    } catch {
+      setError(
+        'No fue posible crear el deployment.',
+      )
+    } finally {
+      setBusy(false)
+    }
+  }
 
   return (
     <div className="apps-page">
       <header className="apps-header">
         <div>
           <span className="apps-eyebrow">
-            TITANMDM ENTERPRISE
+            TITANMDM SOFTWARE MANAGEMENT
           </span>
 
-          <h1>Aplicaciones</h1>
+          <h1>
+            Aplicaciones
+          </h1>
 
           <p>
-            Inventario y administración centralizada
-            de software de la flota.
+            Inventario, catálogo y
+            despliegue empresarial de
+            software.
           </p>
         </div>
 
         <button
           type="button"
           className="apps-refresh-button"
-          onClick={() =>
-            void loadApplications()
+          disabled={
+            loading
+            ||
+            busy
           }
-          disabled={loading}
+          onClick={() =>
+            void loadAll()
+          }
         >
-          <RefreshCw size={16} />
+          <RefreshCw
+            size={16}
+          />
 
           {loading
             ? 'Actualizando...'
@@ -142,217 +480,394 @@ export function AppsPage() {
         </button>
       </header>
 
+      {message && (
+        <div className="apps-message">
+          {message}
+        </div>
+      )}
+
+      {error && (
+        <div className="apps-error">
+          {error}
+        </div>
+      )}
+
       <section className="apps-stat-grid">
         <StatCard
-          icon={<AppWindow size={20} />}
-          title="Aplicaciones"
-          value={statistics.total}
-          description="Paquetes detectados"
+          icon={
+            <AppWindow
+              size={20}
+            />
+          }
+          title="Inventario"
+          value={
+            statistics.inventory
+          }
+          description="Apps detectadas"
         />
 
         <StatCard
-          icon={<Smartphone size={20} />}
-          title="Apps de usuario"
-          value={statistics.user}
-          description="Software instalado"
+          icon={
+            <Boxes
+              size={20}
+            />
+          }
+          title="Catálogo"
+          value={
+            statistics.packages
+          }
+          description="Paquetes administrados"
         />
 
         <StatCard
-          icon={<ShieldCheck size={20} />}
-          title="Sistema"
-          value={statistics.system}
-          description="Componentes Android"
+          icon={
+            <PackagePlus
+              size={20}
+            />
+          }
+          title="Deployments"
+          value={
+            statistics.deployments
+          }
+          description="Despliegues registrados"
         />
 
         <StatCard
-          icon={<MonitorSmartphone size={20} />}
+          icon={
+            <MonitorSmartphone
+              size={20}
+            />
+          }
           title="Instalaciones"
-          value={statistics.devices}
-          description="Presencia en dispositivos"
+          value={
+            statistics.installations
+          }
+          description="Presencia reportada"
         />
       </section>
 
       <section className="apps-panel">
-        <div className="apps-panel-header">
-          <div>
-            <div className="apps-panel-title">
-              <Boxes size={18} />
-
-              <div>
-                <strong>
-                  Inventario de aplicaciones
-                </strong>
-
-                <span>
-                  Software reportado por los
-                  agentes TitanMDM.
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <div className="apps-toolbar">
-          <label className="apps-search">
-            <Search size={17} />
-
-            <input
-              value={search}
-              onChange={(event) =>
-                setSearch(
-                  event.target.value,
-                )
-              }
-              placeholder="Buscar por aplicación o package..."
-            />
-          </label>
-
-          <select
-            value={filter}
-            onChange={(event) =>
-              setFilter(
-                event.target
-                  .value as FilterType,
+        <div className="apps-tabs">
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'inventory'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setActiveTab(
+                'inventory',
               )
             }
           >
-            <option value="all">
-              Todas
-            </option>
+            <AppWindow
+              size={16}
+            />
 
-            <option value="user">
-              Aplicaciones de usuario
-            </option>
+            Inventario
+          </button>
 
-            <option value="system">
-              Aplicaciones del sistema
-            </option>
-          </select>
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'catalog'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setActiveTab(
+                'catalog',
+              )
+            }
+          >
+            <Boxes
+              size={16}
+            />
+
+            Catálogo
+          </button>
+
+          <button
+            type="button"
+            className={
+              activeTab ===
+              'deployments'
+                ? 'active'
+                : ''
+            }
+            onClick={() =>
+              setActiveTab(
+                'deployments',
+              )
+            }
+          >
+            <ShieldCheck
+              size={16}
+            />
+
+            Deployments
+          </button>
         </div>
 
-        {error && (
-          <div className="apps-error">
-            {error}
-          </div>
+        {activeTab ===
+          'inventory' && (
+          <ApplicationsInventoryTab
+            applications={
+              applications
+            }
+            search={search}
+            filter={filter}
+            loading={loading}
+            onSearchChange={
+              setSearch
+            }
+            onFilterChange={
+              setFilter
+            }
+          />
         )}
 
-        <div className="apps-table-wrapper">
-          <table className="apps-table">
-            <thead>
-              <tr>
-                <th>APLICACIÓN</th>
-                <th>PACKAGE</th>
-                <th>VERSIÓN</th>
-                <th>TIPO</th>
-                <th>DISPOSITIVOS</th>
-                <th>HABILITADAS</th>
-                <th>ÚLTIMA DETECCIÓN</th>
-              </tr>
-            </thead>
+        {activeTab ===
+          'catalog' && (
+          <SoftwareCatalogTab
+            packages={packages}
+            busy={busy}
+            onUpload={() =>
+              setShowUpload(
+                true,
+              )
+            }
+            onDeploy={
+              packageItem => {
+                setDeployPackage(
+                  packageItem,
+                )
 
-            <tbody>
-              {!loading &&
-                applications.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="apps-empty"
-                    >
-                      Todavía no existe
-                      inventario de aplicaciones.
-                      Ejecuta APP_INVENTORY
-                      sobre un dispositivo Android.
-                    </td>
-                  </tr>
-                )}
+                setTargetType(
+                  'Device',
+                )
 
-              {applications.map(
-                (application) => (
-                  <tr
-                    key={`${application.packageName}-${application.versionCode}`}
-                  >
-                    <td>
-                      <div className="app-name-cell">
-                        <div className="app-icon">
-                          <AppWindow
-                            size={17}
-                          />
-                        </div>
+                setTargetId('')
+              }
+            }
+          />
+        )}
 
-                        <div>
-                          <strong>
-                            {
-                              application.applicationName
-                            }
-                          </strong>
-
-                          <span>
-                            {
-                              application.versionName ??
-                              'Sin versión'
-                            }
-                          </span>
-                        </div>
-                      </div>
-                    </td>
-
-                    <td className="package-cell">
-                      {
-                        application.packageName
-                      }
-                    </td>
-
-                    <td>
-                      {application.versionName ??
-                        'N/D'}
-                    </td>
-
-                    <td>
-                      <span
-                        className={
-                          application.isSystemApp
-                            ? 'app-badge system'
-                            : 'app-badge user'
-                        }
-                      >
-                        {application.isSystemApp
-                          ? 'Sistema'
-                          : 'Usuario'}
-                      </span>
-                    </td>
-
-                    <td>
-                      {
-                        application.deviceCount
-                      }
-                    </td>
-
-                    <td>
-                      {
-                        application.enabledCount
-                      }
-                    </td>
-
-                    <td>
-                      {new Date(
-                        application.lastSeenAtUtc,
-                      ).toLocaleString()}
-                    </td>
-                  </tr>
-                ),
-              )}
-            </tbody>
-          </table>
-        </div>
+        {activeTab ===
+          'deployments' && (
+          <SoftwareDeploymentsTab
+            deployments={
+              deployments
+            }
+          />
+        )}
       </section>
+
+      {showUpload && (
+        <SoftwarePackageModal
+          busy={busy}
+          onClose={() =>
+            setShowUpload(
+              false,
+            )
+          }
+          onUpload={
+            uploadPackage
+          }
+        />
+      )}
+
+      {deployPackage && (
+        <div className="apps-modal-backdrop">
+          <div className="apps-modal">
+            <header>
+              <div>
+                <span>
+                  SOFTWARE DEPLOYMENT
+                </span>
+
+                <h3>
+                  Desplegar{' '}
+                  {
+                    deployPackage
+                      .name
+                  }
+                </h3>
+              </div>
+            </header>
+
+            <div className="apps-modal-form">
+              <label>
+                <span>
+                  Tipo de destino
+                </span>
+
+                <select
+                  value={targetType}
+                  onChange={
+                    event => {
+                      setTargetType(
+                        event.target
+                          .value as
+                          | 'Device'
+                          | 'Group',
+                      )
+
+                      setTargetId('')
+                    }
+                  }
+                >
+                  <option value="Device">
+                    Dispositivo
+                  </option>
+
+                  <option value="Group">
+                    Grupo
+                  </option>
+                </select>
+              </label>
+
+              <label>
+                <span>
+                  Destino
+                </span>
+
+                <select
+                  value={targetId}
+                  onChange={
+                    event =>
+                      setTargetId(
+                        event.target.value,
+                      )
+                  }
+                >
+                  <option value="">
+                    Seleccionar...
+                  </option>
+
+                  {targetType ===
+                  'Device'
+                    ? devices.map(
+                        device => (
+                          <option
+                            key={
+                              device.id
+                            }
+                            value={
+                              device.id
+                            }
+                          >
+                            {
+                              device
+                                .deviceName
+                            }
+                            {' · '}
+                            {
+                              device
+                                .status
+                            }
+                          </option>
+                        ),
+                      )
+                    : groups.map(
+                        group => (
+                          <option
+                            key={
+                              group.id
+                            }
+                            value={
+                              group.id
+                            }
+                          >
+                            {
+                              group
+                                .name
+                            }
+                            {' · '}
+                            {
+                              group
+                                .deviceCount
+                            }{' '}
+                            dispositivos
+                          </option>
+                        ),
+                      )}
+                </select>
+              </label>
+
+              <div className="apps-deploy-summary">
+                <span>
+                  Paquete
+                </span>
+
+                <strong>
+                  {
+                    deployPackage
+                      .originalFileName
+                  }
+                </strong>
+
+                <span>
+                  Versión
+                </span>
+
+                <strong>
+                  {
+                    deployPackage
+                      .version
+                  }
+                </strong>
+              </div>
+            </div>
+
+            <footer>
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() =>
+                  setDeployPackage(
+                    null,
+                  )
+                }
+              >
+                Cancelar
+              </button>
+
+              <button
+                type="button"
+                className="primary"
+                disabled={
+                  busy
+                  ||
+                  !targetId
+                }
+                onClick={() =>
+                  void runDeployment()
+                }
+              >
+                {busy
+                  ? 'Procesando...'
+                  : 'Desplegar'}
+              </button>
+            </footer>
+          </div>
+        </div>
+      )}
     </div>
   )
 }
 
 interface StatCardProps {
-  icon: React.ReactNode
+  icon:
+    React.ReactNode
+
   title: string
+
   value: number
+
   description: string
 }
 
@@ -369,11 +884,17 @@ function StatCard({
       </div>
 
       <div>
-        <span>{title}</span>
+        <span>
+          {title}
+        </span>
 
-        <strong>{value}</strong>
+        <strong>
+          {value}
+        </strong>
 
-        <small>{description}</small>
+        <small>
+          {description}
+        </small>
       </div>
     </article>
   )

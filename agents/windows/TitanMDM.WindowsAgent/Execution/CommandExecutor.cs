@@ -38,6 +38,9 @@ public sealed class CommandExecutor
     private readonly WindowsSoftwareManager
         _softwareManager;
 
+    private readonly WindowsPolicyExecutor
+    _policyExecutor;
+
     public CommandExecutor(
     ILogger<CommandExecutor> logger,
     WindowsInventoryProvider inventoryProvider,
@@ -48,7 +51,8 @@ public sealed class CommandExecutor
     WindowsServiceManager serviceManager,
     WindowsScriptExecutor scriptExecutor,
     WindowsSoftwareManager softwareManager,
-    WindowsSoftwarePackageDownloader packageDownloader)
+    WindowsSoftwarePackageDownloader packageDownloader,
+    WindowsPolicyExecutor policyExecutor)
 {
     _logger =
         logger;
@@ -79,6 +83,9 @@ public sealed class CommandExecutor
 
     _packageDownloader =
         packageDownloader;
+
+    _policyExecutor =
+    policyExecutor;
 }
     public async Task<CommandExecutionResult>
         ExecuteAsync(
@@ -204,6 +211,12 @@ public sealed class CommandExecutor
                             .TriggerScanAsync(
                                 cancellationToken),
 
+                    "WINDOWS_UPDATE_INSTALL" =>
+                        await _updateProvider
+                            .InstallAvailableAsync(
+                                command.PayloadJson,
+                                cancellationToken),
+
                     /*
                      * ============================================
                      * DEVICE ACTIONS
@@ -270,6 +283,18 @@ public sealed class CommandExecutor
                         await ExecuteScriptAsync(
                             command.PayloadJson,
                             cancellationToken),
+                    
+                    /*
+                    * ============================================
+                    * POLICY
+                    * ============================================
+                    */
+
+                    "APPLY_POLICY" =>
+                        await _policyExecutor
+                            .ApplyAsync(
+                                command.PayloadJson,
+                                cancellationToken),
 
                     /*
                      * ============================================

@@ -122,6 +122,10 @@ builder.Services
         ICommandExecutor,
         CommandExecutor>();
 
+builder.Services
+    .AddSingleton<
+        WindowsPolicyExecutor>();
+
 /*
  * ==============================================================
  * REMOTE SUPPORT
