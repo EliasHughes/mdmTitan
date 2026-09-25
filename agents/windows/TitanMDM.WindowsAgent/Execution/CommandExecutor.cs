@@ -11,6 +11,9 @@ public sealed class CommandExecutor
     private readonly ILogger<CommandExecutor>
         _logger;
 
+    private readonly WindowsSoftwarePackageDownloader
+    _packageDownloader;
+
     private readonly WindowsInventoryProvider
         _inventoryProvider;
 
@@ -72,6 +75,9 @@ public sealed class CommandExecutor
 
         _softwareManager =
             softwareManager;
+        
+        _packageDownloader =
+            packageDownloader;
     }
 
     public async Task<CommandExecutionResult>
@@ -472,24 +478,81 @@ public sealed class CommandExecutor
      */
 
     private async Task<string>
-        ExecuteSoftwareInstallAsync(
-            string payloadJson,
-            CancellationToken cancellationToken)
-    {
-        var payload =
-            Deserialize<
-                SoftwareInstallPayload>(
-                    payloadJson);
+    ExecuteSoftwareInstallAsync(
+        string payloadJson,
+        CancellationToken cancellationToken)
+{
+    var payload =
+        Deserialize<
+            SoftwareInstallPayload>(
+                payloadJson);
 
+    var packagePath =
+        payload.PackagePath;
+
+    var downloaded =
+        false;
+
+    if (
+        string.IsNullOrWhiteSpace(
+            packagePath)
+        &&
+        !string.IsNullOrWhiteSpace(
+            payload.DownloadUrl)
+        &&
+        !string.IsNullOrWhiteSpace(
+            payload.FileName))
+    {
+        packagePath =
+            await _packageDownloader
+                .DownloadAsync(
+                    payload.DownloadUrl,
+                    payload.FileName,
+                    cancellationToken);
+
+        downloaded =
+            true;
+    }
+
+    if (
+        string.IsNullOrWhiteSpace(
+            packagePath))
+    {
+        throw new InvalidOperationException(
+            "No se especificó PackagePath ni DownloadUrl.");
+    }
+
+    try
+    {
         return await _softwareManager
             .InstallAsync(
                 new WindowsSoftwareInstallRequest(
-                    payload.PackagePath,
+                    packagePath,
                     payload.ExpectedSha256,
                     payload.Arguments,
                     payload.TimeoutSeconds),
                 cancellationToken);
     }
+    finally
+    {
+        if (
+            downloaded
+            &&
+            File.Exists(
+                packagePath))
+        {
+            try
+            {
+                File.Delete(
+                    packagePath);
+            }
+            catch
+            {
+                // El staging se limpiará posteriormente.
+            }
+        }
+    }
+}
 
     /*
      * ============================================================
@@ -621,11 +684,14 @@ public sealed class CommandExecutor
             int TimeoutSeconds = 300);
 
     private sealed record
-        SoftwareInstallPayload(
-            string PackagePath,
-            string ExpectedSha256,
-            string? Arguments = null,
-            int TimeoutSeconds = 1800);
+    SoftwareInstallPayload(
+        string? PackagePath = null,
+        Guid? PackageId = null,
+        string? DownloadUrl = null,
+        string? FileName = null,
+        string ExpectedSha256 = "",
+        string? Arguments = null,
+        int TimeoutSeconds = 1800);
 
     private sealed record
         SoftwareUninstallPayload(

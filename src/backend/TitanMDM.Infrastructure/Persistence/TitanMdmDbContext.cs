@@ -130,6 +130,14 @@ public sealed class TitanMdmDbContext : DbContext
     RemoteSessionEvents =>
         Set<RemoteSessionEvent>();
 
+    public DbSet<SoftwarePackage>
+    SoftwarePackages =>
+        Set<SoftwarePackage>();
+
+    public DbSet<SoftwareDeployment>
+    SoftwareDeployments =>
+        Set<SoftwareDeployment>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {
