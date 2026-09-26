@@ -1,27 +1,41 @@
 import {
+  deviceCommandsApi,
+  type DeviceCommand,
+} from './deviceCommandsApi'
+
+import {
   policiesApi,
   type Policy,
+  type PolicyAssignment,
   type PolicyDetails,
+  type PolicyPlatform,
 } from './policiesApi'
 
 export type KioskMode =
   | 'singleApp'
   | 'multiApp'
 
-export interface KioskApplication {
+export interface AndroidKioskApplication {
   packageName: string
   displayName: string
+
   installType:
     | 'FORCE_INSTALLED'
     | 'AVAILABLE'
     | 'REQUIRED_FOR_SETUP'
+
   defaultApp: boolean
 }
 
-export interface KioskConfiguration {
-  titanProfileType: 'kiosk'
-  kioskMode: KioskMode
-  applications: KioskApplication[]
+export interface AndroidKioskConfiguration {
+  titanProfileType:
+    'kiosk'
+
+  kioskMode:
+    KioskMode
+
+  applications:
+    AndroidKioskApplication[]
 
   systemNavigation: {
     homeButton: boolean
@@ -47,40 +61,119 @@ export interface KioskConfiguration {
   }
 }
 
-export interface CreateKioskProfile {
+export interface WindowsKioskApplication {
+  displayName: string
+
+  appUserModelId?:
+    string
+
+  desktopAppPath?:
+    string
+}
+
+export interface WindowsKioskRestrictions {
+  showTaskbar: boolean
+
+  blockTaskManager:
+    boolean
+
+  blockSettings:
+    boolean
+
+  blockCommandPrompt:
+    boolean
+
+  blockRemovableStorage:
+    boolean
+}
+
+export interface WindowsKioskConfiguration {
+  titanProfileType:
+    'kiosk'
+
+  kioskMode:
+    KioskMode
+
+  account:
+    string
+
+  applications:
+    WindowsKioskApplication[]
+
+  restrictions:
+    WindowsKioskRestrictions
+}
+
+export interface CreateAndroidKioskProfile {
   name: string
   description?: string
-  configuration: KioskConfiguration
+
+  configuration:
+    AndroidKioskConfiguration
+}
+
+export interface CreateWindowsKioskProfile {
+  name: string
+  description?: string
+
+  configuration:
+    WindowsKioskConfiguration
+}
+
+function isKioskPolicy(
+  configurationJson:
+    string,
+): boolean {
+  try {
+    const configuration =
+      JSON.parse(
+        configurationJson,
+      )
+
+    return (
+      configuration
+        ?.titanProfileType ===
+      'kiosk'
+    )
+  } catch {
+    return false
+  }
 }
 
 function buildAndroidPolicy(
-  configuration: KioskConfiguration,
+  configuration:
+    AndroidKioskConfiguration,
 ) {
   const applications =
-    configuration.applications.map(
-      (application) => ({
-        packageName:
-          application.packageName,
+    configuration
+      .applications
+      .map(
+        application => ({
+          packageName:
+            application.packageName,
 
-        installType:
-          application.installType,
+          installType:
+            application.installType,
 
-        lockTaskAllowed:
-          true,
+          lockTaskAllowed:
+            true,
 
-        defaultPermissionPolicy:
-          'GRANT',
-      }),
-    )
+          defaultPermissionPolicy:
+            'GRANT',
+        }),
+      )
 
   const defaultApp =
-    configuration.applications.find(
-      (application) =>
-        application.defaultApp,
-    )
+    configuration
+      .applications
+      .find(
+        application =>
+          application.defaultApp,
+      )
 
   return {
-    titanProfileType: 'kiosk',
+    titanProfileType:
+      'kiosk',
 
     kioskMode:
       configuration.kioskMode,
@@ -106,11 +199,13 @@ function buildAndroidPolicy(
           ]
         : [],
 
-    keyguardDisabled: true,
+    keyguardDisabled:
+      true,
 
     statusBarDisabled:
       !configuration
-        .systemNavigation.statusBar,
+        .systemNavigation
+        .statusBar,
 
     screenCaptureDisabled:
       configuration
@@ -153,11 +248,15 @@ function buildAndroidPolicy(
         .cameraDisabled,
 
     maximumTimeToLock:
-      configuration.display
-        .screenTimeoutSeconds * 1000,
+      configuration
+        .display
+        .screenTimeoutSeconds
+      *
+      1000,
 
     stayOnPluggedModes:
-      configuration.display
+      configuration
+        .display
         .stayOnWhilePluggedIn
         ? [
             'AC',
@@ -168,95 +267,210 @@ function buildAndroidPolicy(
   }
 }
 
-export const kioskApi = {
-  async getProfiles(): Promise<
-    Policy[]
-  > {
-    const policies =
-      await policiesApi.getAll(
-        'Android',
+async function getKioskProfiles(
+  platform:
+    PolicyPlatform,
+): Promise<Policy[]> {
+  const policies =
+    await policiesApi
+      .getAll(
+        platform,
       )
 
-    const details =
-      await Promise.all(
-        policies.map((policy) =>
-          policiesApi.getById(
+  if (
+    policies.length ===
+    0
+  ) {
+    return []
+  }
+
+  const details =
+    await Promise.all(
+      policies.map(
+        policy =>
+          policiesApi
+            .getById(
+              policy.id,
+            ),
+      ),
+    )
+
+  const kioskIds =
+    new Set(
+      details
+        .filter(
+          policy =>
+            isKioskPolicy(
+              policy
+                .configurationJson,
+            ),
+        )
+        .map(
+          policy =>
             policy.id,
-          ),
         ),
-      )
+    )
 
-    const kioskIds =
-      new Set(
-        details
-          .filter((policy) => {
-            try {
-              const configuration =
-                JSON.parse(
-                  policy.configurationJson,
-                )
+  return policies.filter(
+    policy =>
+      kioskIds.has(
+        policy.id,
+      ),
+  )
+}
 
-              return (
-                configuration
-                  ?.titanProfileType ===
-                'kiosk'
-              )
-            } catch {
-              return false
-            }
-          })
-          .map((policy) => policy.id),
-      )
+export const kioskApi = {
+  async getAndroidProfiles():
+    Promise<Policy[]> {
+    return getKioskProfiles(
+      'Android',
+    )
+  },
 
-    return policies.filter((policy) =>
-      kioskIds.has(policy.id),
+  async getWindowsProfiles():
+    Promise<Policy[]> {
+    return getKioskProfiles(
+      'Windows',
     )
   },
 
   async getProfile(
     policyId: string,
   ): Promise<PolicyDetails> {
-    return policiesApi.getById(
-      policyId,
-    )
+    return policiesApi
+      .getById(
+        policyId,
+      )
   },
 
-  async createProfile(
-    request: CreateKioskProfile,
+  async createAndroidProfile(
+    request:
+      CreateAndroidKioskProfile,
   ): Promise<PolicyDetails> {
-    return policiesApi.create({
-      name: request.name,
-      description:
-        request.description,
-      platform: 'Android',
-      configurationJson:
-        JSON.stringify(
-          buildAndroidPolicy(
+    return policiesApi
+      .create({
+        name:
+          request.name,
+
+        description:
+          request.description,
+
+        platform:
+          'Android',
+
+        configurationJson:
+          JSON.stringify(
+            buildAndroidPolicy(
+              request.configuration,
+            ),
+          ),
+      })
+  },
+
+  async createWindowsProfile(
+    request:
+      CreateWindowsKioskProfile,
+  ): Promise<PolicyDetails> {
+    return policiesApi
+      .create({
+        name:
+          request.name,
+
+        description:
+          request.description,
+
+        platform:
+          'Windows',
+
+        configurationJson:
+          JSON.stringify(
             request.configuration,
           ),
-        ),
-    })
+      })
   },
 
-  async activateAndPublish(
+  async activateAndroid(
     policyId: string,
   ) {
-    await policiesApi.activate(
-      policyId,
-    )
+    await policiesApi
+      .activate(
+        policyId,
+      )
 
-    return policiesApi.publishAndroid(
-      policyId,
-    )
+    return policiesApi
+      .publishAndroid(
+        policyId,
+      )
   },
 
-  async assignDevice(
+  async activateWindows(
+    policyId: string,
+  ): Promise<void> {
+    await policiesApi
+      .activate(
+        policyId,
+      )
+  },
+
+  async assignAndroid(
     policyId: string,
     deviceId: string,
   ) {
-    return policiesApi.assignAndroid(
-      policyId,
-      deviceId,
-    )
+    return policiesApi
+      .assignAndroid(
+        policyId,
+        deviceId,
+      )
+  },
+
+  async assignWindows(
+    policyId: string,
+    deviceId: string,
+  ): Promise<
+    PolicyAssignment[]
+  > {
+    return policiesApi
+      .assign(
+        policyId,
+        [
+          deviceId,
+        ],
+      )
+  },
+
+  async getWindowsStatus(
+    deviceId: string,
+  ): Promise<DeviceCommand> {
+    return deviceCommandsApi
+      .create({
+        deviceId,
+
+        commandType:
+          'WINDOWS_KIOSK_STATUS',
+
+        payloadJson:
+          '{}',
+
+        expirationMinutes:
+          15,
+      })
+  },
+
+  async removeWindowsKiosk(
+    deviceId: string,
+  ): Promise<DeviceCommand> {
+    return deviceCommandsApi
+      .create({
+        deviceId,
+
+        commandType:
+          'WINDOWS_KIOSK_REMOVE',
+
+        payloadJson:
+          '{}',
+
+        expirationMinutes:
+          30,
+      })
   },
 }

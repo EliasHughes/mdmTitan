@@ -126,6 +126,10 @@ builder.Services
     .AddSingleton<
         WindowsPolicyExecutor>();
 
+builder.Services
+    .AddSingleton<
+        WindowsKioskExecutor>();
+
 /*
  * ==============================================================
  * REMOTE SUPPORT

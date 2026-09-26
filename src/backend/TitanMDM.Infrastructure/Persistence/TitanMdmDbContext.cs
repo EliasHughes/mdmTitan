@@ -156,6 +156,22 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<EntraDirectoryUser> EntraDirectoryUsers =>
         Set<EntraDirectoryUser>();
 
+    public DbSet<RemoteSessionParticipant>
+    RemoteSessionParticipants =>
+        Set<RemoteSessionParticipant>();
+
+    public DbSet<RemoteSessionControlLease>
+    RemoteSessionControlLeases =>
+        Set<RemoteSessionControlLease>();
+
+    public DbSet<RemoteSessionParticipant>
+    RemoteSessionParticipants =>
+        Set<RemoteSessionParticipant>();
+
+    public DbSet<RemoteSessionControlLease>
+    RemoteSessionControlLeases =>
+        Set<RemoteSessionControlLease>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

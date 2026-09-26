@@ -13,38 +13,51 @@ public sealed class WindowsPolicyExecutor
     private readonly ILogger<WindowsPolicyExecutor>
         _logger;
 
+    private readonly WindowsKioskExecutor
+        _kioskExecutor;
+
     private static readonly JsonSerializerOptions
         JsonOptions =
             new()
             {
-                PropertyNameCaseInsensitive = true
+                PropertyNameCaseInsensitive =
+                    true
             };
 
     public WindowsPolicyExecutor(
-        ILogger<WindowsPolicyExecutor> logger)
+        ILogger<WindowsPolicyExecutor> logger,
+        WindowsKioskExecutor kioskExecutor)
     {
-        _logger = logger;
+        _logger =
+            logger;
+
+        _kioskExecutor =
+            kioskExecutor;
     }
 
     public async Task<string> ApplyAsync(
         string payloadJson,
         CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(payloadJson))
+        if (
+            string.IsNullOrWhiteSpace(
+                payloadJson))
         {
             throw new InvalidOperationException(
                 "La política no contiene configuración.");
         }
 
         var payload =
-            JsonSerializer.Deserialize<PolicyEnvelope>(
-                payloadJson,
-                JsonOptions)
+            JsonSerializer.Deserialize<
+                PolicyEnvelope>(
+                    payloadJson,
+                    JsonOptions)
             ??
             throw new InvalidOperationException(
                 "La política contiene un payload inválido.");
 
-        if (!payload.Platform.Equals(
+        if (
+            !payload.Platform.Equals(
                 "Windows",
                 StringComparison.OrdinalIgnoreCase))
         {
@@ -52,7 +65,8 @@ public sealed class WindowsPolicyExecutor
                 $"La política recibida pertenece a {payload.Platform}.");
         }
 
-        if (payload.Configuration.ValueKind
+        if (
+            payload.Configuration.ValueKind
             is JsonValueKind.Null
             or JsonValueKind.Undefined)
         {
@@ -64,16 +78,56 @@ public sealed class WindowsPolicyExecutor
             payload.Configuration;
 
         /*
-         * El editor actual guarda:
+         * ============================================================
+         * SPECIALIZED TITANMDM PROFILES
+         * ============================================================
+         */
+
+        if (
+            TryGetProperty(
+                root,
+                "titanProfileType",
+                out var profileType)
+            &&
+            profileType.ValueKind ==
+                JsonValueKind.String)
+        {
+            var specializedType =
+                profileType
+                    .GetString()
+                    ?.Trim();
+
+            if (
+                string.Equals(
+                    specializedType,
+                    "kiosk",
+                    StringComparison.OrdinalIgnoreCase))
+            {
+                return await _kioskExecutor
+                    .ApplyAsync(
+                        root,
+                        cancellationToken);
+            }
+
+            throw new InvalidOperationException(
+                $"El perfil especializado '{specializedType}' no está soportado por este agente.");
+        }
+
+        /*
+         * ============================================================
+         * STANDARD WINDOWS POLICY
+         * ============================================================
+         *
+         * TitanMDM admite:
          *
          * {
          *   windows: { ... },
          *   android: { ... }
          * }
          *
-         * Pero admitimos también una configuración
-         * Windows directamente para compatibilidad.
+         * y también una configuración Windows directa.
          */
+
         var windows =
             TryGetProperty(
                 root,
@@ -82,31 +136,76 @@ public sealed class WindowsPolicyExecutor
                 ? windowsElement
                 : root;
 
+        if (
+            windows.ValueKind !=
+            JsonValueKind.Object)
+        {
+            throw new InvalidOperationException(
+                "La configuración Windows debe ser un objeto JSON.");
+        }
+
         var results =
-            new List<PolicyActionResult>();
+            new List<
+                PolicyActionResult>();
+
+        /*
+         * ============================================================
+         * PASSWORD POLICY
+         * ============================================================
+         */
 
         await ApplyPasswordAsync(
             windows,
             results,
             cancellationToken);
 
+        /*
+         * ============================================================
+         * MICROSOFT DEFENDER
+         * ============================================================
+         */
+
         await ApplyDefenderAsync(
             windows,
             results,
             cancellationToken);
+
+        /*
+         * ============================================================
+         * WINDOWS FIREWALL
+         * ============================================================
+         */
 
         await ApplyFirewallAsync(
             windows,
             results,
             cancellationToken);
 
+        /*
+         * ============================================================
+         * USB / REMOVABLE STORAGE
+         * ============================================================
+         */
+
         ApplyUsb(
             windows,
             results);
 
+        /*
+         * ============================================================
+         * SCREEN LOCK
+         * ============================================================
+         */
+
         ApplyScreenLock(
             windows,
             results);
+
+        /*
+         * ============================================================
+         * WINDOWS UPDATE
+         * ============================================================
+         */
 
         ApplyWindowsUpdate(
             windows,
@@ -114,7 +213,8 @@ public sealed class WindowsPolicyExecutor
 
         var failed =
             results.Count(
-                x => !x.Success);
+                result =>
+                    !result.Success);
 
         var response =
             new
@@ -124,6 +224,9 @@ public sealed class WindowsPolicyExecutor
 
                 policyVersion =
                     payload.PolicyVersion,
+
+                platform =
+                    payload.Platform,
 
                 appliedAtUtc =
                     DateTime.UtcNow,
@@ -135,7 +238,8 @@ public sealed class WindowsPolicyExecutor
                     results.Count,
 
                 successfulActions =
-                    results.Count - failed,
+                    results.Count -
+                    failed,
 
                 failedActions =
                     failed,
@@ -148,12 +252,19 @@ public sealed class WindowsPolicyExecutor
             response);
     }
 
+    /*
+     * ==============================================================
+     * PASSWORD
+     * ==============================================================
+     */
+
     private async Task ApplyPasswordAsync(
         JsonElement windows,
         List<PolicyActionResult> results,
         CancellationToken cancellationToken)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 windows,
                 "password",
                 out var section))
@@ -161,14 +272,16 @@ public sealed class WindowsPolicyExecutor
             return;
         }
 
-        if (!GetBool(
+        if (
+            !GetBool(
                 section,
                 "enabled"))
         {
             results.Add(
-                PolicyActionResult.Skipped(
-                    "Password",
-                    "Configuración deshabilitada."));
+                PolicyActionResult
+                    .Skipped(
+                        "Password",
+                        "Configuración deshabilitada."));
 
             return;
         }
@@ -182,7 +295,7 @@ public sealed class WindowsPolicyExecutor
                 0,
                 128);
 
-        var maximumAge =
+        var maximumAgeDays =
             Math.Clamp(
                 GetInt(
                     section,
@@ -191,8 +304,32 @@ public sealed class WindowsPolicyExecutor
                 1,
                 999);
 
+        var minimumAgeDays =
+            Math.Clamp(
+                GetInt(
+                    section,
+                    "minimumAgeDays",
+                    0),
+                0,
+                999);
+
+        var passwordHistory =
+            Math.Clamp(
+                GetInt(
+                    section,
+                    "passwordHistory",
+                    0),
+                0,
+                50);
+
         var command =
-            $"net accounts /minpwlen:{minimumLength} /maxpwage:{maximumAge}";
+            string.Join(
+                " ",
+                "net accounts",
+                $"/minpwlen:{minimumLength}",
+                $"/maxpwage:{maximumAgeDays}",
+                $"/minpwage:{minimumAgeDays}",
+                $"/uniquepw:{passwordHistory}");
 
         var execution =
             await RunCmdAsync(
@@ -204,16 +341,24 @@ public sealed class WindowsPolicyExecutor
                 "Password",
                 execution.Success,
                 execution.Success
-                    ? $"Longitud mínima {minimumLength}; edad máxima {maximumAge} días."
-                    : execution.Error));
+                    ? $"Longitud mínima {minimumLength}; edad máxima {maximumAgeDays} días; historial {passwordHistory}."
+                    : BuildExecutionError(
+                        execution)));
     }
+
+    /*
+     * ==============================================================
+     * DEFENDER
+     * ==============================================================
+     */
 
     private async Task ApplyDefenderAsync(
         JsonElement windows,
         List<PolicyActionResult> results,
         CancellationToken cancellationToken)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 windows,
                 "defender",
                 out var section))
@@ -221,14 +366,16 @@ public sealed class WindowsPolicyExecutor
             return;
         }
 
-        if (!GetBool(
+        if (
+            !GetBool(
                 section,
                 "enabled"))
         {
             results.Add(
-                PolicyActionResult.Skipped(
-                    "Defender",
-                    "Configuración deshabilitada."));
+                PolicyActionResult
+                    .Skipped(
+                        "Microsoft Defender",
+                        "Configuración deshabilitada."));
 
             return;
         }
@@ -248,14 +395,20 @@ public sealed class WindowsPolicyExecutor
             $ErrorActionPreference = 'Stop'
 
             Set-MpPreference `
-              -DisableRealtimeMonitoring ${{(!realtime).ToString().ToLowerInvariant()}}
+                -DisableRealtimeMonitoring ${{(!realtime).ToString().ToLowerInvariant()}}
 
             if ({{cloud.ToString().ToLowerInvariant()}}) {
-                Set-MpPreference -MAPSReporting Advanced
-                Set-MpPreference -SubmitSamplesConsent SendSafeSamples
+
+                Set-MpPreference `
+                    -MAPSReporting Advanced
+
+                Set-MpPreference `
+                    -SubmitSamplesConsent SendSafeSamples
             }
             else {
-                Set-MpPreference -MAPSReporting Disabled
+
+                Set-MpPreference `
+                    -MAPSReporting Disabled
             }
             """;
 
@@ -269,16 +422,24 @@ public sealed class WindowsPolicyExecutor
                 "Microsoft Defender",
                 execution.Success,
                 execution.Success
-                    ? "Configuración aplicada."
-                    : execution.Error));
+                    ? "Configuración de Microsoft Defender aplicada."
+                    : BuildExecutionError(
+                        execution)));
     }
+
+    /*
+     * ==============================================================
+     * FIREWALL
+     * ==============================================================
+     */
 
     private async Task ApplyFirewallAsync(
         JsonElement windows,
         List<PolicyActionResult> results,
         CancellationToken cancellationToken)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 windows,
                 "firewall",
                 out var section))
@@ -286,14 +447,16 @@ public sealed class WindowsPolicyExecutor
             return;
         }
 
-        if (!GetBool(
+        if (
+            !GetBool(
                 section,
                 "enabled"))
         {
             results.Add(
-                PolicyActionResult.Skipped(
-                    "Firewall",
-                    "Configuración deshabilitada."));
+                PolicyActionResult
+                    .Skipped(
+                        "Windows Firewall",
+                        "Configuración deshabilitada."));
 
             return;
         }
@@ -318,16 +481,16 @@ public sealed class WindowsPolicyExecutor
             $ErrorActionPreference = 'Stop'
 
             Set-NetFirewallProfile `
-              -Profile Domain `
-              -Enabled ${{domain.ToString().ToLowerInvariant()}}
+                -Profile Domain `
+                -Enabled ${{domain.ToString().ToLowerInvariant()}}
 
             Set-NetFirewallProfile `
-              -Profile Private `
-              -Enabled ${{privateProfile.ToString().ToLowerInvariant()}}
+                -Profile Private `
+                -Enabled ${{privateProfile.ToString().ToLowerInvariant()}}
 
             Set-NetFirewallProfile `
-              -Profile Public `
-              -Enabled ${{publicProfile.ToString().ToLowerInvariant()}}
+                -Profile Public `
+                -Enabled ${{publicProfile.ToString().ToLowerInvariant()}}
             """;
 
         var execution =
@@ -340,15 +503,23 @@ public sealed class WindowsPolicyExecutor
                 "Windows Firewall",
                 execution.Success,
                 execution.Success
-                    ? "Perfiles actualizados."
-                    : execution.Error));
+                    ? "Perfiles de Windows Firewall actualizados."
+                    : BuildExecutionError(
+                        execution)));
     }
+
+    /*
+     * ==============================================================
+     * USB
+     * ==============================================================
+     */
 
     private static void ApplyUsb(
         JsonElement windows,
         List<PolicyActionResult> results)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 windows,
                 "usb",
                 out var section))
@@ -363,14 +534,30 @@ public sealed class WindowsPolicyExecutor
 
         try
         {
-            using var key =
-                Registry.LocalMachine.CreateSubKey(
-                    @"SYSTEM\CurrentControlSet\Services\USBSTOR",
-                    writable: true);
+            using var usbStorKey =
+                Registry.LocalMachine
+                    .CreateSubKey(
+                        @"SYSTEM\CurrentControlSet\Services\USBSTOR",
+                        writable: true);
 
-            key.SetValue(
+            usbStorKey.SetValue(
                 "Start",
-                block ? 4 : 3,
+                block
+                    ? 4
+                    : 3,
+                RegistryValueKind.DWord);
+
+            using var removableStorageKey =
+                Registry.LocalMachine
+                    .CreateSubKey(
+                        @"SOFTWARE\Policies\Microsoft\Windows\RemovableStorageDevices",
+                        writable: true);
+
+            removableStorageKey.SetValue(
+                "Deny_All",
+                block
+                    ? 1
+                    : 0,
                 RegistryValueKind.DWord);
 
             results.Add(
@@ -378,8 +565,8 @@ public sealed class WindowsPolicyExecutor
                     "USB Storage",
                     true,
                     block
-                        ? "Almacenamiento USB bloqueado."
-                        : "Almacenamiento USB permitido."));
+                        ? "Almacenamiento removible bloqueado."
+                        : "Almacenamiento removible permitido."));
         }
         catch (Exception ex)
         {
@@ -391,11 +578,18 @@ public sealed class WindowsPolicyExecutor
         }
     }
 
+    /*
+     * ==============================================================
+     * SCREEN LOCK
+     * ==============================================================
+     */
+
     private static void ApplyScreenLock(
         JsonElement windows,
         List<PolicyActionResult> results)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 windows,
                 "screenLock",
                 out var section))
@@ -420,13 +614,16 @@ public sealed class WindowsPolicyExecutor
         try
         {
             using var key =
-                Registry.LocalMachine.CreateSubKey(
-                    @"SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop",
-                    writable: true);
+                Registry.LocalMachine
+                    .CreateSubKey(
+                        @"SOFTWARE\Policies\Microsoft\Windows\Control Panel\Desktop",
+                        writable: true);
 
             key.SetValue(
                 "ScreenSaveActive",
-                enabled ? "1" : "0",
+                enabled
+                    ? "1"
+                    : "0",
                 RegistryValueKind.String);
 
             if (enabled)
@@ -438,9 +635,23 @@ public sealed class WindowsPolicyExecutor
 
                 key.SetValue(
                     "ScreenSaveTimeOut",
-                    (timeoutMinutes * 60)
-                        .ToString(),
+                    (
+                        timeoutMinutes *
+                        60
+                    ).ToString(),
                     RegistryValueKind.String);
+            }
+            else
+            {
+                key.DeleteValue(
+                    "ScreenSaverIsSecure",
+                    throwOnMissingValue:
+                        false);
+
+                key.DeleteValue(
+                    "ScreenSaveTimeOut",
+                    throwOnMissingValue:
+                        false);
             }
 
             results.Add(
@@ -461,11 +672,18 @@ public sealed class WindowsPolicyExecutor
         }
     }
 
+    /*
+     * ==============================================================
+     * WINDOWS UPDATE
+     * ==============================================================
+     */
+
     private static void ApplyWindowsUpdate(
         JsonElement windows,
         List<PolicyActionResult> results)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 windows,
                 "windowsUpdate",
                 out var section))
@@ -486,9 +704,10 @@ public sealed class WindowsPolicyExecutor
         try
         {
             using var key =
-                Registry.LocalMachine.CreateSubKey(
-                    @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU",
-                    writable: true);
+                Registry.LocalMachine
+                    .CreateSubKey(
+                        @"SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU",
+                        writable: true);
 
             if (!enabled)
             {
@@ -506,7 +725,9 @@ public sealed class WindowsPolicyExecutor
 
                 key.SetValue(
                     "AUOptions",
-                    automatic ? 4 : 3,
+                    automatic
+                        ? 4
+                        : 3,
                     RegistryValueKind.DWord);
             }
 
@@ -517,7 +738,7 @@ public sealed class WindowsPolicyExecutor
                     enabled
                         ? automatic
                             ? "Actualizaciones automáticas habilitadas."
-                            : "Actualizaciones habilitadas con control manual."
+                            : "Actualizaciones habilitadas con instalación controlada."
                         : "Actualizaciones automáticas deshabilitadas."));
         }
         catch (Exception ex)
@@ -529,6 +750,12 @@ public sealed class WindowsPolicyExecutor
                     ex.Message));
         }
     }
+
+    /*
+     * ==============================================================
+     * PROCESS EXECUTION
+     * ==============================================================
+     */
 
     private async Task<ExecutionResult>
         RunPowerShellAsync(
@@ -543,7 +770,9 @@ public sealed class WindowsPolicyExecutor
 
         return await RunProcessAsync(
             "powershell.exe",
-            $"-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand {encoded}",
+            "-NoLogo -NoProfile -NonInteractive " +
+            "-ExecutionPolicy Bypass " +
+            $"-EncodedCommand {encoded}",
             cancellationToken);
     }
 
@@ -595,7 +824,15 @@ public sealed class WindowsPolicyExecutor
 
         try
         {
-            process.Start();
+            if (
+                !process.Start())
+            {
+                return new ExecutionResult(
+                    false,
+                    -1,
+                    string.Empty,
+                    "No fue posible iniciar el proceso.");
+            }
 
             var stdoutTask =
                 process.StandardOutput
@@ -607,26 +844,36 @@ public sealed class WindowsPolicyExecutor
                     .ReadToEndAsync(
                         cancellationToken);
 
-            await process.WaitForExitAsync(
-                cancellationToken);
+            await process
+                .WaitForExitAsync(
+                    cancellationToken);
 
             var stdout =
-                await stdoutTask;
+                (
+                    await stdoutTask
+                ).Trim();
 
             var stderr =
-                await stderrTask;
+                (
+                    await stderrTask
+                ).Trim();
 
             return new ExecutionResult(
                 process.ExitCode == 0,
                 process.ExitCode,
-                stdout.Trim(),
-                stderr.Trim());
+                stdout,
+                stderr);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
         }
         catch (Exception ex)
         {
             _logger.LogWarning(
                 ex,
-                "Error aplicando configuración de política.");
+                "Error aplicando configuración Windows mediante {Process}.",
+                fileName);
 
             return new ExecutionResult(
                 false,
@@ -636,15 +883,24 @@ public sealed class WindowsPolicyExecutor
         }
     }
 
+    /*
+     * ==============================================================
+     * JSON HELPERS
+     * ==============================================================
+     */
+
     private static bool TryGetProperty(
         JsonElement element,
         string name,
         out JsonElement value)
     {
-        if (element.ValueKind !=
+        if (
+            element.ValueKind !=
             JsonValueKind.Object)
         {
-            value = default;
+            value =
+                default;
+
             return false;
         }
 
@@ -652,7 +908,8 @@ public sealed class WindowsPolicyExecutor
             var property
             in element.EnumerateObject())
         {
-            if (property.Name.Equals(
+            if (
+                property.Name.Equals(
                     name,
                     StringComparison.OrdinalIgnoreCase))
             {
@@ -663,7 +920,8 @@ public sealed class WindowsPolicyExecutor
             }
         }
 
-        value = default;
+        value =
+            default;
 
         return false;
     }
@@ -672,7 +930,8 @@ public sealed class WindowsPolicyExecutor
         JsonElement section,
         string name)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 section,
                 name,
                 out var value))
@@ -688,6 +947,13 @@ public sealed class WindowsPolicyExecutor
             JsonValueKind.False =>
                 false,
 
+            JsonValueKind.String =>
+                bool.TryParse(
+                    value.GetString(),
+                    out var parsed)
+                    &&
+                    parsed,
+
             _ =>
                 false
         };
@@ -698,7 +964,8 @@ public sealed class WindowsPolicyExecutor
         string name,
         int fallback)
     {
-        if (!TryGetProperty(
+        if (
+            !TryGetProperty(
                 section,
                 name,
                 out var value))
@@ -706,11 +973,56 @@ public sealed class WindowsPolicyExecutor
             return fallback;
         }
 
-        return value.TryGetInt32(
-            out var result)
-                ? result
-                : fallback;
+        if (
+            value.ValueKind ==
+                JsonValueKind.Number
+            &&
+            value.TryGetInt32(
+                out var numeric))
+        {
+            return numeric;
+        }
+
+        if (
+            value.ValueKind ==
+                JsonValueKind.String
+            &&
+            int.TryParse(
+                value.GetString(),
+                out var textNumeric))
+        {
+            return textNumeric;
+        }
+
+        return fallback;
     }
+
+    private static string BuildExecutionError(
+        ExecutionResult execution)
+    {
+        if (
+            !string.IsNullOrWhiteSpace(
+                execution.Error))
+        {
+            return execution.Error;
+        }
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                execution.Output))
+        {
+            return execution.Output;
+        }
+
+        return
+            $"El proceso terminó con código {execution.ExitCode}.";
+    }
+
+    /*
+     * ==============================================================
+     * DTO
+     * ==============================================================
+     */
 
     private sealed class PolicyEnvelope
     {
