@@ -2,6 +2,7 @@ using TitanMDM.Api.Hubs;
 using TitanMDM.Api.Services;
 using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence.Seed;
+using TitanMDM.Api.RemoteSupport;
 
 var builder =
     WebApplication.CreateBuilder(
@@ -90,6 +91,12 @@ builder.Services
 builder.Services
     .AddScoped<
         SessionSecurityService>();
+
+builder.Services.AddSingleton<RemoteSupportConnectionRegistry>();
+
+builder.Services.AddScoped<RemoteSupportParticipantService>();
+
+builder.Services.AddScoped<RemoteControlLeaseService>();
 
 /*
  * ================================================================
