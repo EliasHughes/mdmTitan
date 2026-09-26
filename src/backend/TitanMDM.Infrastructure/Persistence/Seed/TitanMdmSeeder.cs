@@ -336,7 +336,7 @@ public sealed class TitanMdmSeeder
                     "settings.manage",
                     "Administrar configuración",
                     "Settings",
-                    "Permite modificar la configuración global de TitanMDM.")
+                    "Permite modificar la configuración global de TitanMDM."),
 
                  
                 new(
