@@ -325,6 +325,25 @@ public sealed class RemoteSessionIndicatorForm
                         });
                 };
 
+                _transport.ConnectionLost += () =>
+{
+                    if (IsDisposed || !IsHandleCreated)
+                    {
+                        return;
+                    }
+
+                    BeginInvoke(() =>
+                    {
+                        if (IsDisposed)
+                        {
+                            return;
+                        }
+
+                        _allowProgrammaticClose = true;
+                        Close();
+                    });
+                };
+
             await _transport.ConnectAsync();
         }
         catch (Exception ex)

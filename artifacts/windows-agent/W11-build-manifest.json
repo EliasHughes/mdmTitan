@@ -1,0 +1,13 @@
+﻿{
+    "product":  "TitanMDM Windows Agent",
+    "phase":  "W11",
+    "builtAtUtc":  "2026-09-26T14:09:26.8215792Z",
+    "sourceCommit":  "2ce0c33f6c9efbd1c81e5964a83575c112e1b21d",
+    "configuration":  "Release",
+    "runtime":  "win-x64",
+    "packageFile":  "TitanMDM-WindowsAgent-x64.zip",
+    "packageBytes":  86794830,
+    "packageSha256":  "E7F8E8D4529A531A2357B008FC1E11E7168287D8462AD24CE82B9539F6AEF973",
+    "agentSha256":  "7EE906A08590591AE79E72E56EB95940510B358AB4380545864CA95FA48A7DCD",
+    "remoteHostSha256":  "0BAEBCD7F853C605DEB2D485D6A42BA61932DEE19AE0CE1417B2627BAD1DA1EF"
+}
