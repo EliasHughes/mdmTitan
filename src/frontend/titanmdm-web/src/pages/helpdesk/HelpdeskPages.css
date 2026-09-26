@@ -1,0 +1,147 @@
+
+.helpdesk-page {
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+}
+
+.helpdesk-kpis {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 180px));
+  gap: 12px;
+}
+
+.helpdesk-kpis article {
+  background: var(--workspace-soft);
+  border: 1px solid var(--workspace-border);
+  border-radius: 16px;
+  padding: 14px 16px;
+}
+
+.helpdesk-kpis span {
+  display: block;
+  color: #64748b;
+  font-size: 12px;
+}
+
+.helpdesk-toolbar,
+.helpdesk-create,
+.helpdesk-entra-form {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.helpdesk-toolbar {
+  flex-direction: row;
+  align-items: center;
+}
+
+.helpdesk-search {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid var(--workspace-border);
+  border-radius: 12px;
+  padding: 0 12px;
+  background: #fff;
+}
+
+.helpdesk-search input,
+.helpdesk-page input,
+.helpdesk-page select,
+.helpdesk-page textarea {
+  width: 100%;
+  border: 1px solid var(--workspace-border);
+  border-radius: 12px;
+  padding: 10px 12px;
+  font: inherit;
+}
+
+.helpdesk-search input {
+  border: 0;
+  outline: none;
+}
+
+.helpdesk-create__row {
+  display: flex;
+  gap: 10px;
+}
+
+.helpdesk-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.helpdesk-table th,
+.helpdesk-table td {
+  text-align: left;
+  padding: 12px 10px;
+  border-bottom: 1px solid #e8eef8;
+  font-size: 14px;
+}
+
+.helpdesk-table tbody tr {
+  cursor: pointer;
+}
+
+.helpdesk-pill {
+  display: inline-flex;
+  border-radius: 999px;
+  padding: 3px 10px;
+  background: #eef2ff;
+  text-transform: capitalize;
+}
+
+.helpdesk-ticket-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.4fr) minmax(280px, 0.8fr);
+  gap: 16px;
+}
+
+.helpdesk-comments {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0;
+}
+
+.helpdesk-comments article {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 10px 12px;
+}
+
+.helpdesk-comments article.is-internal {
+  background: #fff7ed;
+}
+
+.helpdesk-side__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 12px 0;
+}
+
+.helpdesk-check {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.helpdesk-error {
+  color: #b91c1c;
+}
+
+.helpdesk-ok {
+  color: #166534;
+}
+
+@media (max-width: 960px) {
+  .helpdesk-ticket-grid,
+  .helpdesk-toolbar {
+    grid-template-columns: 1fr;
+    flex-direction: column;
+  }
+}

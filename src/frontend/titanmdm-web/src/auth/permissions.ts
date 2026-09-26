@@ -46,6 +46,13 @@ export const Permissions = {
       view:
         'workspace.administration.view',
     },
+
+    workspace: {
+    windows: { view: 'workspace.windows.view' },
+    android: { view: 'workspace.android.view' },
+    administration: { view: 'workspace.administration.view' },
+    helpdesk: { view: 'workspace.helpdesk.view' },
+  },
   },
 
   /*
@@ -259,3 +266,15 @@ export const Permissions = {
 
 export type PermissionCatalog =
   typeof Permissions
+
+helpdesk: {
+    view: 'helpdesk.view',
+    manage: 'helpdesk.manage',
+    tickets: {
+      view: 'tickets.view',
+      create: 'tickets.create',
+      assign: 'tickets.assign',
+      comment: 'tickets.comment',
+      close: 'tickets.close',
+    },
+  },

@@ -207,10 +207,10 @@ const helpDeskModule:
     ],
 
     enabled:
-      false,
+      true,
 
     badge:
-      'Próximamente',
+      'Entra ID',
 
     theme: {
       primary:

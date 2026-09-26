@@ -16,6 +16,8 @@ import {
   UserCog,
   Users,
   Workflow,
+  Inbox,
+  CloudCog,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -442,8 +444,20 @@ const administrationNavigation:
  * ================================================================
  */
 
-const helpDeskNavigation:
-  WorkspaceNavigationItem[] = []
+const helpDeskNavigation: WorkspaceNavigationItem[] = [
+  {
+    label: 'Inbox',
+    path: '/helpdesk?workspace=helpdesk',
+    permission: 'tickets.view',
+    icon: Inbox,
+  },
+  {
+    label: 'Entra ID',
+    path: '/helpdesk/entra?workspace=helpdesk',
+    permission: 'helpdesk.manage',
+    icon: CloudCog,
+  },
+]
 
 /*
  * ================================================================

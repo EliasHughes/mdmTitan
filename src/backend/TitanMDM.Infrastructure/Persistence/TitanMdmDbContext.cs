@@ -138,6 +138,24 @@ public sealed class TitanMdmDbContext : DbContext
     SoftwareDeployments =>
         Set<SoftwareDeployment>();
 
+    public DbSet<HelpdeskTicket> HelpdeskTickets =>
+        Set<HelpdeskTicket>();
+
+    public DbSet<HelpdeskTicketComment> HelpdeskTicketComments =>
+        Set<HelpdeskTicketComment>();
+
+    public DbSet<HelpdeskTicketEvent> HelpdeskTicketEvents =>
+        Set<HelpdeskTicketEvent>();
+
+    public DbSet<HelpdeskQueue> HelpdeskQueues =>
+        Set<HelpdeskQueue>();
+
+    public DbSet<EntraIdSettings> EntraIdSettings =>
+        Set<EntraIdSettings>();
+
+    public DbSet<EntraDirectoryUser> EntraDirectoryUsers =>
+        Set<EntraDirectoryUser>();
+
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
     {

@@ -571,3 +571,19 @@
     width: 100%;
   }
 }
+
+.windows-command-details {
+  margin-top: 9px;
+}
+
+.windows-command-details summary {
+  width: fit-content;
+  cursor: pointer;
+  color: #2563eb;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.windows-command-details pre {
+  margin-top: 8px;
+}
