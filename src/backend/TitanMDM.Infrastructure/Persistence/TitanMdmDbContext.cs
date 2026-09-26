@@ -1,12 +1,10 @@
 using Microsoft.EntityFrameworkCore;
-
-using TitanMDM.Domain.Automation;
 using TitanMDM.Domain.Entities;
+using TitanMDM.Domain.Automation;
 
 namespace TitanMDM.Infrastructure.Persistence;
 
-public sealed class TitanMdmDbContext
-    : DbContext
+public sealed class TitanMdmDbContext : DbContext
 {
     public TitanMdmDbContext(
         DbContextOptions<TitanMdmDbContext> options)
@@ -14,69 +12,54 @@ public sealed class TitanMdmDbContext
     {
     }
 
-    public DbSet<Organization>
-        Organizations =>
-            Set<Organization>();
+    public DbSet<Organization> Organizations =>
+        Set<Organization>();
 
     public DbSet<AndroidPolicyPublication>
         AndroidPolicyPublications =>
             Set<AndroidPolicyPublication>();
 
-    public DbSet<Department>
-        Departments =>
-            Set<Department>();
+    public DbSet<Department> Departments =>
+        Set<Department>();
 
-    public DbSet<User>
-        Users =>
-            Set<User>();
+    public DbSet<User> Users =>
+        Set<User>();
 
-    public DbSet<Role>
-        Roles =>
-            Set<Role>();
+    public DbSet<Role> Roles =>
+        Set<Role>();
 
-    public DbSet<Permission>
-        Permissions =>
-            Set<Permission>();
+    public DbSet<Permission> Permissions =>
+        Set<Permission>();
 
-    public DbSet<UserRole>
-        UserRoles =>
-            Set<UserRole>();
+    public DbSet<UserRole> UserRoles =>
+        Set<UserRole>();
 
-    public DbSet<RolePermission>
-        RolePermissions =>
-            Set<RolePermission>();
+    public DbSet<RolePermission> RolePermissions =>
+        Set<RolePermission>();
 
-    public DbSet<RefreshToken>
-        RefreshTokens =>
-            Set<RefreshToken>();
+    public DbSet<RefreshToken> RefreshTokens =>
+        Set<RefreshToken>();
 
-    public DbSet<Device>
-        Devices =>
-            Set<Device>();
+    public DbSet<Device> Devices =>
+        Set<Device>();
 
-    public DbSet<DeviceCredential>
-        DeviceCredentials =>
-            Set<DeviceCredential>();
+    public DbSet<DeviceCredential> DeviceCredentials =>
+        Set<DeviceCredential>();
 
-    public DbSet<DeviceCommand>
-        DeviceCommands =>
-            Set<DeviceCommand>();
+    public DbSet<DeviceCommand> DeviceCommands =>
+        Set<DeviceCommand>();
 
-    public DbSet<DeviceApplication>
-        DeviceApplications =>
-            Set<DeviceApplication>();
+    public DbSet<DeviceApplication> DeviceApplications =>
+        Set<DeviceApplication>();
 
-    public DbSet<EnrollmentToken>
-        EnrollmentTokens =>
-            Set<EnrollmentToken>();
+    public DbSet<EnrollmentToken> EnrollmentTokens =>
+        Set<EnrollmentToken>();
 
-    public DbSet<Policy>
-        Policies =>
-            Set<Policy>();
+    public DbSet<Policy> Policies =>
+        Set<Policy>();
 
-    public DbSet<PolicyVersion>
-        PolicyVersions =>
-            Set<PolicyVersion>();
+    public DbSet<PolicyVersion> PolicyVersions =>
+        Set<PolicyVersion>();
 
     public DbSet<DevicePolicyAssignment>
         DevicePolicyAssignments =>
@@ -99,120 +82,117 @@ public sealed class TitanMdmDbContext
             Set<AndroidDevice>();
 
     public DbSet<DeviceSecurityPosture>
-        DeviceSecurityPostures =>
-            Set<DeviceSecurityPosture>();
+    DeviceSecurityPostures =>
+        Set<DeviceSecurityPosture>();
 
-    public DbSet<DeviceGroup>
-        DeviceGroups =>
-            Set<DeviceGroup>();
+    public DbSet<DeviceGroup> DeviceGroups =>
+        Set<DeviceGroup>();
 
     public DbSet<DeviceGroupMember>
         DeviceGroupMembers =>
-            Set<DeviceGroupMember>();
+        Set<DeviceGroupMember>();
 
-    public DbSet<DeviceLocation>
-        DeviceLocations =>
-            Set<DeviceLocation>();
+    public DbSet<DeviceLocation> DeviceLocations =>
+    Set<DeviceLocation>();
 
-    public DbSet<Geofence>
-        Geofences =>
-            Set<Geofence>();
+    public DbSet<Geofence> Geofences =>
+        Set<Geofence>();
 
     public DbSet<GeofenceDeviceAssignment>
         GeofenceDeviceAssignments =>
             Set<GeofenceDeviceAssignment>();
 
     public DbSet<AutomationRule>
-        AutomationRules =>
-            Set<AutomationRule>();
+    AutomationRules =>
+        Set<AutomationRule>();
 
     public DbSet<AutomationExecution>
-        AutomationExecutions =>
-            Set<AutomationExecution>();
+    AutomationExecutions =>
+        Set<AutomationExecution>();
 
     public DbSet<LostModeSession>
         LostModeSessions =>
             Set<LostModeSession>();
-
+        
     public DbSet<GeofenceDeviceState>
-        GeofenceDeviceStates =>
-            Set<GeofenceDeviceState>();
+    GeofenceDeviceStates =>
+        Set<GeofenceDeviceState>();
 
     public DbSet<GeofenceEvent>
-        GeofenceEvents =>
-            Set<GeofenceEvent>();
-
-    /*
-     * ============================================================
-     * REMOTE SUPPORT
-     * ============================================================
-     */
+    GeofenceEvents =>
+        Set<GeofenceEvent>();
 
     public DbSet<RemoteSession>
-        RemoteSessions =>
-            Set<RemoteSession>();
+    RemoteSessions =>
+        Set<RemoteSession>();
 
     public DbSet<RemoteSessionEvent>
-        RemoteSessionEvents =>
-            Set<RemoteSessionEvent>();
-
-    public DbSet<RemoteSessionParticipant>
-        RemoteSessionParticipants =>
-            Set<RemoteSessionParticipant>();
-
-    public DbSet<RemoteSessionControlLease>
-        RemoteSessionControlLeases =>
-            Set<RemoteSessionControlLease>();
-
-    /*
-     * ============================================================
-     * SOFTWARE MANAGEMENT
-     * ============================================================
-     */
+    RemoteSessionEvents =>
+        Set<RemoteSessionEvent>();
 
     public DbSet<SoftwarePackage>
-        SoftwarePackages =>
-            Set<SoftwarePackage>();
+    SoftwarePackages =>
+        Set<SoftwarePackage>();
 
     public DbSet<SoftwareDeployment>
-        SoftwareDeployments =>
-            Set<SoftwareDeployment>();
+    SoftwareDeployments =>
+        Set<SoftwareDeployment>();
 
-    /*
+    public DbSet<HelpdeskTicket> HelpdeskTickets =>
+        Set<HelpdeskTicket>();
+
+    public DbSet<HelpdeskTicketComment> HelpdeskTicketComments =>
+        Set<HelpdeskTicketComment>();
+
+    public DbSet<HelpdeskTicketEvent> HelpdeskTicketEvents =>
+        Set<HelpdeskTicketEvent>();
+
+    public DbSet<HelpdeskQueue> HelpdeskQueues =>
+        Set<HelpdeskQueue>();
+
+    public DbSet<EntraIdSettings> EntraIdSettings =>
+        Set<EntraIdSettings>();
+
+    public DbSet<EntraDirectoryUser> EntraDirectoryUsers =>
+        Set<EntraDirectoryUser>();
+
+    public DbSet<RemoteSessionControlLease>
+    RemoteSessionControlLeases =>
+        Set<RemoteSessionControlLease>();
+
+    public DbSet<RemoteSessionParticipant>
+    RemoteSessionParticipants =>
+        Set<RemoteSessionParticipant>();
+
+        /*
      * ============================================================
-     * HELPDESK
+     * HELPDESK: ZONAS, GRUPOS Y ASISTENTE
      * ============================================================
      */
 
-    public DbSet<HelpdeskTicket>
-        HelpdeskTickets =>
-            Set<HelpdeskTicket>();
+    public DbSet<HelpdeskZone>
+        HelpdeskZones =>
+            Set<HelpdeskZone>();
 
-    public DbSet<HelpdeskTicketComment>
-        HelpdeskTicketComments =>
-            Set<HelpdeskTicketComment>();
+    public DbSet<HelpdeskTeam>
+        HelpdeskTeams =>
+            Set<HelpdeskTeam>();
 
-    public DbSet<HelpdeskTicketEvent>
-        HelpdeskTicketEvents =>
-            Set<HelpdeskTicketEvent>();
+    public DbSet<HelpdeskTeamZone>
+        HelpdeskTeamZones =>
+            Set<HelpdeskTeamZone>();
 
-    public DbSet<HelpdeskQueue>
-        HelpdeskQueues =>
-            Set<HelpdeskQueue>();
+    public DbSet<HelpdeskTeamMember>
+        HelpdeskTeamMembers =>
+            Set<HelpdeskTeamMember>();
 
-    /*
-     * ============================================================
-     * MICROSOFT ENTRA ID
-     * ============================================================
-     */
+    public DbSet<HelpdeskUserZone>
+        HelpdeskUserZones =>
+            Set<HelpdeskUserZone>();
 
-    public DbSet<EntraIdSettings>
-        EntraIdSettings =>
-            Set<EntraIdSettings>();
-
-    public DbSet<EntraDirectoryUser>
-        EntraDirectoryUsers =>
-            Set<EntraDirectoryUser>();
+    public DbSet<HelpdeskAssistantAccess>
+        HelpdeskAssistantAccess =>
+            Set<HelpdeskAssistantAccess>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)
@@ -220,10 +200,7 @@ public sealed class TitanMdmDbContext
         base.OnModelCreating(
             modelBuilder);
 
-        modelBuilder
-            .ApplyConfigurationsFromAssembly(
-                typeof(
-                    TitanMdmDbContext)
-                .Assembly);
+        modelBuilder.ApplyConfigurationsFromAssembly(
+            typeof(TitanMdmDbContext).Assembly);
     }
 }

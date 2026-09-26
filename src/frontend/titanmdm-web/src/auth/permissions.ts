@@ -1,273 +1,97 @@
 /*
- * ================================================================
- * TITANMDM PERMISSIONS
- * ================================================================
- *
- * Catálogo central de permisos utilizados por el frontend.
- *
- * Estos códigos deben coincidir exactamente con los permisos
- * definidos por TitanMdmSeeder en el backend.
- * ================================================================
+ * Catálogo de permisos del frontend TitanMDM.
+ * Los valores deben coincidir con TitanMdmSeeder en el backend.
  */
 
 export const Permissions = {
-  /*
-   * ==============================================================
-   * DASHBOARD
-   * ==============================================================
-   */
-
   dashboard: {
-    view:
-      'dashboard.view',
-
-    globalView:
-      'dashboard.global.view',
+    view: 'dashboard.view',
+    globalView: 'dashboard.global.view',
   },
-
-  /*
-   * ==============================================================
-   * WORKSPACES
-   * ==============================================================
-   */
 
   workspace: {
     windows: {
-      view:
-        'workspace.windows.view',
+      view: 'workspace.windows.view',
     },
-
     android: {
-      view:
-        'workspace.android.view',
+      view: 'workspace.android.view',
     },
-
     administration: {
-      view:
-        'workspace.administration.view',
+      view: 'workspace.administration.view',
     },
-
-    workspace: {
-    windows: { view: 'workspace.windows.view' },
-    android: { view: 'workspace.android.view' },
-    administration: { view: 'workspace.administration.view' },
-    helpdesk: { view: 'workspace.helpdesk.view' },
+    helpdesk: {
+      view: 'workspace.helpdesk.view',
+    },
   },
-  },
-
-  /*
-   * ==============================================================
-   * DEVICES
-   * ==============================================================
-   */
 
   devices: {
-    view:
-      'devices.view',
-
-    create:
-      'devices.create',
-
-    update:
-      'devices.update',
-
-    delete:
-      'devices.delete',
-
-    commands:
-      'devices.commands',
+    view: 'devices.view',
+    create: 'devices.create',
+    update: 'devices.update',
+    delete: 'devices.delete',
+    commands: 'devices.commands',
   },
-
-  /*
-   * ==============================================================
-   * ENROLLMENT
-   * ==============================================================
-   */
 
   enrollment: {
-    view:
-      'enrollment.view',
-
-    manage:
-      'enrollment.manage',
+    view: 'enrollment.view',
+    manage: 'enrollment.manage',
   },
-
-  /*
-   * ==============================================================
-   * POLICIES
-   * ==============================================================
-   */
 
   policies: {
-    view:
-      'policies.view',
-
-    manage:
-      'policies.manage',
+    view: 'policies.view',
+    manage: 'policies.manage',
   },
-
-  /*
-   * ==============================================================
-   * APPLICATIONS
-   * ==============================================================
-   */
 
   applications: {
-    view:
-      'apps.view',
-
-    manage:
-      'apps.manage',
+    view: 'apps.view',
+    manage: 'apps.manage',
   },
-
-  /*
-   * ==============================================================
-   * COMPLIANCE
-   * ==============================================================
-   */
 
   compliance: {
-    view:
-      'compliance.view',
-
-    manage:
-      'compliance.manage',
+    view: 'compliance.view',
+    manage: 'compliance.manage',
   },
-
-  /*
-   * ==============================================================
-   * SECURITY
-   * ==============================================================
-   */
 
   security: {
-    view:
-      'security.view',
-
-    manage:
-      'security.manage',
+    view: 'security.view',
+    manage: 'security.manage',
   },
-
-  /*
-   * ==============================================================
-   * KIOSK
-   * ==============================================================
-   */
 
   kiosk: {
-    view:
-      'kiosk.view',
-
-    manage:
-      'kiosk.manage',
+    view: 'kiosk.view',
+    manage: 'kiosk.manage',
   },
-
-  /*
-   * ==============================================================
-   * GEOFENCING
-   * ==============================================================
-   */
 
   geofencing: {
-    view:
-      'geofencing.view',
-
-    manage:
-      'geofencing.manage',
+    view: 'geofencing.view',
+    manage: 'geofencing.manage',
   },
-
-  /*
-   * ==============================================================
-   * REMOTE SUPPORT
-   * ==============================================================
-   */
 
   remote: {
-    view:
-      'remote.view',
-
-    manage:
-      'remote.manage',
+    view: 'remote.view',
+    manage: 'remote.manage',
   },
-
-  /*
-   * ==============================================================
-   * REPORTS
-   * ==============================================================
-   */
 
   reports: {
-    view:
-      'reports.view',
-
-    export:
-      'reports.export',
+    view: 'reports.view',
+    export: 'reports.export',
   },
-
-  /*
-   * ==============================================================
-   * USERS
-   * ==============================================================
-   */
 
   users: {
-    view:
-      'users.view',
-
-    manage:
-      'users.manage',
+    view: 'users.view',
+    manage: 'users.manage',
   },
-
-  /*
-   * ==============================================================
-   * ROLES
-   * ==============================================================
-   */
 
   roles: {
-    view:
-      'roles.view',
-
-    manage:
-      'roles.manage',
+    view: 'roles.view',
+    manage: 'roles.manage',
   },
-
-  /*
-   * ==============================================================
-   * AUDIT
-   * ==============================================================
-   */
 
   audit: {
-    view:
-      'audit.view',
+    view: 'audit.view',
   },
 
-  /*
-   * ==============================================================
-   * SETTINGS
-   * ==============================================================
-   */
-
-  settings: {
-    view:
-      'settings.view',
-
-    manage:
-      'settings.manage',
-  },
-} as const
-
-/*
- * ================================================================
- * TYPE HELPERS
- * ================================================================
- */
-
-export type PermissionCatalog =
-  typeof Permissions
-
-helpdesk: {
+  helpdesk: {
     view: 'helpdesk.view',
     manage: 'helpdesk.manage',
     tickets: {
@@ -278,3 +102,11 @@ helpdesk: {
       close: 'tickets.close',
     },
   },
+
+  settings: {
+    view: 'settings.view',
+    manage: 'settings.manage',
+  },
+} as const
+
+export type PermissionCatalog = typeof Permissions
