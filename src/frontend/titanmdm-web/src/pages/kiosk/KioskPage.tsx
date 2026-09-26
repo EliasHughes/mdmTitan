@@ -1,25 +1,24 @@
 import {
-  AppWindow,
-  CheckCircle2,
-  LockKeyhole,
-  MonitorSmartphone,
-  PackagePlus,
-  PanelsTopLeft,
-  Plus,
+  Monitor,
   RefreshCw,
-  Rocket,
   ShieldCheck,
-  Trash2,
 } from 'lucide-react'
+
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
 
 import {
+  devicesApi,
+} from '../../api/devicesApi'
+
+import {
   kioskApi,
-  type KioskApplication,
+  type WindowsKioskApplication,
+  type WindowsKioskRestrictions,
   type KioskMode,
 } from '../../api/kioskApi'
 
@@ -27,204 +26,254 @@ import type {
   Policy,
 } from '../../api/policiesApi'
 
+import type {
+  DeviceListItem,
+} from '../../types/device'
+
+import {
+  KioskPlatformSelector,
+  type KioskPlatform,
+} from './components/KioskPlatformSelector'
+
+import {
+  KioskProfilesList,
+} from './components/KioskProfilesList'
+
+import {
+  WindowsKioskEditor,
+} from './components/WindowsKioskEditor'
+
 import './KioskPage.css'
 
-const initialApps:
-  KioskApplication[] = []
-
 export function KioskPage() {
-  const [profiles, setProfiles] =
+  const [
+    platform,
+    setPlatform,
+  ] =
+    useState<KioskPlatform>(
+      'Windows',
+    )
+
+  const [
+    profiles,
+    setProfiles,
+  ] =
     useState<Policy[]>([])
 
-  const [loading, setLoading] =
+  const [
+    windowsDevices,
+    setWindowsDevices,
+  ] =
+    useState<
+      DeviceListItem[]
+    >([])
+
+  const [
+    selectedProfile,
+    setSelectedProfile,
+  ] =
+    useState<
+      Policy | null
+    >(null)
+
+  const [
+    selectedDeviceId,
+    setSelectedDeviceId,
+  ] =
+    useState('')
+
+  const [
+    loading,
+    setLoading,
+  ] =
     useState(true)
 
-  const [saving, setSaving] =
+  const [
+    saving,
+    setSaving,
+  ] =
     useState(false)
 
-  const [message, setMessage] =
-    useState<string | null>(null)
+  const [
+    message,
+    setMessage,
+  ] =
+    useState<
+      string | null
+    >(null)
 
-  const [error, setError] =
-    useState<string | null>(null)
-
-  const [name, setName] =
-    useState('')
-
-  const [description, setDescription] =
-    useState('')
-
-  const [mode, setMode] =
-    useState<KioskMode>(
-      'singleApp',
-    )
-
-  const [applications, setApplications] =
-    useState<KioskApplication[]>(
-      initialApps,
-    )
-
-  const [packageName, setPackageName] =
-    useState('')
-
-  const [displayName, setDisplayName] =
-    useState('')
-
-  const [screenCaptureDisabled,
-    setScreenCaptureDisabled] =
-    useState(true)
-
-  const [cameraDisabled,
-    setCameraDisabled] =
-    useState(false)
-
-  const [bluetoothDisabled,
-    setBluetoothDisabled] =
-    useState(false)
-
-  const [usbDisabled,
-    setUsbDisabled] =
-    useState(true)
+  const [
+    error,
+    setError,
+  ] =
+    useState<
+      string | null
+    >(null)
 
   const load =
-    useCallback(async () => {
-      try {
-        setLoading(true)
-        setError(null)
+    useCallback(
+      async () => {
+        try {
+          setLoading(true)
+          setError(null)
 
-        setProfiles(
-          await kioskApi.getProfiles(),
-        )
-      } catch {
-        setError(
-          'No fue posible cargar los perfiles Kiosk.',
-        )
-      } finally {
-        setLoading(false)
-      }
-    }, [])
+          const [
+            profileResult,
+            deviceResult,
+          ] =
+            await Promise.all([
+              platform ===
+                'Windows'
+                ? kioskApi
+                    .getWindowsProfiles()
+                : kioskApi
+                    .getAndroidProfiles(),
 
-  useEffect(() => {
-    void load()
-  }, [load])
+              devicesApi
+                .getDevices({
+                  platform,
+                  page:
+                    1,
 
-  function addApplication() {
-    const cleanPackage =
-      packageName.trim()
+                  pageSize:
+                    200,
+                }),
+            ])
 
-    if (!cleanPackage) {
-      setError(
-        'Escribe el package name de la aplicación.',
-      )
-      return
-    }
+          setProfiles(
+            profileResult,
+          )
 
-    if (
-      applications.some(
-        (application) =>
-          application.packageName ===
-          cleanPackage,
-      )
-    ) {
-      setError(
-        'La aplicación ya está incluida.',
-      )
-      return
-    }
-
-    const newApplication:
-      KioskApplication = {
-        packageName:
-          cleanPackage,
-
-        displayName:
-          displayName.trim() ||
-          cleanPackage,
-
-        installType:
-          'FORCE_INSTALLED',
-
-        defaultApp:
-          applications.length === 0,
-      }
-
-    setApplications(
-      (current) => [
-        ...current,
-        newApplication,
+          if (
+            platform ===
+            'Windows')
+          {
+            setWindowsDevices(
+              deviceResult.items,
+            )
+          }
+        } catch {
+          setError(
+            'No fue posible cargar Kiosk.',
+          )
+        } finally {
+          setLoading(false)
+        }
+      },
+      [
+        platform,
       ],
     )
 
-    setPackageName('')
-    setDisplayName('')
-    setError(null)
-  }
+  useEffect(
+    () => {
+      void load()
+    },
+    [
+      load,
+    ],
+  )
 
-  function removeApplication(
-    packageToRemove: string,
-  ) {
-    const remaining =
-      applications.filter(
-        (application) =>
-          application.packageName !==
-          packageToRemove,
+  useEffect(
+    () => {
+      setSelectedProfile(
+        null,
       )
 
-    if (
-      remaining.length > 0 &&
-      !remaining.some(
-        (application) =>
-          application.defaultApp,
-      )
-    ) {
-      remaining[0] = {
-        ...remaining[0],
-        defaultApp: true,
-      }
-    }
+      setSelectedDeviceId('')
+      setMessage(null)
+      setError(null)
+    },
+    [
+      platform,
+    ],
+  )
 
-    setApplications(remaining)
-  }
-
-  function setDefaultApplication(
-    packageValue: string,
-  ) {
-    setApplications(
-      applications.map(
-        (application) => ({
-          ...application,
-          defaultApp:
-            application.packageName ===
-            packageValue,
-        }),
-      ),
+  const managedWindowsDevices =
+    useMemo(
+      () =>
+        windowsDevices.filter(
+          device =>
+            device.isManaged,
+        ),
+      [
+        windowsDevices,
+      ],
     )
+
+  async function createWindowsProfile(
+    request: {
+      name: string
+      description?: string
+      mode: KioskMode
+      account: string
+      applications:
+        WindowsKioskApplication[]
+      restrictions:
+        WindowsKioskRestrictions
+    },
+  ) {
+    try {
+      setSaving(true)
+      setError(null)
+      setMessage(null)
+
+      const created =
+        await kioskApi
+          .createWindowsProfile({
+            name:
+              request.name,
+
+            description:
+              request.description,
+
+            configuration: {
+              titanProfileType:
+                'kiosk',
+
+              kioskMode:
+                request.mode,
+
+              account:
+                request.account,
+
+              applications:
+                request.applications,
+
+              restrictions:
+                request.restrictions,
+            },
+          })
+
+      await kioskApi
+        .activateWindows(
+          created.id,
+        )
+
+      setMessage(
+        'Perfil Windows Kiosk creado y activado.',
+      )
+
+      await load()
+    } catch {
+      setError(
+        'No fue posible crear el perfil Windows Kiosk.',
+      )
+    } finally {
+      setSaving(false)
+    }
   }
 
-  async function createProfile() {
-    if (!name.trim()) {
-      setError(
-        'El perfil necesita un nombre.',
-      )
-      return
-    }
-
+  async function assignWindows() {
     if (
-      applications.length === 0
-    ) {
+      !selectedProfile
+      ||
+      !selectedDeviceId)
+    {
       setError(
-        'Agrega al menos una aplicación.',
+        'Selecciona un perfil y un dispositivo Windows.',
       )
-      return
-    }
 
-    if (
-      mode === 'singleApp' &&
-      applications.length !== 1
-    ) {
-      setError(
-        'Single App Kiosk debe contener exactamente una aplicación.',
-      )
       return
     }
 
@@ -233,84 +282,72 @@ export function KioskPage() {
       setError(null)
       setMessage(null)
 
-      const created =
-        await kioskApi.createProfile({
-          name: name.trim(),
-
-          description:
-            description.trim() ||
-            undefined,
-
-          configuration: {
-            titanProfileType:
-              'kiosk',
-
-            kioskMode:
-              mode,
-
-            applications,
-
-            systemNavigation: {
-              homeButton: false,
-              overviewButton: false,
-              statusBar: false,
-              notifications: false,
-            },
-
-            deviceRestrictions: {
-              factoryResetDisabled:
-                true,
-
-              safeBootDisabled:
-                true,
-
-              screenCaptureDisabled,
-
-              usbFileTransferDisabled:
-                usbDisabled,
-
-              outgoingCallsDisabled:
-                true,
-
-              smsDisabled:
-                true,
-
-              bluetoothDisabled,
-
-              cameraDisabled,
-            },
-
-            display: {
-              screenTimeoutSeconds:
-                300,
-
-              stayOnWhilePluggedIn:
-                true,
-            },
-          },
-        })
-
       await kioskApi
-        .activateAndPublish(
-          created.id,
+        .assignWindows(
+          selectedProfile.id,
+          selectedDeviceId,
         )
 
       setMessage(
-        'Perfil Kiosk creado, activado y enviado al motor Android Enterprise.',
+        'Perfil enviado al dispositivo. El agente aplicará Assigned Access.',
       )
-
-      setName('')
-      setDescription('')
-      setApplications([])
 
       await load()
     } catch {
       setError(
-        'No fue posible crear/publicar el perfil Kiosk.',
+        'No fue posible asignar el perfil Kiosk.',
       )
     } finally {
       setSaving(false)
     }
+  }
+
+  async function queryStatus() {
+    if (!selectedDeviceId) {
+      setError(
+        'Selecciona un dispositivo.',
+      )
+
+      return
+    }
+
+    const command =
+      await kioskApi
+        .getWindowsStatus(
+          selectedDeviceId,
+        )
+
+    setMessage(
+      `Consulta Kiosk enviada. Command ID: ${command.id}`,
+    )
+  }
+
+  async function removeKiosk() {
+    if (!selectedDeviceId) {
+      setError(
+        'Selecciona un dispositivo.',
+      )
+
+      return
+    }
+
+    if (
+      !window.confirm(
+        '¿Eliminar Assigned Access y restaurar las restricciones previas del dispositivo?',
+      ))
+    {
+      return
+    }
+
+    const command =
+      await kioskApi
+        .removeWindowsKiosk(
+          selectedDeviceId,
+        )
+
+    setMessage(
+      `Retiro Kiosk enviado. Command ID: ${command.id}`,
+    )
   }
 
   return (
@@ -318,7 +355,7 @@ export function KioskPage() {
       <header className="kiosk-header">
         <div>
           <span className="kiosk-eyebrow">
-            ANDROID ENTERPRISE
+            TITANMDM KIOSK
           </span>
 
           <h1>
@@ -326,22 +363,29 @@ export function KioskPage() {
           </h1>
 
           <p>
-            Configura dispositivos
-            corporativos para uso
-            dedicado Single-App o
-            Multi-App.
+            Administración de endpoints dedicados Windows y Android.
           </p>
         </div>
 
         <button
           type="button"
           className="kiosk-secondary"
-          onClick={() => void load()}
+          onClick={() =>
+            void load()
+          }
         >
           <RefreshCw size={16} />
+
           Actualizar
         </button>
       </header>
+
+      <KioskPlatformSelector
+        value={platform}
+        onChange={
+          setPlatform
+        }
+      />
 
       {message && (
         <div className="kiosk-message success">
@@ -355,403 +399,207 @@ export function KioskPage() {
         </div>
       )}
 
-      <section className="kiosk-summary">
-        <Summary
-          icon={
-            <PanelsTopLeft
-              size={20}
+      {platform ===
+      'Windows' ? (
+        <>
+          <section className="kiosk-summary">
+            <Summary
+              label="Perfiles"
+              value={profiles.length}
             />
-          }
-          label="Perfiles Kiosk"
-          value={profiles.length}
-        />
 
-        <Summary
-          icon={
-            <LockKeyhole
-              size={20}
+            <Summary
+              label="Dispositivos"
+              value={
+                managedWindowsDevices.length
+              }
             />
-          }
-          label="Modo"
-          value="Enterprise"
-        />
 
-        <Summary
-          icon={
-            <ShieldCheck
-              size={20}
+            <Summary
+              label="Tecnología"
+              value="Assigned Access"
             />
-          }
-          label="Control"
-          value="Android Policy"
-        />
 
-        <Summary
-          icon={
-            <MonitorSmartphone
-              size={20}
+            <Summary
+              label="Control"
+              value="Titan Agent"
             />
-          }
-          label="Tipo"
-          value="Dedicated"
-        />
-      </section>
+          </section>
 
-      <div className="kiosk-layout">
-        <section className="kiosk-editor">
-          <div className="kiosk-section-title">
-            <div>
-              <Plus size={18} />
-              <strong>
-                Nuevo perfil
-              </strong>
+          <div className="kiosk-layout">
+            <WindowsKioskEditor
+              saving={saving}
+              onCreate={
+                createWindowsProfile
+              }
+            />
+
+            <KioskProfilesList
+              loading={loading}
+              profiles={profiles}
+              selectedId={
+                selectedProfile?.id
+                ??
+                ''
+              }
+              onSelect={
+                setSelectedProfile
+              }
+            />
+          </div>
+
+          <section className="kiosk-windows-deployment">
+            <header>
+              <div>
+                <Monitor size={18} />
+
+                <strong>
+                  Deployment Windows
+                </strong>
+              </div>
+
+              <span>
+                Aplicación y retiro remoto de Assigned Access
+              </span>
+            </header>
+
+            <div className="kiosk-deployment-grid">
+              <label>
+                Perfil
+                <input
+                  readOnly
+                  value={
+                    selectedProfile?.name
+                    ??
+                    'Selecciona un perfil'
+                  }
+                />
+              </label>
+
+              <label>
+                Dispositivo
+                <select
+                  value={
+                    selectedDeviceId
+                  }
+                  onChange={
+                    event =>
+                      setSelectedDeviceId(
+                        event.target.value,
+                      )
+                  }
+                >
+                  <option value="">
+                    Seleccionar...
+                  </option>
+
+                  {managedWindowsDevices.map(
+                    device => (
+                      <option
+                        key={device.id}
+                        value={device.id}
+                      >
+                        {device.deviceName}
+                        {' · '}
+                        {device.status}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
             </div>
 
-            <span>
-              Política especializada
-              para Android Enterprise
-            </span>
-          </div>
-
-          <label>
-            Nombre
-            <input
-              value={name}
-              onChange={(event) =>
-                setName(
-                  event.target.value,
-                )
-              }
-              placeholder="Kiosk Recepción"
-            />
-          </label>
-
-          <label>
-            Descripción
-            <textarea
-              value={description}
-              onChange={(event) =>
-                setDescription(
-                  event.target.value,
-                )
-              }
-              placeholder="Dispositivos dedicados de recepción"
-            />
-          </label>
-
-          <div className="kiosk-mode-grid">
-            <button
-              type="button"
-              className={
-                mode === 'singleApp'
-                  ? 'kiosk-mode selected'
-                  : 'kiosk-mode'
-              }
-              onClick={() => {
-                setMode('singleApp')
-
-                if (
-                  applications.length > 1
-                ) {
-                  setApplications([
-                    applications[0],
-                  ])
+            <div className="kiosk-deployment-actions">
+              <button
+                type="button"
+                disabled={
+                  saving
+                  ||
+                  !selectedProfile
+                  ||
+                  !selectedDeviceId
                 }
-              }}
-            >
-              <AppWindow size={22} />
-              <strong>
-                Single App
-              </strong>
-              <span>
-                Una aplicación ocupa
-                todo el dispositivo.
-              </span>
-            </button>
-
-            <button
-              type="button"
-              className={
-                mode === 'multiApp'
-                  ? 'kiosk-mode selected'
-                  : 'kiosk-mode'
-              }
-              onClick={() =>
-                setMode('multiApp')
-              }
-            >
-              <PanelsTopLeft
-                size={22}
-              />
-              <strong>
-                Multi App
-              </strong>
-              <span>
-                Launcher dedicado con
-                aplicaciones autorizadas.
-              </span>
-            </button>
-          </div>
-
-          <div className="kiosk-app-builder">
-            <h3>
-              Aplicaciones permitidas
-            </h3>
-
-            <div className="kiosk-app-inputs">
-              <input
-                value={displayName}
-                onChange={(event) =>
-                  setDisplayName(
-                    event.target.value,
-                  )
+                onClick={() =>
+                  void assignWindows()
                 }
-                placeholder="Nombre visible"
-              />
+              >
+                <ShieldCheck size={16} />
 
-              <input
-                value={packageName}
-                onChange={(event) =>
-                  setPackageName(
-                    event.target.value,
-                  )
-                }
-                placeholder="com.empresa.app"
-              />
+                Aplicar Kiosk
+              </button>
 
               <button
                 type="button"
-                onClick={
-                  addApplication
+                disabled={
+                  !selectedDeviceId
+                }
+                onClick={() =>
+                  void queryStatus()
                 }
               >
-                <PackagePlus
-                  size={16}
-                />
-                Agregar
+                Consultar estado
+              </button>
+
+              <button
+                type="button"
+                className="danger"
+                disabled={
+                  !selectedDeviceId
+                }
+                onClick={() =>
+                  void removeKiosk()
+                }
+              >
+                Retirar Kiosk
               </button>
             </div>
+          </section>
+        </>
+      ) : (
+        <section className="kiosk-android-preserved">
+          <strong>
+            Android Enterprise
+          </strong>
 
-            {applications.map(
-              (application) => (
-                <div
-                  className="kiosk-app-row"
-                  key={
-                    application.packageName
-                  }
-                >
-                  <div>
-                    <strong>
-                      {
-                        application.displayName
-                      }
-                    </strong>
-                    <span>
-                      {
-                        application.packageName
-                      }
-                    </span>
-                  </div>
+          <p>
+            La implementación Android existente se conserva. La retomaremos en la fase Android después de Windows y Mesa de Ayuda.
+          </p>
 
-                  <label>
-                    <input
-                      type="radio"
-                      name="defaultKioskApp"
-                      checked={
-                        application.defaultApp
-                      }
-                      onChange={() =>
-                        setDefaultApplication(
-                          application.packageName,
-                        )
-                      }
-                    />
-                    Principal
-                  </label>
-
-                  <button
-                    type="button"
-                    onClick={() =>
-                      removeApplication(
-                        application.packageName,
-                      )
-                    }
-                  >
-                    <Trash2
-                      size={15}
-                    />
-                  </button>
-                </div>
-              ),
-            )}
-          </div>
-
-          <div className="kiosk-restrictions">
-            <h3>
-              Restricciones
-            </h3>
-
-            <Toggle
-              label="Bloquear capturas de pantalla"
-              checked={
-                screenCaptureDisabled
-              }
-              onChange={
-                setScreenCaptureDisabled
-              }
-            />
-
-            <Toggle
-              label="Bloquear transferencia USB"
-              checked={usbDisabled}
-              onChange={setUsbDisabled}
-            />
-
-            <Toggle
-              label="Deshabilitar cámara"
-              checked={cameraDisabled}
-              onChange={setCameraDisabled}
-            />
-
-            <Toggle
-              label="Deshabilitar Bluetooth"
-              checked={
-                bluetoothDisabled
-              }
-              onChange={
-                setBluetoothDisabled
-              }
-            />
-          </div>
-
-          <button
-            type="button"
-            className="kiosk-create"
-            disabled={saving}
-            onClick={() =>
-              void createProfile()
-            }
-          >
-            <Rocket size={17} />
-            {saving
-              ? 'Publicando...'
-              : 'Crear y publicar perfil'}
-          </button>
+          <KioskProfilesList
+            loading={loading}
+            profiles={profiles}
+            selectedId=""
+            onSelect={() => {
+            }}
+          />
         </section>
-
-        <section className="kiosk-profiles">
-          <div className="kiosk-section-title">
-            <div>
-              <PanelsTopLeft
-                size={18}
-              />
-              <strong>
-                Perfiles existentes
-              </strong>
-            </div>
-          </div>
-
-          {loading ? (
-            <div className="kiosk-empty">
-              Cargando...
-            </div>
-          ) : profiles.length === 0 ? (
-            <div className="kiosk-empty">
-              No existen perfiles
-              Kiosk.
-            </div>
-          ) : (
-            profiles.map(
-              (profile) => (
-                <article
-                  className="kiosk-profile"
-                  key={profile.id}
-                >
-                  <div className="kiosk-profile-icon">
-                    <PanelsTopLeft
-                      size={20}
-                    />
-                  </div>
-
-                  <div>
-                    <strong>
-                      {profile.name}
-                    </strong>
-
-                    <span>
-                      {profile.description ??
-                        'Sin descripción'}
-                    </span>
-
-                    <small>
-                      Versión{' '}
-                      {
-                        profile.currentVersion
-                      }
-                      {' · '}
-                      {
-                        profile.assignedDevices
-                      }{' '}
-                      dispositivos
-                    </small>
-                  </div>
-
-                  <div className="kiosk-profile-status">
-                    <CheckCircle2
-                      size={14}
-                    />
-                    {profile.status}
-                  </div>
-                </article>
-              ),
-            )
-          )}
-        </section>
-      </div>
+      )}
     </div>
   )
 }
 
 function Summary({
-  icon,
   label,
   value,
 }: {
-  icon: React.ReactNode
   label: string
-  value: string | number
+
+  value:
+    string | number
 }) {
   return (
     <article className="kiosk-summary-card">
-      <div>{icon}</div>
-      <span>{label}</span>
-      <strong>{value}</strong>
+      <div>
+        <ShieldCheck size={19} />
+      </div>
+
+      <span>
+        {label}
+      </span>
+
+      <strong>
+        {value}
+      </strong>
     </article>
-  )
-}
-
-function Toggle({
-  label,
-  checked,
-  onChange,
-}: {
-  label: string
-  checked: boolean
-  onChange: (value: boolean) => void
-}) {
-  return (
-    <label className="kiosk-toggle">
-      <span>{label}</span>
-
-      <input
-        type="checkbox"
-        checked={checked}
-        onChange={(event) =>
-          onChange(
-            event.target.checked,
-          )
-        }
-      />
-    </label>
   )
 }
