@@ -111,6 +111,10 @@ import {
   SettingsPage,
 } from './pages/settings/SettingsPage'
 
+import { HelpdeskInboxPage } from './pages/helpdesk/HelpdeskInboxPage'
+import { HelpdeskTicketPage } from './pages/helpdesk/HelpdeskTicketPage'
+import { HelpdeskEntraSettingsPage } from './pages/helpdesk/HelpdeskEntraSettingsPage'
+
 function App() {
   return (
     <Routes>
@@ -151,6 +155,33 @@ function App() {
               ]}
             >
               <DashboardPage />
+            </PermissionRoute>
+          }
+        />
+
+                <Route
+          path="helpdesk"
+          element={
+            <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
+              <HelpdeskInboxPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="helpdesk/entra"
+          element={
+            <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
+              <HelpdeskEntraSettingsPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="helpdesk/tickets/:ticketId"
+          element={
+            <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
+              <HelpdeskTicketPage />
             </PermissionRoute>
           }
         />

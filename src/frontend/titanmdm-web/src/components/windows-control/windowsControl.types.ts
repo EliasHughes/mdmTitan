@@ -14,10 +14,7 @@ export type WindowsControlTab =
   | 'commands'
 
 export type JsonObject =
-  Record<
-    string,
-    unknown
-  >
+  Record<string, unknown>
 
 export interface CommandDefinition {
   type: string
@@ -86,13 +83,29 @@ export interface UpdateHistoryItem {
   hResult: number | null
 }
 
+export interface AvailableWindowsUpdate {
+  title: string
+  kbArticleIds: string[]
+  severity: string | null
+  rebootRequired: boolean | null
+  isDownloaded: boolean | null
+  eulaAccepted: boolean | null
+}
+
 export interface UpdateView {
   available: boolean
+
   serviceStatus: string
   serviceQuerySucceeded: boolean
+
   pendingReboot: boolean | null
+
   historyAvailable: boolean
   history: UpdateHistoryItem[]
+
+  availableUpdatesAvailable: boolean
+  availableUpdates: AvailableWindowsUpdate[]
+
   collectedAtUtc: string | null
 }
 
@@ -101,53 +114,3 @@ export type SendWindowsCommand =
     commandType: string,
     payload?: Record<string, unknown>,
   ) => Promise<void>
-
-export interface UpdateHistoryItem {
-  title: string
-  date: string | null
-  resultCode: number | null
-  hResult: number | null
-}
-
-export interface AvailableWindowsUpdate {
-  title: string
-
-  kbArticleIds: string[]
-
-  severity:
-    string | null
-
-  rebootRequired:
-    boolean | null
-
-  isDownloaded:
-    boolean | null
-
-  eulaAccepted:
-    boolean | null
-}
-
-export interface UpdateView {
-  available: boolean
-
-  serviceStatus: string
-
-  serviceQuerySucceeded: boolean
-
-  pendingReboot:
-    boolean | null
-
-  historyAvailable: boolean
-
-  history:
-    UpdateHistoryItem[]
-
-  availableUpdatesAvailable:
-    boolean
-
-  availableUpdates:
-    AvailableWindowsUpdate[]
-
-  collectedAtUtc:
-    string | null
-}

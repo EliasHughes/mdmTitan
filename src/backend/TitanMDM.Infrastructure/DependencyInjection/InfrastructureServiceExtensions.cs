@@ -53,6 +53,10 @@ using TitanMDM.Infrastructure.Audit;
 using TitanMDM.Infrastructure.Reports;
 
 
+using TitanMDM.Application.Helpdesk;
+using TitanMDM.Infrastructure.Helpdesk;
+
+
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceExtensions
@@ -367,6 +371,15 @@ public static class InfrastructureServiceExtensions
             IReportsService,
             ReportsService>();
 
+        services.AddHttpClient("entra-id");
+
+        services.AddScoped<
+            IHelpdeskService,
+            HelpdeskService>();
+
+        services.AddScoped<
+            IEntraIdDirectoryService,
+            EntraIdDirectoryService>();
 
 
         // ============================================================

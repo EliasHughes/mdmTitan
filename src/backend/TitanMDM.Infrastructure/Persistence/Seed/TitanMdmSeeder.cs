@@ -337,6 +337,55 @@ public sealed class TitanMdmSeeder
                     "Administrar configuración",
                     "Settings",
                     "Permite modificar la configuración global de TitanMDM.")
+
+                 
+                new(
+                    "workspace.helpdesk.view",
+                    "Acceder a Mesa de Ayuda",
+                    "Workspaces",
+                    "Permite acceder al espacio de trabajo de Mesa de Ayuda."),
+
+                new(
+                    "helpdesk.view",
+                    "Ver mesa de ayuda",
+                    "Helpdesk",
+                    "Permite visualizar el workspace de Mesa de Ayuda."),
+
+                new(
+                    "helpdesk.manage",
+                    "Administrar mesa de ayuda",
+                    "Helpdesk",
+                    "Permite configurar Entra ID y la mesa de ayuda."),
+
+                new(
+                    "tickets.view",
+                    "Ver tickets",
+                    "Helpdesk",
+                    "Permite consultar tickets de la mesa de ayuda."),
+
+                new(
+                    "tickets.create",
+                    "Crear tickets",
+                    "Helpdesk",
+                    "Permite crear tickets."),
+
+                new(
+                    "tickets.assign",
+                    "Asignar tickets",
+                    "Helpdesk",
+                    "Permite asignar tickets a administradores Titan existentes."),
+
+                new(
+                    "tickets.comment",
+                    "Comentar tickets",
+                    "Helpdesk",
+                    "Permite agregar comentarios y notas internas."),
+
+                new(
+                    "tickets.close",
+                    "Cerrar tickets",
+                    "Helpdesk",
+                    "Permite resolver y cerrar tickets."),
             };
 
         var permissionCodes =
