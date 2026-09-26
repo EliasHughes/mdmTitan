@@ -7,21 +7,29 @@ import {
 
 /*
  * ============================================================
- * REMOTE FRAME
+ * FRAME
  * ============================================================
  */
 
 export interface RemoteFrame {
   sessionId: string
+
   sequence: number
+
   width: number
+
   height: number
+
   mimeType: string
+
   base64Data: string
+
   capturedAtUtc: string
 
   displayIndex: number
+
   displayCount: number
+
   displayLabel: string
 }
 
@@ -33,8 +41,11 @@ export interface RemoteFrame {
 
 export interface RemoteSessionChanged {
   sessionId: string
+
   status: string
-  connectedAtUtc?: string | null
+
+  connectedAtUtc?:
+    string | null
 }
 
 /*
@@ -45,17 +56,61 @@ export interface RemoteSessionChanged {
 
 export interface RemoteMonitorInfo {
   index: number
+
   deviceName: string
+
   width: number
+
   height: number
+
   isPrimary: boolean
+
   label: string
 }
 
 export interface RemoteMonitorState {
   sessionId: string
+
   selectedMonitorIndex: number
-  monitors: RemoteMonitorInfo[]
+
+  monitors:
+    RemoteMonitorInfo[]
+}
+
+/*
+ * ============================================================
+ * MULTI TECHNICIAN
+ * ============================================================
+ */
+
+export interface RemoteParticipantState {
+  sessionId: string
+
+  userId: string
+
+  displayName: string
+
+  connected: boolean
+}
+
+export interface RemoteControlState {
+  sessionId: string
+
+  hasController: boolean
+
+  userId?: string
+
+  displayName?: string
+
+  acquiredAtUtc?: string
+
+  expiresAtUtc?: string
+}
+
+export interface RemoteHostState {
+  sessionId: string
+
+  connected: boolean
 }
 
 /*
@@ -66,15 +121,33 @@ export interface RemoteMonitorState {
 
 export interface RemoteSupportSignalRHandlers {
   onFrame?: (
-    frame: RemoteFrame,
+    frame:
+      RemoteFrame,
   ) => void
 
   onSessionChanged?: (
-    update: RemoteSessionChanged,
+    update:
+      RemoteSessionChanged,
   ) => void
 
   onMonitorState?: (
-    state: RemoteMonitorState,
+    state:
+      RemoteMonitorState,
+  ) => void
+
+  onParticipantStateChanged?: (
+    state:
+      RemoteParticipantState,
+  ) => void
+
+  onControlStateChanged?: (
+    state:
+      RemoteControlState,
+  ) => void
+
+  onRemoteHostStateChanged?: (
+    state:
+      RemoteHostState,
   ) => void
 
   onReconnecting?: (
@@ -92,7 +165,7 @@ export interface RemoteSupportSignalRHandlers {
 
 /*
  * ============================================================
- * ERROR HELPER
+ * ERROR
  * ============================================================
  */
 
@@ -144,7 +217,8 @@ export class RemoteSupportSignalRClient {
     boolean {
     return (
       this.connection?.state ===
-      signalR.HubConnectionState
+      signalR
+        .HubConnectionState
         .Connected
     )
   }
@@ -166,34 +240,34 @@ export class RemoteSupportSignalRClient {
 
   public async connect(
     handlers:
-      RemoteSupportSignalRHandlers =
-        {},
+      RemoteSupportSignalRHandlers = {},
   ): Promise<void> {
-    /*
-     * Evitar conexiones duplicadas.
-     */
     if (
       this.connection
     ) {
       if (
         this.connection.state ===
-        signalR.HubConnectionState
-          .Connected
-      ) {
-        return
-      }
-
-      if (
+          signalR
+            .HubConnectionState
+            .Connected
+        ||
         this.connection.state ===
-        signalR.HubConnectionState
-          .Connecting
+          signalR
+            .HubConnectionState
+            .Connecting
+        ||
+        this.connection.state ===
+          signalR
+            .HubConnectionState
+            .Reconnecting
       ) {
         return
       }
     }
 
     const connection =
-      new signalR.HubConnectionBuilder()
+      new signalR
+        .HubConnectionBuilder()
         .withUrl(
           '/hubs/remote-support',
           {
@@ -211,11 +285,13 @@ export class RemoteSupportSignalRClient {
             2000,
             5000,
             10000,
+            15000,
           ],
         )
         .configureLogging(
-          signalR.LogLevel
-            .Information,
+          signalR
+            .LogLevel
+            .Warning,
         )
         .build()
 
@@ -270,88 +346,99 @@ export class RemoteSupportSignalRClient {
       },
     )
 
+    connection.on(
+      'ParticipantStateChanged',
+      (
+        state:
+          RemoteParticipantState,
+      ) => {
+        handlers
+          .onParticipantStateChanged
+          ?.(
+            state,
+          )
+      },
+    )
+
+    connection.on(
+      'RemoteControlState',
+      (
+        state:
+          RemoteControlState,
+      ) => {
+        handlers
+          .onControlStateChanged
+          ?.(
+            state,
+          )
+      },
+    )
+
+    connection.on(
+      'RemoteHostStateChanged',
+      (
+        state:
+          RemoteHostState,
+      ) => {
+        handlers
+          .onRemoteHostStateChanged
+          ?.(
+            state,
+          )
+      },
+    )
+
     /*
      * ========================================================
      * CONNECTION EVENTS
      * ========================================================
      */
 
-    connection.onreconnecting(
-      (
-        error,
-      ) => {
-        console.warn(
-          '[TitanMDM SignalR] Reconectando...',
-          error,
-        )
+    connection
+      .onreconnecting(
+        error => {
+          handlers
+            .onReconnecting
+            ?.(
+              error ??
+              undefined,
+            )
+        },
+      )
 
-        handlers
-          .onReconnecting
-          ?.(
-            error ??
-            undefined,
-          )
-      },
-    )
+    connection
+      .onreconnected(
+        connectionId => {
+          handlers
+            .onReconnected
+            ?.(
+              connectionId ??
+              undefined,
+            )
+        },
+      )
 
-    connection.onreconnected(
-      (
-        connectionId,
-      ) => {
-        console.info(
-          '[TitanMDM SignalR] Reconectado.',
-          {
-            connectionId,
-          },
-        )
-
-        handlers
-          .onReconnected
-          ?.(
-            connectionId ??
-            undefined,
-          )
-      },
-    )
-
-    connection.onclose(
-      (
-        error,
-      ) => {
-        console.warn(
-          '[TitanMDM SignalR] Cerrado.',
-          error,
-        )
-
-        handlers
-          .onClosed
-          ?.(
-            error ??
-            undefined,
-          )
-      },
-    )
+    connection
+      .onclose(
+        error => {
+          handlers
+            .onClosed
+            ?.(
+              error ??
+              undefined,
+            )
+        },
+      )
 
     /*
      * ========================================================
-     * START CONNECTION
+     * START
      * ========================================================
      */
 
     try {
       await connection
         .start()
-
-      console.info(
-        '[TitanMDM SignalR] Conectado.',
-        {
-          connectionId:
-            connection.connectionId,
-
-          state:
-            connection.state,
-        },
-      )
     } catch (
       error
     ) {
@@ -359,12 +446,6 @@ export class RemoteSupportSignalRClient {
         extractSignalRError(
           error,
         )
-
-      console.error(
-        '[TitanMDM SignalR] Error iniciando conexión:',
-        message,
-        error,
-      )
 
       this.connection =
         null
@@ -372,7 +453,8 @@ export class RemoteSupportSignalRClient {
       throw new Error(
         `No fue posible conectar SignalR: ${message}`,
         {
-          cause: error,
+          cause:
+            error,
         },
       )
     }
@@ -380,116 +462,84 @@ export class RemoteSupportSignalRClient {
 
   /*
    * ==========================================================
-   * JOIN SESSION
+   * SESSION
    * ==========================================================
    */
 
   public async joinSession(
     sessionId: string,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    if (
-      !sessionId
-    ) {
+    if (!sessionId) {
       throw new Error(
-        'JoinSession requiere un SessionId.',
+        'JoinSession requiere SessionId.',
       )
     }
 
-    try {
-      await connection.invoke(
+    await this
+      .invoke(
         'JoinSession',
         sessionId,
       )
-
-      console.info(
-        '[TitanMDM SignalR] JoinSession correcto.',
-        {
-          sessionId,
-        },
-      )
-    } catch (
-      error
-    ) {
-      const message =
-        extractSignalRError(
-          error,
-        )
-
-      console.error(
-        '[TitanMDM SignalR] JoinSession falló.',
-        {
-          sessionId,
-          message,
-          error,
-        },
-      )
-
-      throw new Error(
-        `JoinSession falló: ${message}`,
-        {
-          cause: error,
-        },
-      )
-    }
   }
-
-  /*
-   * ==========================================================
-   * LEAVE SESSION
-   * ==========================================================
-   */
 
   public async leaveSession(
     sessionId: string,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    if (
-      !sessionId
-    ) {
+    if (!sessionId) {
       return
     }
 
-    try {
-      await connection.invoke(
+    await this
+      .invoke(
         'LeaveSession',
         sessionId,
       )
+  }
 
-      console.info(
-        '[TitanMDM SignalR] LeaveSession correcto.',
-        {
-          sessionId,
-        },
-      )
-    } catch (
-      error
-    ) {
-      const message =
-        extractSignalRError(
-          error,
-        )
+  /*
+   * ==========================================================
+   * CONTROL
+   * ==========================================================
+   */
 
-      console.warn(
-        '[TitanMDM SignalR] LeaveSession falló.',
-        {
-          sessionId,
-          message,
-          error,
-        },
+  public async acquireControl(
+    sessionId: string,
+  ): Promise<RemoteControlState> {
+    return this
+      .invoke<RemoteControlState>(
+        'AcquireControl',
+        sessionId,
       )
+  }
 
-      throw new Error(
-        `LeaveSession falló: ${message}`,
-        {
-          cause: error,
-        },
+  public async renewControl(
+    sessionId: string,
+  ): Promise<void> {
+    await this
+      .invoke(
+        'RenewControl',
+        sessionId,
       )
-    }
+  }
+
+  public async releaseControl(
+    sessionId: string,
+  ): Promise<void> {
+    await this
+      .invoke(
+        'ReleaseControl',
+        sessionId,
+      )
+  }
+
+  public async requestControlState(
+    sessionId: string,
+  ): Promise<void> {
+    await this
+      .invoke(
+        'RequestControlState',
+        sessionId,
+      )
   }
 
   /*
@@ -502,55 +552,47 @@ export class RemoteSupportSignalRClient {
     sessionId: string,
     monitorIndex: number,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'SelectMonitor',
-      sessionId,
-      monitorIndex,
-    )
+    await this
+      .invoke(
+        'SelectMonitor',
+        sessionId,
+        monitorIndex,
+      )
   }
 
   public async nextMonitor(
     sessionId: string,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'NextMonitor',
-      sessionId,
-    )
+    await this
+      .invoke(
+        'NextMonitor',
+        sessionId,
+      )
   }
 
   public async previousMonitor(
     sessionId: string,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'PreviousMonitor',
-      sessionId,
-    )
+    await this
+      .invoke(
+        'PreviousMonitor',
+        sessionId,
+      )
   }
 
   public async requestMonitorState(
     sessionId: string,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'RequestMonitorState',
-      sessionId,
-    )
+    await this
+      .invoke(
+        'RequestMonitorState',
+        sessionId,
+      )
   }
 
   /*
    * ==========================================================
-   * MOUSE
+   * POINTER
    * ==========================================================
    */
 
@@ -559,15 +601,13 @@ export class RemoteSupportSignalRClient {
     x: number,
     y: number,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'PointerMove',
-      sessionId,
-      x,
-      y,
-    )
+    await this
+      .invoke(
+        'PointerMove',
+        sessionId,
+        x,
+        y,
+      )
   }
 
   public async pointerButton(
@@ -578,28 +618,24 @@ export class RemoteSupportSignalRClient {
       | 'right-down'
       | 'right-up',
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'PointerButton',
-      sessionId,
-      action,
-    )
+    await this
+      .invoke(
+        'PointerButton',
+        sessionId,
+        action,
+      )
   }
 
   public async pointerWheel(
     sessionId: string,
     delta: number,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'PointerWheel',
-      sessionId,
-      delta,
-    )
+    await this
+      .invoke(
+        'PointerWheel',
+        sessionId,
+        delta,
+      )
   }
 
   /*
@@ -613,15 +649,13 @@ export class RemoteSupportSignalRClient {
     virtualKey: number,
     keyDown: boolean,
   ): Promise<void> {
-    const connection =
-      this.requireConnection()
-
-    await connection.invoke(
-      'Keyboard',
-      sessionId,
-      virtualKey,
-      keyDown,
-    )
+    await this
+      .invoke(
+        'Keyboard',
+        sessionId,
+        virtualKey,
+        keyDown,
+      )
   }
 
   /*
@@ -638,16 +672,15 @@ export class RemoteSupportSignalRClient {
     this.connection =
       null
 
-    if (
-      !connection
-    ) {
+    if (!connection) {
       return
     }
 
     try {
       if (
         connection.state !==
-        signalR.HubConnectionState
+        signalR
+          .HubConnectionState
           .Disconnected
       ) {
         await connection
@@ -657,7 +690,7 @@ export class RemoteSupportSignalRClient {
       error
     ) {
       console.warn(
-        '[TitanMDM SignalR] Error cerrando conexión.',
+        '[TitanMDM Remote] Error cerrando SignalR.',
         error,
       )
     }
@@ -665,15 +698,44 @@ export class RemoteSupportSignalRClient {
 
   /*
    * ==========================================================
-   * HELPERS
+   * INTERNAL INVOKE
    * ==========================================================
    */
 
+  private async invoke<T = void>(
+    methodName: string,
+    ...args: unknown[]
+  ): Promise<T> {
+    const connection =
+      this.requireConnection()
+
+    try {
+      return await connection
+        .invoke<T>(
+          methodName,
+          ...args,
+        )
+    } catch (
+      error
+    ) {
+      const message =
+        extractSignalRError(
+          error,
+        )
+
+      throw new Error(
+        `${methodName} falló: ${message}`,
+        {
+          cause:
+            error,
+        },
+      )
+    }
+  }
+
   private requireConnection():
     signalR.HubConnection {
-    if (
-      !this.connection
-    ) {
+    if (!this.connection) {
       throw new Error(
         'El cliente SignalR no está inicializado.',
       )
@@ -681,11 +743,12 @@ export class RemoteSupportSignalRClient {
 
     if (
       this.connection.state !==
-      signalR.HubConnectionState
+      signalR
+        .HubConnectionState
         .Connected
     ) {
       throw new Error(
-        `SignalR no está conectado. Estado actual: ${this.connection.state}.`,
+        `SignalR no está conectado. Estado: ${this.connection.state}.`,
       )
     }
 
