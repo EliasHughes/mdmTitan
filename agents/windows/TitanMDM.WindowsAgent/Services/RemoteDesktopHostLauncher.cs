@@ -38,7 +38,7 @@ public sealed class RemoteDesktopHostLauncher
             logger;
     }
 
-    public bool IsRunning
+        public bool IsRunning
     {
         get
         {
@@ -48,6 +48,22 @@ public sealed class RemoteDesktopHostLauncher
             }
         }
     }
+
+    public int? RunningWindowsSessionId
+    {
+        get
+        {
+            lock (_syncRoot)
+            {
+                CleanupExitedProcessUnsafe();
+                return _windowsSessionId;
+            }
+        }
+    }
+
+    public int? ActiveConsoleSessionId =>
+        _activeSessionLauncher.GetActiveConsoleSessionId();
+
 
     public Task StartAsync(
         RemoteDesktopStartRequest request,

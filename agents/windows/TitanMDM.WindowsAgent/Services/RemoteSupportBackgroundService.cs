@@ -2,20 +2,24 @@ using TitanMDM.WindowsAgent.Contracts;
 
 namespace TitanMDM.WindowsAgent.Services;
 
-public sealed class RemoteSupportBackgroundService
-    : BackgroundService
+public sealed class RemoteSupportBackgroundService : BackgroundService
 {
-    private readonly RemoteSupportApiClient
-        _apiClient;
+    private const int MaxRestartAttempts = 3;
 
-    private readonly RemoteSupportSessionManager
-        _sessionManager;
+    private static readonly TimeSpan PollInterval =
+        TimeSpan.FromSeconds(5);
 
-    private readonly RemoteDesktopHostLauncher
-        _hostLauncher;
+    private static readonly TimeSpan RestartInterval =
+        TimeSpan.FromSeconds(10);
 
-    private readonly ILogger<
-        RemoteSupportBackgroundService> _logger;
+    private readonly RemoteSupportApiClient _apiClient;
+    private readonly RemoteSupportSessionManager _sessionManager;
+    private readonly RemoteDesktopHostLauncher _hostLauncher;
+    private readonly ILogger<RemoteSupportBackgroundService> _logger;
+
+    private RemoteDesktopStartRequest? _activeLaunchRequest;
+    private int _restartAttempts;
+    private DateTime _nextRestartAtUtc;
 
     public RemoteSupportBackgroundService(
         RemoteSupportApiClient apiClient,
@@ -23,17 +27,10 @@ public sealed class RemoteSupportBackgroundService
         RemoteDesktopHostLauncher hostLauncher,
         ILogger<RemoteSupportBackgroundService> logger)
     {
-        _apiClient =
-            apiClient;
-
-        _sessionManager =
-            sessionManager;
-
-        _hostLauncher =
-            hostLauncher;
-
-        _logger =
-            logger;
+        _apiClient = apiClient;
+        _sessionManager = sessionManager;
+        _hostLauncher = hostLauncher;
+        _logger = logger;
     }
 
     protected override async Task ExecuteAsync(
@@ -42,17 +39,14 @@ public sealed class RemoteSupportBackgroundService
         _logger.LogInformation(
             "TitanMDM Remote Support service started.");
 
-        while (!stoppingToken
-            .IsCancellationRequested)
+        while (!stoppingToken.IsCancellationRequested)
         {
             try
             {
-                await PollAsync(
-                    stoppingToken);
+                await PollAsync(stoppingToken);
             }
             catch (OperationCanceledException)
-                when (stoppingToken
-                    .IsCancellationRequested)
+                when (stoppingToken.IsCancellationRequested)
             {
                 break;
             }
@@ -63,33 +57,53 @@ public sealed class RemoteSupportBackgroundService
                     "Remote Support polling failed.");
             }
 
-            await Task.Delay(
-                TimeSpan.FromSeconds(5),
-                stoppingToken);
+            try
+            {
+                await Task.Delay(
+                    PollInterval,
+                    stoppingToken);
+            }
+            catch (OperationCanceledException)
+                when (stoppingToken.IsCancellationRequested)
+            {
+                break;
+            }
+        }
+
+        var current = _sessionManager.CurrentSession;
+
+        if (current is not null)
+        {
+            try
+            {
+                await StopCurrentSessionAsync(
+                    current.SessionId,
+                    CancellationToken.None);
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(
+                    ex,
+                    "RemoteHost cleanup failed while stopping the service.");
+            }
         }
     }
 
     private async Task PollAsync(
         CancellationToken cancellationToken)
     {
-        var pending =
-            await _apiClient
-                .GetPendingAsync(
-                    cancellationToken);
+        var pending = await _apiClient.GetPendingAsync(
+            cancellationToken);
 
-        var current =
-            _sessionManager
-                .CurrentSession;
+        var current = _sessionManager.CurrentSession;
 
         if (current is not null)
         {
-            var serverSession =
-                pending.FirstOrDefault(
-                    x =>
-                        x.SessionId ==
-                        current.SessionId);
+            var serverSession = pending.FirstOrDefault(
+                x => x.SessionId == current.SessionId);
 
-            if (serverSession is null)
+            if (serverSession is null ||
+                serverSession.ExpiresAtUtc <= DateTime.UtcNow)
             {
                 await StopCurrentSessionAsync(
                     current.SessionId,
@@ -98,36 +112,24 @@ public sealed class RemoteSupportBackgroundService
                 return;
             }
 
-            if (serverSession.ExpiresAtUtc <=
-                DateTime.UtcNow)
-            {
-                await StopCurrentSessionAsync(
-                    current.SessionId,
-                    cancellationToken);
-            }
+            await EnsureHostRunningAsync(
+                current.SessionId,
+                cancellationToken);
 
             return;
         }
 
-        var request =
-            pending
-                .Where(
-                    x =>
-                        x.ExpiresAtUtc >
-                        DateTime.UtcNow)
-                .OrderBy(
-                    x =>
-                        x.RequestedAtUtc)
-                .FirstOrDefault();
+        var request = pending
+            .Where(x => x.ExpiresAtUtc > DateTime.UtcNow)
+            .OrderBy(x => x.RequestedAtUtc)
+            .FirstOrDefault();
 
-        if (request is null)
+        if (request is not null)
         {
-            return;
+            await StartSessionAsync(
+                request,
+                cancellationToken);
         }
-
-        await StartSessionAsync(
-            request,
-            cancellationToken);
     }
 
     private async Task StartSessionAsync(
@@ -143,106 +145,202 @@ public sealed class RemoteSupportBackgroundService
 
         try
         {
-            _logger.LogInformation(
-                "Preparing remote support session {SessionId}.",
-                request.SessionId);
+            await _apiClient.MarkConnectingAsync(
+                request.SessionId,
+                cancellationToken);
 
-            await _apiClient
-                .MarkConnectingAsync(
+            var bootstrap =
+                await _apiClient.CreateHostBootstrapAsync(
                     request.SessionId,
                     cancellationToken);
 
-            var bootstrap =
-                await _apiClient
-                    .CreateHostBootstrapAsync(
-                        request.SessionId,
-                        cancellationToken);
-
-            var startRequest =
+            var launchRequest =
                 new RemoteDesktopStartRequest(
-                    SessionId:
-                        request.SessionId,
+                    SessionId: request.SessionId,
+                    TechnicianName: request.TechnicianDisplayName,
+                    Reason: request.Reason,
+                    AllowKeyboard: request.AllowKeyboard,
+                    AllowMouse: request.AllowMouse,
+                    AllowClipboard: request.AllowClipboard,
+                    AllowFileTransfer: request.AllowFileTransfer,
+                    ExpiresAtUtc: request.ExpiresAtUtc,
+                    ServerUrl: bootstrap.ServerUrl,
+                    AccessToken: bootstrap.AccessToken);
 
-                    TechnicianName:
-                        request.TechnicianDisplayName,
+            await _hostLauncher.StartAsync(
+                launchRequest,
+                cancellationToken);
 
-                    Reason:
-                        request.Reason,
+            _activeLaunchRequest = launchRequest;
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
 
-                    AllowKeyboard:
-                        request.AllowKeyboard,
-
-                    AllowMouse:
-                        request.AllowMouse,
-
-                    AllowClipboard:
-                        request.AllowClipboard,
-
-                    AllowFileTransfer:
-                        request.AllowFileTransfer,
-
-                    ExpiresAtUtc:
-                        request.ExpiresAtUtc,
-
-                    ServerUrl:
-                        bootstrap.ServerUrl,
-
-                    AccessToken:
-                        bootstrap.AccessToken);
-
-            await _hostLauncher
-                .StartAsync(
-                    startRequest,
-                    cancellationToken);
-
-            /*
-             * NO se llama MarkConnectedAsync aquí.
-             *
-             * La sesión solamente pasa a Connected cuando
-             * TitanMDM.RemoteHost consigue establecer
-             * realmente su conexión SignalR y ejecuta
-             * RegisterRemoteHost en RemoteSupportHub.
-             */
-
+            // RegisterRemoteHost en SignalR confirma la conexión real.
+            // El lanzamiento del proceso por sí solo no la confirma.
             _logger.LogInformation(
                 "RemoteHost launched for session {SessionId}. Waiting for SignalR registration.",
                 request.SessionId);
         }
         catch (Exception ex)
         {
-            _sessionManager.End(
-                request.SessionId);
-
-            try
-            {
-                await _hostLauncher
-                    .StopAsync(
-                        request.SessionId,
-                        CancellationToken.None);
-            }
-            catch
-            {
-            }
-
-            try
-            {
-                await _apiClient
-                    .MarkFailedAsync(
-                        request.SessionId,
-                        ex.Message,
-                        cancellationToken);
-            }
-            catch
-            {
-            }
-
-            _logger.LogError(
+            await FailSessionAsync(
+                request.SessionId,
                 ex,
-                "Unable to start remote support session {SessionId}.",
-                request.SessionId);
+                cancellationToken);
 
             throw;
         }
+    }
+
+    private async Task EnsureHostRunningAsync(
+        Guid sessionId,
+        CancellationToken cancellationToken)
+    {
+        var activeWindowsSessionId =
+    _hostLauncher.ActiveConsoleSessionId;
+
+if (activeWindowsSessionId is null)
+{
+    // Windows puede quedar brevemente sin sesión activa durante
+    // un cambio de usuario. Esperamos al siguiente ciclo.
+    return;
+}
+
+var runningWindowsSessionId =
+    _hostLauncher.RunningWindowsSessionId;
+
+if (_hostLauncher.IsRunning &&
+    runningWindowsSessionId != activeWindowsSessionId)
+{
+    _logger.LogInformation(
+        "Windows session changed from {PreviousSessionId} to {CurrentSessionId}. Restarting RemoteHost for remote session {RemoteSessionId}.",
+        runningWindowsSessionId,
+        activeWindowsSessionId,
+        sessionId);
+
+    await _hostLauncher.StopAsync(
+        sessionId,
+        cancellationToken);
+
+    // Conservamos _activeLaunchRequest. El resto de este método
+    // iniciará RemoteHost usando la nueva sesión activa.
+    _restartAttempts = 0;
+    _nextRestartAtUtc = DateTime.MinValue;
+}
+        if (_hostLauncher.IsRunning)
+        {
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
+            return;
+        }
+
+        if (_activeLaunchRequest is null ||
+            _activeLaunchRequest.SessionId != sessionId)
+        {
+            await FailSessionAsync(
+                sessionId,
+                new InvalidOperationException(
+                    "RemoteHost terminó y no existe una configuración válida para reiniciarlo."),
+                cancellationToken);
+
+            return;
+        }
+
+        if (_activeLaunchRequest.ExpiresAtUtc <= DateTime.UtcNow)
+        {
+            await StopCurrentSessionAsync(
+                sessionId,
+                cancellationToken);
+
+            return;
+        }
+
+        if (DateTime.UtcNow < _nextRestartAtUtc)
+        {
+            return;
+        }
+
+        if (_restartAttempts >= MaxRestartAttempts)
+        {
+            await FailSessionAsync(
+                sessionId,
+                new InvalidOperationException(
+                    "RemoteHost no pudo recuperarse después de tres intentos."),
+                cancellationToken);
+
+            return;
+        }
+
+        _restartAttempts++;
+        _nextRestartAtUtc =
+            DateTime.UtcNow.Add(RestartInterval);
+
+        try
+        {
+            _logger.LogWarning(
+                "RemoteHost exited unexpectedly. Restarting session {SessionId}, attempt {Attempt}/{Maximum}.",
+                sessionId,
+                _restartAttempts,
+                MaxRestartAttempts);
+
+            await _hostLauncher.StartAsync(
+                _activeLaunchRequest,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(
+                ex,
+                "RemoteHost restart failed for session {SessionId}, attempt {Attempt}/{Maximum}.",
+                sessionId,
+                _restartAttempts,
+                MaxRestartAttempts);
+        }
+    }
+
+    private async Task FailSessionAsync(
+        Guid sessionId,
+        Exception error,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            await _apiClient.MarkFailedAsync(
+                sessionId,
+                error.Message,
+                cancellationToken);
+        }
+        catch (Exception reportError)
+        {
+            _logger.LogWarning(
+                reportError,
+                "Unable to report failure for remote session {SessionId}.",
+                sessionId);
+        }
+
+        try
+        {
+            await StopCurrentSessionAsync(
+                sessionId,
+                CancellationToken.None);
+        }
+        catch (Exception stopError)
+        {
+            _logger.LogWarning(
+                stopError,
+                "Unable to stop RemoteHost for failed session {SessionId}.",
+                sessionId);
+        }
+
+        _logger.LogError(
+            error,
+            "Remote support session {SessionId} failed.",
+            sessionId);
     }
 
     private async Task StopCurrentSessionAsync(
@@ -251,15 +349,16 @@ public sealed class RemoteSupportBackgroundService
     {
         try
         {
-            await _hostLauncher
-                .StopAsync(
-                    sessionId,
-                    cancellationToken);
+            await _hostLauncher.StopAsync(
+                sessionId,
+                cancellationToken);
         }
         finally
         {
-            _sessionManager.End(
-                sessionId);
+            _sessionManager.End(sessionId);
+            _activeLaunchRequest = null;
+            _restartAttempts = 0;
+            _nextRestartAtUtc = DateTime.MinValue;
         }
 
         _logger.LogInformation(
