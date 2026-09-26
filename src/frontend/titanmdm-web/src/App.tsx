@@ -111,9 +111,14 @@ import {
   SettingsPage,
 } from './pages/settings/SettingsPage'
 
+import { MyHelpdeskPage } from './pages/helpdesk/MyHelpdeskPage'
+
 import { HelpdeskInboxPage } from './pages/helpdesk/HelpdeskInboxPage'
 import { HelpdeskTicketPage } from './pages/helpdesk/HelpdeskTicketPage'
 import { HelpdeskEntraSettingsPage } from './pages/helpdesk/HelpdeskEntraSettingsPage'
+
+import { HelpdeskOperationsPage } from './pages/helpdesk/HelpdeskOperationsPage'
+import { HelpdeskProgressPage } from './pages/helpdesk/HelpdeskProgressPage'
 
 function App() {
   return (
@@ -158,6 +163,17 @@ function App() {
             </PermissionRoute>
           }
         />
+                <Route
+          path="helpdesk/operations"
+          element={
+            <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
+              <HelpdeskOperationsPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route path="my-support" element={<MyHelpdeskPage />} />
+        <Route path="my-support/:ticketId" element={<MyHelpdeskPage />} />
 
                 <Route
           path="helpdesk"
@@ -167,6 +183,14 @@ function App() {
             </PermissionRoute>
           }
         />
+        <Route
+  path="helpdesk/avance"
+  element={
+    <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
+      <HelpdeskProgressPage />
+    </PermissionRoute>
+  }
+/>
 
         <Route
           path="helpdesk/entra"

@@ -1,4 +1,3 @@
-
 using Microsoft.EntityFrameworkCore;
 using TitanMDM.Application.Helpdesk;
 using TitanMDM.Domain.Entities;
@@ -20,11 +19,10 @@ public sealed class HelpdeskService : IHelpdeskService
         HelpdeskTicketQuery query,
         CancellationToken cancellationToken = default)
     {
-        var page = query.Page < 1 ? 1 : query.Page;
+        var page = Math.Max(1, query.Page);
         var pageSize = query.PageSize is < 1 or > 100 ? 25 : query.PageSize;
 
-        var tickets = _db.HelpdeskTickets
-            .AsNoTracking()
+        var tickets = _db.HelpdeskTickets.AsNoTracking()
             .Where(x => x.OrganizationId == organizationId);
 
         if (!string.IsNullOrWhiteSpace(query.Search))
@@ -37,43 +35,56 @@ public sealed class HelpdeskService : IHelpdeskService
         }
 
         if (!string.IsNullOrWhiteSpace(query.Status))
-            tickets = tickets.Where(x => x.Status == query.Status.Trim().ToLowerInvariant());
+        {
+            var status = query.Status.Trim().ToLowerInvariant();
+            tickets = tickets.Where(x => x.Status == status);
+        }
 
         if (!string.IsNullOrWhiteSpace(query.Priority))
-            tickets = tickets.Where(x => x.Priority == query.Priority.Trim().ToLowerInvariant());
+        {
+            var priority = query.Priority.Trim().ToLowerInvariant();
+            tickets = tickets.Where(x => x.Priority == priority);
+        }
 
         if (query.DeviceId.HasValue)
-            tickets = tickets.Where(x => x.DeviceId == query.DeviceId);
+            tickets = tickets.Where(x => x.DeviceId == query.DeviceId.Value);
 
         if (query.AssigneeUserId.HasValue)
-            tickets = tickets.Where(x => x.AssigneeUserId == query.AssigneeUserId);
+            tickets = tickets.Where(x => x.AssigneeUserId == query.AssigneeUserId.Value);
 
         var total = await tickets.CountAsync(cancellationToken);
-
         var rows = await tickets
             .OrderByDescending(x => x.CreatedAtUtc)
             .Skip((page - 1) * pageSize)
             .Take(pageSize)
             .ToListAsync(cancellationToken);
 
-        var userIds = rows
-            .Select(x => x.RequesterUserId)
-            .Concat(rows.Where(x => x.AssigneeUserId.HasValue).Select(x => x.AssigneeUserId!.Value))
+        var userIds = rows.Select(x => x.RequesterUserId)
+            .Concat(rows.Where(x => x.AssigneeUserId.HasValue)
+                .Select(x => x.AssigneeUserId!.Value))
             .Distinct()
-            .ToList();
+            .ToArray();
 
         var users = await _db.Users.AsNoTracking()
-            .Where(x => userIds.Contains(x.Id))
+            .Where(x => x.OrganizationId == organizationId &&
+                        userIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
-        var deviceIds = rows.Where(x => x.DeviceId.HasValue).Select(x => x.DeviceId!.Value).Distinct().ToList();
+        var deviceIds = rows.Where(x => x.DeviceId.HasValue)
+            .Select(x => x.DeviceId!.Value)
+            .Distinct()
+            .ToArray();
+
         var devices = await _db.Devices.AsNoTracking()
-            .Where(x => deviceIds.Contains(x.Id))
+            .Where(x => x.OrganizationId == organizationId &&
+                        deviceIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
+        var now = DateTime.UtcNow;
         var items = rows.Select(ticket =>
         {
             users.TryGetValue(ticket.RequesterUserId, out var requester);
+
             User? assignee = null;
             if (ticket.AssigneeUserId.HasValue)
                 users.TryGetValue(ticket.AssigneeUserId.Value, out assignee);
@@ -83,13 +94,12 @@ public sealed class HelpdeskService : IHelpdeskService
                 devices.TryGetValue(ticket.DeviceId.Value, out device);
 
             var breached =
-                (ticket.FirstResponseDueAtUtc.HasValue &&
-                 ticket.FirstRespondedAtUtc is null &&
-                 ticket.FirstResponseDueAtUtc < DateTime.UtcNow)
-                ||
-                (ticket.ResolveDueAtUtc.HasValue &&
-                 ticket.ResolvedAtUtc is null &&
-                 ticket.ResolveDueAtUtc < DateTime.UtcNow);
+                ticket.FirstResponseDueAtUtc.HasValue &&
+                ticket.FirstRespondedAtUtc is null &&
+                ticket.FirstResponseDueAtUtc < now ||
+                ticket.ResolveDueAtUtc.HasValue &&
+                ticket.ResolvedAtUtc is null &&
+                ticket.ResolveDueAtUtc < now;
 
             return new HelpdeskTicketListItemDto(
                 ticket.Id,
@@ -122,10 +132,10 @@ public sealed class HelpdeskService : IHelpdeskService
         Guid ticketId,
         CancellationToken cancellationToken = default)
     {
-        var ticket = await _db.HelpdeskTickets
-            .AsNoTracking()
+        var ticket = await _db.HelpdeskTickets.AsNoTracking()
             .FirstOrDefaultAsync(
-                x => x.OrganizationId == organizationId && x.Id == ticketId,
+                x => x.OrganizationId == organizationId &&
+                     x.Id == ticketId,
                 cancellationToken);
 
         return ticket is null
@@ -139,17 +149,46 @@ public sealed class HelpdeskService : IHelpdeskService
         CreateHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default)
     {
-        var count = await _db.HelpdeskTickets
-            .CountAsync(x => x.OrganizationId == organizationId, cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.Subject) ||
+            request.Subject.Trim().Length > 250)
+            throw new ArgumentException("El asunto debe tener entre 1 y 250 caracteres.");
 
-        var number = $"HD-{count + 10001}";
+        if (request.Description?.Length > 4000)
+            throw new ArgumentException("La descripción excede 4000 caracteres.");
+
         var requesterId = request.RequesterUserId ?? actorUserId;
+
+        var requesterExists = await _db.Users.AnyAsync(
+            x => x.Id == requesterId &&
+                 x.OrganizationId == organizationId &&
+                 x.IsActive,
+            cancellationToken);
+
+        if (!requesterExists)
+            throw new ArgumentException(
+                "El solicitante no existe o no pertenece a esta organización.");
+
+        if (request.DeviceId.HasValue)
+        {
+            var deviceExists = await _db.Devices.AnyAsync(
+                x => x.Id == request.DeviceId.Value &&
+                     x.OrganizationId == organizationId,
+                cancellationToken);
+
+            if (!deviceExists)
+                throw new ArgumentException(
+                    "El dispositivo no pertenece a esta organización.");
+        }
+
+        // El sufijo aleatorio evita colisiones entre solicitudes concurrentes.
+        var number = $"HD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]
+            .ToUpperInvariant();
 
         var ticket = new HelpdeskTicket(
             organizationId,
             number,
-            request.Subject,
-            request.Description,
+            request.Subject.Trim(),
+            request.Description ?? string.Empty,
             request.Type ?? "incident",
             request.Priority ?? "medium",
             request.Category ?? "general",
@@ -160,41 +199,74 @@ public sealed class HelpdeskService : IHelpdeskService
 
         if (!string.IsNullOrWhiteSpace(request.EntraObjectId))
         {
-            var directoryUser = await _db.EntraDirectoryUsers
+            var directoryUser = await _db.EntraDirectoryUsers.AsNoTracking()
                 .FirstOrDefaultAsync(
                     x => x.OrganizationId == organizationId &&
                          x.EntraObjectId == request.EntraObjectId,
                     cancellationToken);
 
-            if (directoryUser is not null)
-            {
-                ticket.LinkEntraRequester(
-                    directoryUser.EntraObjectId,
-                    directoryUser.UserPrincipalName);
-            }
+            if (directoryUser is null)
+                throw new ArgumentException(
+                    "El solicitante de Entra ID no existe en esta organización.");
+
+            ticket.LinkEntraRequester(
+                directoryUser.EntraObjectId,
+                directoryUser.UserPrincipalName);
         }
 
         var now = DateTime.UtcNow;
-        var hours = ticket.Priority switch
+        var resolutionHours = ticket.Priority switch
         {
             "urgent" => 4,
             "high" => 8,
             "low" => 72,
             _ => 24
         };
-        ticket.ApplySla(now.AddHours(Math.Max(1, hours / 4)), now.AddHours(hours));
+
+        ticket.ApplySla(
+            now.AddHours(Math.Max(1, resolutionHours / 4)),
+            now.AddHours(resolutionHours));
 
         _db.HelpdeskTickets.Add(ticket);
-        _db.HelpdeskTicketEvents.Add(
-            new HelpdeskTicketEvent(
+        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
+            organizationId,
+            ticket.Id,
+            actorUserId,
+            "created",
+            $"Ticket {ticket.Number} creado."));
+
+        var routing = await FindAutomaticAssigneeAsync(
+            organizationId,
+            requesterId,
+            cancellationToken);
+
+        if (routing is not null)
+        {
+            ticket.Assign(routing.UserId);
+            _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
                 organizationId,
                 ticket.Id,
                 actorUserId,
-                "created",
-                $"Ticket {ticket.Number} creado."));
+                "auto_assigned",
+                $"Asignación automática: grupo {routing.TeamName}, " +
+                $"zona {routing.ZoneName}, técnico {routing.UserName}."));
+        }
+        else
+        {
+            _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
+                organizationId,
+                ticket.Id,
+                actorUserId,
+                "routing_pending",
+                "Sin asignación automática: falta una ubicación inequívoca " +
+                "o un técnico disponible con cobertura y capacidad."));
+        }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return (await GetTicketAsync(organizationId, ticket.Id, cancellationToken))!;
+        return (await GetTicketAsync(
+            organizationId,
+            ticket.Id,
+            cancellationToken))!;
     }
 
     public async Task<HelpdeskTicketDetailsDto?> AddCommentAsync(
@@ -204,36 +276,46 @@ public sealed class HelpdeskService : IHelpdeskService
         AddHelpdeskCommentRequest request,
         CancellationToken cancellationToken = default)
     {
-        var ticket = await _db.HelpdeskTickets
-            .FirstOrDefaultAsync(
-                x => x.OrganizationId == organizationId && x.Id == ticketId,
-                cancellationToken);
+        if (string.IsNullOrWhiteSpace(request.Body) ||
+            request.Body.Trim().Length > 4000)
+            throw new ArgumentException(
+                "El comentario debe tener entre 1 y 4000 caracteres.");
 
-        if (ticket is null)
-            return null;
+        var ticket = await _db.HelpdeskTickets.FirstOrDefaultAsync(
+            x => x.OrganizationId == organizationId &&
+                 x.Id == ticketId,
+            cancellationToken);
 
-        _db.HelpdeskTicketComments.Add(
-            new HelpdeskTicketComment(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                request.Body,
-                request.IsInternal));
+        if (ticket is null) return null;
 
-        ticket.MarkFirstResponse();
+        _db.HelpdeskTicketComments.Add(new HelpdeskTicketComment(
+            organizationId,
+            ticket.Id,
+            actorUserId,
+            request.Body.Trim(),
+            request.IsInternal));
+
+        // Una nota interna no cuenta como primera respuesta al solicitante.
+        if (!request.IsInternal)
+            ticket.MarkFirstResponse();
+
         if (ticket.Status == "new")
             ticket.Transition("open");
 
-        _db.HelpdeskTicketEvents.Add(
-            new HelpdeskTicketEvent(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                request.IsInternal ? "internal_note" : "comment",
-                request.IsInternal ? "Nota interna agregada." : "Comentario público agregado."));
+        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
+            organizationId,
+            ticket.Id,
+            actorUserId,
+            request.IsInternal ? "internal_note" : "comment",
+            request.IsInternal
+                ? "Nota interna agregada."
+                : "Respuesta pública agregada."));
 
         await _db.SaveChangesAsync(cancellationToken);
-        return await GetTicketAsync(organizationId, ticket.Id, cancellationToken);
+        return await GetTicketAsync(
+            organizationId,
+            ticket.Id,
+            cancellationToken);
     }
 
     public async Task<HelpdeskTicketDetailsDto?> AssignAsync(
@@ -243,32 +325,36 @@ public sealed class HelpdeskService : IHelpdeskService
         AssignHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default)
     {
-        var ticket = await _db.HelpdeskTickets
-            .FirstOrDefaultAsync(
-                x => x.OrganizationId == organizationId && x.Id == ticketId,
-                cancellationToken);
+        var ticket = await _db.HelpdeskTickets.FirstOrDefaultAsync(
+            x => x.OrganizationId == organizationId &&
+                 x.Id == ticketId,
+            cancellationToken);
 
-        if (ticket is null)
-            return null;
+        if (ticket is null) return null;
 
         var assigneeExists = await _db.Users.AnyAsync(
-            x => x.Id == request.AssigneeUserId && x.OrganizationId == organizationId,
+            x => x.Id == request.AssigneeUserId &&
+                 x.OrganizationId == organizationId &&
+                 x.IsActive,
             cancellationToken);
 
         if (!assigneeExists)
-            throw new InvalidOperationException("El asignado no existe en TitanMDM.");
+            throw new InvalidOperationException(
+                "El técnico no existe o está inactivo.");
 
         ticket.Assign(request.AssigneeUserId);
-        _db.HelpdeskTicketEvents.Add(
-            new HelpdeskTicketEvent(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                "assigned",
-                "Ticket asignado a un administrador Titan."));
+        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
+            organizationId,
+            ticket.Id,
+            actorUserId,
+            "assigned",
+            $"Asignación manual al usuario {request.AssigneeUserId}."));
 
         await _db.SaveChangesAsync(cancellationToken);
-        return await GetTicketAsync(organizationId, ticket.Id, cancellationToken);
+        return await GetTicketAsync(
+            organizationId,
+            ticket.Id,
+            cancellationToken);
     }
 
     public async Task<HelpdeskTicketDetailsDto?> TransitionAsync(
@@ -278,25 +364,171 @@ public sealed class HelpdeskService : IHelpdeskService
         TransitionHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default)
     {
-        var ticket = await _db.HelpdeskTickets
-            .FirstOrDefaultAsync(
-                x => x.OrganizationId == organizationId && x.Id == ticketId,
-                cancellationToken);
+        var allowed = new[]
+        {
+            "open", "pendinguser", "resolved", "closed"
+        };
 
-        if (ticket is null)
-            return null;
+        var status = request.Status?.Trim().ToLowerInvariant();
+        if (status is null || !allowed.Contains(status))
+            throw new ArgumentException("Estado de ticket no válido.");
 
-        ticket.Transition(request.Status);
-        _db.HelpdeskTicketEvents.Add(
-            new HelpdeskTicketEvent(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                "status",
-                $"Estado actualizado a {ticket.Status}."));
+        var ticket = await _db.HelpdeskTickets.FirstOrDefaultAsync(
+            x => x.OrganizationId == organizationId &&
+                 x.Id == ticketId,
+            cancellationToken);
+
+        if (ticket is null) return null;
+
+        ticket.Transition(status);
+        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
+            organizationId,
+            ticket.Id,
+            actorUserId,
+            "status",
+            $"Estado actualizado a {ticket.Status}."));
 
         await _db.SaveChangesAsync(cancellationToken);
-        return await GetTicketAsync(organizationId, ticket.Id, cancellationToken);
+        return await GetTicketAsync(
+            organizationId,
+            ticket.Id,
+            cancellationToken);
+    }
+
+    private async Task<RoutingCandidate?> FindAutomaticAssigneeAsync(
+        Guid organizationId,
+        Guid requesterId,
+        CancellationToken cancellationToken)
+    {
+        var userZones = await _db.HelpdeskUserZones.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId &&
+                        x.UserId == requesterId)
+            .Select(x => x.ZoneId)
+            .ToListAsync(cancellationToken);
+
+        // Si el usuario tiene cero o varias zonas, evitamos adivinar.
+        if (userZones.Count != 1) return null;
+
+        var zones = await _db.HelpdeskZones.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId && x.IsActive)
+            .Select(x => new
+            {
+                x.Id,
+                x.Name,
+                x.ParentZoneId
+            })
+            .ToListAsync(cancellationToken);
+
+        var byId = zones.ToDictionary(x => x.Id);
+        var zoneChain = new List<Guid>();
+        var current = userZones[0];
+
+        // Zona concreta primero; luego sus zonas superiores.
+        for (var depth = 0; depth < 12; depth++)
+        {
+            if (!byId.TryGetValue(current, out var zone) ||
+                zoneChain.Contains(current))
+                break;
+
+            zoneChain.Add(current);
+            if (!zone.ParentZoneId.HasValue) break;
+            current = zone.ParentZoneId.Value;
+        }
+
+        if (zoneChain.Count == 0) return null;
+
+        var coverage = await _db.HelpdeskTeamZones.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId &&
+                        zoneChain.Contains(x.ZoneId))
+            .ToListAsync(cancellationToken);
+
+        if (coverage.Count == 0) return null;
+
+        // La cobertura más específica tiene preferencia.
+        var bestDistance = coverage.Min(x => zoneChain.IndexOf(x.ZoneId));
+        var matching = coverage
+            .Where(x => zoneChain.IndexOf(x.ZoneId) == bestDistance)
+            .ToList();
+
+        var teamIds = matching.Select(x => x.TeamId).Distinct().ToArray();
+        var teams = await _db.HelpdeskTeams.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId &&
+                        x.IsActive &&
+                        teamIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+
+        if (teams.Count == 0) return null;
+
+        var eligibleUserIds =
+            await (
+                from userRole in _db.UserRoles
+                join rolePermission in _db.RolePermissions
+                    on userRole.RoleId equals rolePermission.RoleId
+                join permission in _db.Permissions
+                    on rolePermission.PermissionId equals permission.Id
+                where permission.IsActive &&
+                      permission.Code == "tickets.comment"
+                select userRole.UserId
+            )
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var members = await _db.HelpdeskTeamMembers.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId &&
+                        teams.Keys.Contains(x.TeamId) &&
+                        x.IsAvailable &&
+                        x.AcceptsAutomaticAssignments &&
+                        eligibleUserIds.Contains(x.UserId))
+            .ToListAsync(cancellationToken);
+
+        if (members.Count == 0) return null;
+
+        var memberUserIds = members.Select(x => x.UserId).Distinct().ToArray();
+        var users = await _db.Users.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId &&
+                        x.IsActive &&
+                        memberUserIds.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, cancellationToken);
+
+        var loads = await _db.HelpdeskTickets.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId &&
+                        x.AssigneeUserId.HasValue &&
+                        memberUserIds.Contains(x.AssigneeUserId.Value) &&
+                        x.Status != "resolved" &&
+                        x.Status != "closed")
+            .GroupBy(x => x.AssigneeUserId!.Value)
+            .Select(x => new { UserId = x.Key, Count = x.Count() })
+            .ToDictionaryAsync(x => x.UserId, x => x.Count, cancellationToken);
+
+        var selected = members
+            .Where(x => users.ContainsKey(x.UserId))
+            .Select(x => new
+            {
+                Member = x,
+                Load = loads.GetValueOrDefault(x.UserId)
+            })
+            .Where(x => x.Load < x.Member.MaxOpenTickets)
+            .OrderBy(x => (double)x.Load / x.Member.MaxOpenTickets)
+            .ThenBy(x => x.Load)
+            .ThenBy(x => x.Member.UserId)
+            .FirstOrDefault();
+
+        if (selected is null) return null;
+
+        var team = teams[selected.Member.TeamId];
+        var coverageZoneId = matching
+            .First(x => x.TeamId == team.Id)
+            .ZoneId;
+
+        var zoneName = byId.TryGetValue(coverageZoneId, out var coveredZone)
+            ? coveredZone.Name
+            : "zona asignada";
+
+        return new RoutingCandidate(
+            selected.Member.UserId,
+            users[selected.Member.UserId].FullName,
+            team.Name,
+            zoneName);
     }
 
     private async Task<HelpdeskTicketDetailsDto> MapDetailsAsync(
@@ -304,34 +536,46 @@ public sealed class HelpdeskService : IHelpdeskService
         CancellationToken cancellationToken)
     {
         var requester = await _db.Users.AsNoTracking()
-            .FirstOrDefaultAsync(x => x.Id == ticket.RequesterUserId, cancellationToken);
+            .FirstOrDefaultAsync(
+                x => x.Id == ticket.RequesterUserId &&
+                     x.OrganizationId == ticket.OrganizationId,
+                cancellationToken);
 
         User? assignee = null;
         if (ticket.AssigneeUserId.HasValue)
         {
             assignee = await _db.Users.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == ticket.AssigneeUserId.Value, cancellationToken);
+                .FirstOrDefaultAsync(
+                    x => x.Id == ticket.AssigneeUserId.Value &&
+                         x.OrganizationId == ticket.OrganizationId,
+                    cancellationToken);
         }
 
         Device? device = null;
         if (ticket.DeviceId.HasValue)
         {
             device = await _db.Devices.AsNoTracking()
-                .FirstOrDefaultAsync(x => x.Id == ticket.DeviceId.Value, cancellationToken);
+                .FirstOrDefaultAsync(
+                    x => x.Id == ticket.DeviceId.Value &&
+                         x.OrganizationId == ticket.OrganizationId,
+                    cancellationToken);
         }
 
         var comments = await _db.HelpdeskTicketComments.AsNoTracking()
-            .Where(x => x.TicketId == ticket.Id)
+            .Where(x => x.OrganizationId == ticket.OrganizationId &&
+                        x.TicketId == ticket.Id)
             .OrderBy(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
-        var commentAuthorIds = comments.Select(x => x.AuthorUserId).Distinct().ToList();
+        var authorIds = comments.Select(x => x.AuthorUserId).Distinct().ToArray();
         var authors = await _db.Users.AsNoTracking()
-            .Where(x => commentAuthorIds.Contains(x.Id))
+            .Where(x => x.OrganizationId == ticket.OrganizationId &&
+                        authorIds.Contains(x.Id))
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
         var events = await _db.HelpdeskTicketEvents.AsNoTracking()
-            .Where(x => x.TicketId == ticket.Id)
+            .Where(x => x.OrganizationId == ticket.OrganizationId &&
+                        x.TicketId == ticket.Id)
             .OrderBy(x => x.CreatedAtUtc)
             .ToListAsync(cancellationToken);
 
@@ -356,21 +600,27 @@ public sealed class HelpdeskService : IHelpdeskService
             ticket.EntraUserPrincipalName,
             ticket.CreatedAtUtc,
             ticket.UpdatedAtUtc,
-            comments.Select(c =>
+            comments.Select(item =>
             {
-                authors.TryGetValue(c.AuthorUserId, out var author);
+                authors.TryGetValue(item.AuthorUserId, out var author);
                 return new HelpdeskCommentDto(
-                    c.Id,
-                    c.AuthorUserId,
+                    item.Id,
+                    item.AuthorUserId,
                     author?.FullName ?? "Usuario",
-                    c.Body,
-                    c.IsInternal,
-                    c.CreatedAtUtc);
+                    item.Body,
+                    item.IsInternal,
+                    item.CreatedAtUtc);
             }).ToList(),
-            events.Select(e => new HelpdeskEventDto(
-                e.Id,
-                e.EventType,
-                e.Summary,
-                e.CreatedAtUtc)).ToList());
+            events.Select(item => new HelpdeskEventDto(
+                item.Id,
+                item.EventType,
+                item.Summary,
+                item.CreatedAtUtc)).ToList());
     }
+
+    private sealed record RoutingCandidate(
+        Guid UserId,
+        string UserName,
+        string TeamName,
+        string ZoneName);
 }
