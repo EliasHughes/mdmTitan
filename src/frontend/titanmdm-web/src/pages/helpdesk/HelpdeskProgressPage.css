@@ -1,0 +1,253 @@
+.helpdesk-progress {
+  width: min(1500px, 100%);
+  margin: 0 auto;
+  padding: 8px 0 40px;
+  color: #17233b;
+}
+
+.helpdesk-progress *,
+.helpdesk-progress *::before,
+.helpdesk-progress *::after {
+  box-sizing: border-box;
+}
+
+.helpdesk-progress__hero,
+.helpdesk-progress__notice,
+.helpdesk-progress__phase {
+  border: 1px solid #dfe7f3;
+  border-radius: 20px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgb(31 54 101 / 5%);
+}
+
+.helpdesk-progress__hero {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 24px;
+  padding: 28px;
+  background: linear-gradient(120deg, #fff 40%, #eef2ff);
+}
+
+.helpdesk-progress__eyebrow {
+  margin: 0 0 8px;
+  color: #5265df;
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.helpdesk-progress h1,
+.helpdesk-progress h2,
+.helpdesk-progress h3 {
+  margin: 0;
+}
+
+.helpdesk-progress h1 {
+  font-size: clamp(26px, 3vw, 36px);
+  letter-spacing: -.04em;
+}
+
+.helpdesk-progress__hero p:not(.helpdesk-progress__eyebrow),
+.helpdesk-progress__notice p,
+.helpdesk-progress__phase header p,
+.helpdesk-progress__item p {
+  color: #61718c;
+  line-height: 1.55;
+}
+
+.helpdesk-progress__hero p:not(.helpdesk-progress__eyebrow) {
+  max-width: 780px;
+  margin: 10px 0 0;
+}
+
+.helpdesk-progress__back {
+  flex-shrink: 0;
+  padding: 10px 15px;
+  border: 1px solid #d4dded;
+  border-radius: 10px;
+  background: #fff;
+  color: #34466b;
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.helpdesk-progress__back:hover {
+  border-color: #5265df;
+  color: #394bcc;
+}
+
+.helpdesk-progress__summary {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 18px 0;
+}
+
+.helpdesk-progress__stat {
+  min-height: 110px;
+  padding: 20px;
+  border: 1px solid #e0e7f2;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.helpdesk-progress__stat strong,
+.helpdesk-progress__stat span {
+  display: block;
+}
+
+.helpdesk-progress__stat strong {
+  font-size: 31px;
+}
+
+.helpdesk-progress__stat span {
+  margin-top: 4px;
+  color: #61718c;
+  font-size: 13px;
+  font-weight: 650;
+}
+
+.helpdesk-progress__stat.is-repository strong { color: #17805d; }
+.helpdesk-progress__stat.is-integration strong { color: #4a5cdb; }
+.helpdesk-progress__stat.is-pending strong { color: #a36a10; }
+.helpdesk-progress__stat.is-blocked strong { color: #b34e55; }
+
+.helpdesk-progress__notice {
+  padding: 22px 25px;
+  margin-bottom: 18px;
+  background: #f7f9ff;
+}
+
+.helpdesk-progress__notice h2 {
+  font-size: 19px;
+}
+
+.helpdesk-progress__notice p {
+  margin: 8px 0 0;
+}
+
+.helpdesk-progress__phases {
+  display: grid;
+  gap: 16px;
+}
+
+.helpdesk-progress__phase {
+  overflow: hidden;
+}
+
+.helpdesk-progress__phase > header {
+  display: flex;
+  gap: 15px;
+  align-items: flex-start;
+  padding: 23px 25px;
+  border-bottom: 1px solid #e9eef6;
+}
+
+.helpdesk-progress__code {
+  display: inline-flex;
+  min-width: 72px;
+  justify-content: center;
+  padding: 7px 10px;
+  border-radius: 9px;
+  background: #e9edff;
+  color: #4556c9;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.helpdesk-progress__phase h2 {
+  font-size: 19px;
+}
+
+.helpdesk-progress__phase header p {
+  margin: 5px 0 0;
+  font-size: 13px;
+}
+
+.helpdesk-progress__items {
+  padding: 3px 25px;
+}
+
+.helpdesk-progress__item {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  align-items: flex-start;
+  padding: 18px 0;
+}
+
+.helpdesk-progress__item + .helpdesk-progress__item {
+  border-top: 1px solid #edf1f7;
+}
+
+.helpdesk-progress__item h3 {
+  font-size: 14px;
+}
+
+.helpdesk-progress__item p {
+  margin: 5px 0 0;
+  font-size: 13px;
+}
+
+.helpdesk-progress__badge {
+  flex-shrink: 0;
+  max-width: 230px;
+  padding: 7px 10px;
+  border-radius: 8px;
+  font-size: 11px;
+  font-weight: 750;
+  text-align: center;
+}
+
+.helpdesk-progress__badge.is-repository {
+  background: #e7f6ef;
+  color: #187451;
+}
+
+.helpdesk-progress__badge.is-integration {
+  background: #ebeeff;
+  color: #4658ca;
+}
+
+.helpdesk-progress__badge.is-pending {
+  background: #fff3dd;
+  color: #94600e;
+}
+
+.helpdesk-progress__badge.is-blocked {
+  background: #ffeaec;
+  color: #a83f49;
+}
+
+@media (max-width: 850px) {
+  .helpdesk-progress__summary {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .helpdesk-progress__hero,
+  .helpdesk-progress__item {
+    flex-direction: column;
+  }
+
+  .helpdesk-progress__badge {
+    max-width: none;
+  }
+}
+
+@media (max-width: 520px) {
+  .helpdesk-progress__summary {
+    grid-template-columns: 1fr;
+  }
+
+  .helpdesk-progress__hero,
+  .helpdesk-progress__notice,
+  .helpdesk-progress__phase > header {
+    padding: 18px;
+  }
+
+  .helpdesk-progress__items {
+    padding: 0 18px;
+  }
+}

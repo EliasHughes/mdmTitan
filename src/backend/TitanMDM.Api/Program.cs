@@ -132,6 +132,12 @@ builder.Services
                 });
         });
 
+        
+
+builder.Services.AddHostedService<HelpdeskMonitoringService>();
+
+builder.Services.AddHostedService<
+    TitanMDM.Api.Services.HelpdeskMonitoringWorker>();
 /*
  * ================================================================
  * BUILD

@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
   ArrowRight,
-  CheckCircle2,
   Clock3,
   Headphones,
   Plus,
   RefreshCw,
   Search,
   Ticket,
+  UserRoundX,
   X,
 } from 'lucide-react'
+import {
+  Bar,
+  BarChart,
+  CartesianGrid,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
+import apiClient from '../../api/apiClient'
 import { helpdeskApi, type HelpdeskTicketListItem } from '../../api/helpdeskApi'
 import { useAuth } from '../../auth/AuthContext'
 import './HelpdeskPages.css'
@@ -21,7 +31,7 @@ const PAGE_SIZE = 25
 const STATUS_LABELS: Record<string, string> = {
   new: 'Nuevo',
   open: 'Abierto',
-  pendinguser: 'Pendiente del usuario',
+  pendinguser: 'Pendiente usuario',
   resolved: 'Resuelto',
   closed: 'Cerrado',
 }
@@ -33,18 +43,68 @@ const PRIORITY_LABELS: Record<string, string> = {
   urgent: 'Urgente',
 }
 
+const ALERT_LABELS: Record<string, string> = {
+  unassigned_reminder: 'Sin asignar',
+  first_response_warning: 'Primera respuesta próxima',
+  first_response_overdue: 'Primera respuesta vencida',
+  resolution_warning: 'Resolución próxima',
+  resolution_overdue: 'Resolución vencida',
+}
+
+interface CountByStatus {
+  status: string
+  count: number
+}
+
+interface CountByPriority {
+  priority: string
+  count: number
+}
+
+interface CountByCategory {
+  category: string
+  count: number
+}
+
+interface MonitoringSummary {
+  total: number
+  active: number
+  unassigned: number
+  overdueFirstResponse: number
+  overdueResolution: number
+  byStatus: CountByStatus[]
+  byPriority: CountByPriority[]
+  byCategory: CountByCategory[]
+  generatedAtUtc: string
+}
+
+interface MonitoringAlert {
+  id: string
+  ticketId: string
+  number: string
+  subject: string
+  eventType: string
+  summary: string
+  createdAtUtc: string
+}
+
 const dateFormatter = new Intl.DateTimeFormat('es-DO', {
-  day: '2-digit',
-  month: 'short',
-  hour: '2-digit',
-  minute: '2-digit',
+  dateStyle: 'short',
+  timeStyle: 'short',
 })
+
+function formatDate(value: string) {
+  const date = new Date(value)
+  return Number.isNaN(date.getTime()) ? '—' : dateFormatter.format(date)
+}
 
 export function HelpdeskInboxPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
   const [tickets, setTickets] = useState<HelpdeskTicketListItem[]>([])
+  const [summary, setSummary] = useState<MonitoringSummary | null>(null)
+  const [alerts, setAlerts] = useState<MonitoringAlert[]>([])
   const [total, setTotal] = useState(0)
   const [page, setPage] = useState(1)
   const [searchInput, setSearchInput] = useState('')
@@ -52,6 +112,7 @@ export function HelpdeskInboxPage() {
   const [status, setStatus] = useState('')
   const [priorityFilter, setPriorityFilter] = useState('')
   const [loading, setLoading] = useState(true)
+  const [monitoringError, setMonitoringError] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [showCreate, setShowCreate] = useState(false)
   const [creating, setCreating] = useState(false)
@@ -66,7 +127,7 @@ export function HelpdeskInboxPage() {
   const firstRow = total === 0 ? 0 : (page - 1) * PAGE_SIZE + 1
   const lastRow = Math.min(page * PAGE_SIZE, total)
 
-  const load = useCallback(async () => {
+  const loadTickets = useCallback(async () => {
     setLoading(true)
     setError(null)
 
@@ -78,27 +139,46 @@ export function HelpdeskInboxPage() {
         page,
         pageSize: PAGE_SIZE,
       })
-
       setTickets(result.items)
       setTotal(result.total)
     } catch {
       setTickets([])
       setTotal(0)
-      setError('No se pudieron cargar los tickets. Comprueba que la API y la base de datos estén disponibles.')
+      setError('No fue posible cargar los tickets.')
     } finally {
       setLoading(false)
     }
-  }, [page, priorityFilter, search, status])
+  }, [search, status, priorityFilter, page])
+
+  const loadMonitoring = useCallback(async () => {
+    try {
+      const [summaryResponse, alertsResponse] = await Promise.all([
+        apiClient.get<MonitoringSummary>('/helpdesk/monitoring/summary'),
+        apiClient.get<MonitoringAlert[]>('/helpdesk/monitoring/alerts', {
+          params: { limit: 8 },
+        }),
+      ])
+
+      setSummary(summaryResponse.data)
+      setAlerts(alertsResponse.data)
+      setMonitoringError(false)
+    } catch {
+      setMonitoringError(true)
+    }
+  }, [])
 
   useEffect(() => {
-    void load()
-  }, [load])
+    void loadTickets()
+  }, [loadTickets])
 
-  const pageMetrics = useMemo(() => ({
-    active: tickets.filter((item) => !['resolved', 'closed'].includes(item.status)).length,
-    breached: tickets.filter((item) => item.slaBreached).length,
-    unassigned: tickets.filter((item) => !item.assigneeUserId).length,
-  }), [tickets])
+  useEffect(() => {
+    void loadMonitoring()
+  }, [loadMonitoring])
+
+  function refresh() {
+    void loadTickets()
+    void loadMonitoring()
+  }
 
   function applySearch() {
     setPage(1)
@@ -129,34 +209,55 @@ export function HelpdeskInboxPage() {
         category: category.trim() || 'general',
         source: 'console',
       })
+
       setShowCreate(false)
       navigate(`/helpdesk/tickets/${created.id}?workspace=helpdesk`)
     } catch {
-      setError('No se pudo crear el ticket. Revisa los datos y vuelve a intentarlo.')
+      setError('No se pudo crear el ticket. Revisa los datos e inténtalo de nuevo.')
     } finally {
       setCreating(false)
     }
   }
+
+  const statusChart = summary?.byStatus.map((item) => ({
+    name: STATUS_LABELS[item.status] ?? item.status,
+    tickets: item.count,
+  })) ?? []
+
+  const priorityChart = summary?.byPriority.map((item) => ({
+    name: PRIORITY_LABELS[item.priority] ?? item.priority,
+    tickets: item.count,
+  })) ?? []
 
   return (
     <main className="titan-page helpdesk-page helpdesk-inbox">
       <header className="helpdesk-inbox__header">
         <div>
           <span className="helpdesk-inbox__eyebrow">
-            <Headphones size={15} aria-hidden="true" />
-            Centro de soporte
+            <Headphones size={15} />
+            Operación TIC
           </span>
           <h1>Mesa de ayuda</h1>
-          <p>Atiende solicitudes, consulta el historial y trabaja con el contexto de cada dispositivo.</p>
+          <p>Tickets, cumplimiento y alertas del equipo de soporte.</p>
         </div>
+
         <div className="helpdesk-inbox__header-actions">
           <button
             type="button"
             className="helpdesk-ui-button helpdesk-ui-button--secondary"
-            onClick={() => void load()}
+            onClick={refresh}
             disabled={loading}
           >
-            <RefreshCw size={16} aria-hidden="true" />
+
+          <button
+            type="button"
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
+            onClick={() => navigate('/helpdesk/avance')}
+          >
+            Ver avance del proyecto
+          </button>
+
+            <RefreshCw size={16} />
             Actualizar
           </button>
           {canCreate && (
@@ -165,72 +266,154 @@ export function HelpdeskInboxPage() {
               className="helpdesk-ui-button helpdesk-ui-button--primary"
               onClick={() => setShowCreate(true)}
             >
-              <Plus size={17} aria-hidden="true" />
+              <Plus size={16} />
               Nuevo ticket
             </button>
           )}
         </div>
       </header>
 
-      <div className="helpdesk-inbox__metrics" aria-label="Resumen de la página actual">
-        <article className="helpdesk-metric">
-          <span className="helpdesk-metric__icon helpdesk-metric__icon--blue">
-            <Ticket size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <span>Tickets encontrados</span>
-            <strong>{total}</strong>
-          </div>
-        </article>
-        <article className="helpdesk-metric">
-          <span className="helpdesk-metric__icon helpdesk-metric__icon--violet">
-            <Clock3 size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <span>Activos en esta página</span>
-            <strong>{pageMetrics.active}</strong>
-          </div>
-        </article>
-        <article className="helpdesk-metric">
-          <span className="helpdesk-metric__icon helpdesk-metric__icon--amber">
-            <AlertCircle size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <span>SLA vencido en esta página</span>
-            <strong>{pageMetrics.breached}</strong>
-          </div>
-        </article>
-        <article className="helpdesk-metric">
-          <span className="helpdesk-metric__icon helpdesk-metric__icon--green">
-            <CheckCircle2 size={19} aria-hidden="true" />
-          </span>
-          <div>
-            <span>Sin asignar en esta página</span>
-            <strong>{pageMetrics.unassigned}</strong>
-          </div>
-        </article>
-      </div>
-
       {error && (
         <div className="helpdesk-inbox__error" role="alert">
-          <AlertCircle size={18} aria-hidden="true" />
-          <span>{error}</span>
-          <button type="button" onClick={() => void load()}>Reintentar</button>
+          <AlertCircle size={17} />
+          {error}
+          <button type="button" onClick={refresh}>Reintentar</button>
         </div>
       )}
+
+      {monitoringError && (
+        <div className="helpdesk-inbox__error" role="alert">
+          <AlertCircle size={17} />
+          Los KPI y alertas no están disponibles. Comprueba que el backend tenga
+          HelpdeskMonitoringController y vuelve a actualizar.
+        </div>
+      )}
+
+      <section className="helpdesk-inbox__metrics" aria-label="Indicadores de mesa de ayuda">
+        <article className="helpdesk-metric">
+          <span className="helpdesk-metric__icon helpdesk-metric__icon--blue">
+            <Ticket size={19} />
+          </span>
+          <div><span>Total de tickets</span><strong>{summary?.total ?? '—'}</strong></div>
+        </article>
+
+        <article className="helpdesk-metric">
+          <span className="helpdesk-metric__icon helpdesk-metric__icon--violet">
+            <Clock3 size={19} />
+          </span>
+          <div><span>Tickets activos</span><strong>{summary?.active ?? '—'}</strong></div>
+        </article>
+
+        <article className="helpdesk-metric">
+          <span className="helpdesk-metric__icon helpdesk-metric__icon--amber">
+            <UserRoundX size={19} />
+          </span>
+          <div><span>Sin asignar</span><strong>{summary?.unassigned ?? '—'}</strong></div>
+        </article>
+
+        <article className="helpdesk-metric">
+          <span className="helpdesk-metric__icon helpdesk-metric__icon--green">
+            <AlertCircle size={19} />
+          </span>
+          <div>
+            <span>SLA vencidos</span>
+            <strong>
+              {summary
+                ? summary.overdueFirstResponse + summary.overdueResolution
+                : '—'}
+            </strong>
+          </div>
+        </article>
+      </section>
+
+      <div className="helpdesk-monitoring">
+        <section className="helpdesk-monitoring__chart-card">
+          <div className="helpdesk-monitoring__heading">
+            <h2>Tickets por estado</h2>
+            <p>Distribución de todos los casos de la organización</p>
+          </div>
+          <div className="helpdesk-monitoring__chart">
+            {statusChart.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={statusChart} margin={{ top: 8, right: 12, left: -22, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf1f7" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="tickets" fill="#5867e8" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="helpdesk-monitoring__no-data">Sin datos para mostrar</div>
+            )}
+          </div>
+        </section>
+
+        <section className="helpdesk-monitoring__chart-card">
+          <div className="helpdesk-monitoring__heading">
+            <h2>Prioridad de los casos</h2>
+            <p>Distribución por nivel de atención</p>
+          </div>
+          <div className="helpdesk-monitoring__chart">
+            {priorityChart.length ? (
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={priorityChart} margin={{ top: 8, right: 12, left: -22, bottom: 8 }}>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#edf1f7" />
+                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 11 }} />
+                  <Tooltip />
+                  <Bar dataKey="tickets" fill="#8b78e6" radius={[6, 6, 0, 0]} />
+                </BarChart>
+              </ResponsiveContainer>
+            ) : (
+              <div className="helpdesk-monitoring__no-data">Sin datos para mostrar</div>
+            )}
+          </div>
+        </section>
+      </div>
+
+      <section className="helpdesk-monitoring__alerts">
+        <div className="helpdesk-monitoring__heading">
+          <h2>Alertas recientes</h2>
+          <p>Tickets sin atender y plazos de servicio próximos o vencidos</p>
+        </div>
+        {alerts.length === 0 ? (
+          <p className="helpdesk-monitoring__no-alerts">No hay alertas registradas.</p>
+        ) : (
+          <div className="helpdesk-monitoring__alert-list">
+            {alerts.map((alert) => (
+              <button
+                key={alert.id}
+                type="button"
+                onClick={() => navigate(`/helpdesk/tickets/${alert.ticketId}?workspace=helpdesk`)}
+              >
+                <span className="helpdesk-monitoring__alert-icon">
+                  <AlertCircle size={16} />
+                </span>
+                <span className="helpdesk-monitoring__alert-text">
+                  <strong>{ALERT_LABELS[alert.eventType] ?? 'Alerta'} · {alert.number}</strong>
+                  <small>{alert.subject} — {alert.summary}</small>
+                </span>
+                <time>{formatDate(alert.createdAtUtc)}</time>
+                <ArrowRight size={15} />
+              </button>
+            ))}
+          </div>
+        )}
+      </section>
 
       <section className="helpdesk-inbox__panel" aria-label="Bandeja de tickets">
         <div className="helpdesk-inbox__panel-heading">
           <div>
             <h2>Bandeja de tickets</h2>
-            <p>Filtra y abre un ticket para ver su conversación y sus acciones.</p>
+            <p>Busca y abre casos para atenderlos.</p>
           </div>
           <span className="helpdesk-inbox__total">{total} resultados</span>
         </div>
 
         <div className="helpdesk-inbox__filters">
           <label className="helpdesk-inbox__search">
-            <Search size={17} aria-hidden="true" />
+            <Search size={17} />
             <span className="sr-only">Buscar tickets</span>
             <input
               value={searchInput}
@@ -238,7 +421,7 @@ export function HelpdeskInboxPage() {
               onKeyDown={(event) => {
                 if (event.key === 'Enter') applySearch()
               }}
-              placeholder="Buscar número, asunto o categoría"
+              placeholder="Número, asunto o categoría"
             />
           </label>
 
@@ -308,9 +491,9 @@ export function HelpdeskInboxPage() {
               ) : tickets.length === 0 ? (
                 <tr>
                   <td colSpan={8} className="helpdesk-inbox__empty">
-                    <Ticket size={28} aria-hidden="true" />
+                    <Ticket size={28} />
                     <strong>No hay tickets con estos filtros</strong>
-                    <span>Prueba otra búsqueda o crea un ticket para comenzar.</span>
+                    <span>Prueba otra búsqueda o crea el primer caso.</span>
                   </td>
                 </tr>
               ) : tickets.map((item) => (
@@ -335,7 +518,7 @@ export function HelpdeskInboxPage() {
                   <td>{item.requesterName}</td>
                   <td>{item.assigneeName ?? 'Sin asignar'}</td>
                   <td>{item.deviceName ?? '—'}</td>
-                  <td>{dateFormatter.format(new Date(item.createdAtUtc))}</td>
+                  <td>{formatDate(item.createdAtUtc)}</td>
                   <td>
                     <button
                       type="button"
@@ -355,11 +538,19 @@ export function HelpdeskInboxPage() {
         <footer className="helpdesk-inbox__footer">
           <span>{firstRow}–{lastRow} de {total}</span>
           <div>
-            <button type="button" disabled={page <= 1 || loading} onClick={() => setPage(page - 1)}>
+            <button
+              type="button"
+              disabled={page <= 1 || loading}
+              onClick={() => setPage(page - 1)}
+            >
               Anterior
             </button>
             <span>Página {page} de {pageCount}</span>
-            <button type="button" disabled={page >= pageCount || loading} onClick={() => setPage(page + 1)}>
+            <button
+              type="button"
+              disabled={page >= pageCount || loading}
+              onClick={() => setPage(page + 1)}
+            >
               Siguiente
             </button>
           </div>
@@ -367,7 +558,10 @@ export function HelpdeskInboxPage() {
       </section>
 
       {showCreate && (
-        <div className="helpdesk-inbox__overlay" onMouseDown={() => setShowCreate(false)}>
+        <div
+          className="helpdesk-inbox__overlay"
+          onMouseDown={() => setShowCreate(false)}
+        >
           <section
             className="helpdesk-inbox__dialog"
             role="dialog"
@@ -379,12 +573,17 @@ export function HelpdeskInboxPage() {
               <div>
                 <span className="helpdesk-inbox__eyebrow">Nuevo caso</span>
                 <h2 id="helpdesk-create-title">Crear ticket</h2>
-                <p>Registra el problema y asigna su clasificación inicial.</p>
+                <p>Registra el problema y su clasificación inicial.</p>
               </div>
-              <button type="button" aria-label="Cerrar" onClick={() => setShowCreate(false)}>
+              <button
+                type="button"
+                aria-label="Cerrar"
+                onClick={() => setShowCreate(false)}
+              >
                 <X size={19} />
               </button>
             </header>
+
             <form onSubmit={(event) => void createTicket(event)}>
               <label>
                 Asunto
@@ -397,6 +596,7 @@ export function HelpdeskInboxPage() {
                   placeholder="Resumen claro del problema"
                 />
               </label>
+
               <label>
                 Descripción
                 <textarea
@@ -405,9 +605,10 @@ export function HelpdeskInboxPage() {
                   rows={5}
                   value={description}
                   onChange={(event) => setDescription(event.target.value)}
-                  placeholder="Qué sucede, desde cuándo y cuál es el impacto"
+                  placeholder="Qué ocurre, desde cuándo y cuál es el impacto"
                 />
               </label>
+
               <div className="helpdesk-inbox__form-grid">
                 <label>
                   Tipo
@@ -418,27 +619,39 @@ export function HelpdeskInboxPage() {
                 </label>
                 <label>
                   Prioridad
-                  <select value={priority} onChange={(event) => setPriority(event.target.value)}>
+                  <select
+                    value={priority}
+                    onChange={(event) => setPriority(event.target.value)}
+                  >
                     {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
                     ))}
                   </select>
                 </label>
               </div>
+
               <label>
                 Categoría
                 <input
                   maxLength={80}
                   value={category}
                   onChange={(event) => setCategory(event.target.value)}
-                  placeholder="general"
                 />
               </label>
+
               <div className="helpdesk-inbox__dialog-actions">
-                <button type="button" className="helpdesk-ui-button helpdesk-ui-button--secondary" onClick={() => setShowCreate(false)}>
+                <button
+                  type="button"
+                  className="helpdesk-ui-button helpdesk-ui-button--secondary"
+                  onClick={() => setShowCreate(false)}
+                >
                   Cancelar
                 </button>
-                <button type="submit" className="helpdesk-ui-button helpdesk-ui-button--primary" disabled={creating}>
+                <button
+                  type="submit"
+                  className="helpdesk-ui-button helpdesk-ui-button--primary"
+                  disabled={creating}
+                >
                   <Plus size={16} />
                   {creating ? 'Creando…' : 'Crear ticket'}
                 </button>
