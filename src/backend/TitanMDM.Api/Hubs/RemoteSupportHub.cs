@@ -8,7 +8,7 @@ using TitanMDM.Api.Services;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 using TitanMDM.Infrastructure.Persistence;
-using TitanMDM.Api.RemoteSupport;
+
 namespace TitanMDM.Api.Hubs;
 
 [AllowAnonymous]
@@ -20,50 +20,49 @@ public sealed class RemoteSupportHub : Hub
     private const string JoinedSessionsKey =
         "TitanMDM.RemoteSupport.JoinedSessions";
 
-    private readonly TitanMdmDbContext
-        _dbContext;
-
-    private readonly RemoteHostTokenService
-        _tokenService;
-
-    private readonly RemoteSupportConnectionRegistry
-        _connectionRegistry;
-
-    private readonly RemoteSupportParticipantService
-        _participantService;
-
-    private readonly RemoteControlLeaseService
-        _controlLeaseService;
-
-    private readonly ILogger<RemoteSupportHub>
-        _logger;
+    private readonly TitanMdmDbContext _dbContext;
+    private readonly RemoteHostTokenService _tokenService;
+    private readonly ILogger<RemoteSupportHub> _logger;
 
     public RemoteSupportHub(
         TitanMdmDbContext dbContext,
         RemoteHostTokenService tokenService,
-        RemoteSupportConnectionRegistry connectionRegistry,
-        RemoteSupportParticipantService participantService,
-        RemoteControlLeaseService controlLeaseService,
         ILogger<RemoteSupportHub> logger)
     {
-        _dbContext =
-            dbContext;
-
-        _tokenService =
-            tokenService;
-
-        _connectionRegistry =
-            connectionRegistry;
-
-        _participantService =
-            participantService;
-
-        _controlLeaseService =
-            controlLeaseService;
-
-        _logger =
-            logger;
+        _dbContext = dbContext;
+        _tokenService = tokenService;
+        _logger = logger;
     }
+
+    public override async Task OnConnectedAsync()
+    {
+        if (IsHumanConnection())
+        {
+            var organizationId = GetHumanOrganizationId();
+
+            await Groups.AddToGroupAsync(
+                Context.ConnectionId,
+                OrganizationGroup(organizationId));
+
+            _logger.LogInformation(
+                "TitanMDM Remote Support technician connected. " +
+                "ConnectionId={ConnectionId}, OrganizationId={OrganizationId}, User={User}.",
+                Context.ConnectionId,
+                organizationId,
+                Context.User?.Identity?.Name);
+        }
+        else
+        {
+            _logger.LogInformation(
+                "TitanMDM Remote Support RemoteHost connection established. " +
+                "ConnectionId={ConnectionId}.",
+                Context.ConnectionId);
+        }
+
+        await base.OnConnectedAsync();
+    }
+
+    // Aquí continúa el OnDisconnectedAsync existente.
     public override async Task OnDisconnectedAsync(
         Exception? exception)
     {

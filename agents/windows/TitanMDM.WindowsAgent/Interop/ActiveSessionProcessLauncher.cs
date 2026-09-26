@@ -144,13 +144,21 @@ public sealed class ActiveSessionProcessLauncher
              * LocalSystem se seguirá usando CreateProcessAsUser.
              */
 
-            return LaunchInteractiveFallback(
+                      return LaunchInteractiveFallback(
                 executablePath,
                 arguments,
                 workingDirectory,
-                checked(
-                    (int)sessionId));
+                checked((int)sessionId));
         }
+    }
+
+    public int? GetActiveConsoleSessionId()
+    {
+        var activeSessionId = WTSGetActiveConsoleSessionId();
+
+        return activeSessionId == uint.MaxValue
+            ? null
+            : checked((int)activeSessionId);
     }
 
     /*
