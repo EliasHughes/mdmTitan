@@ -236,10 +236,18 @@ public sealed class HelpdeskService : IHelpdeskService
             "created",
             $"Ticket {ticket.Number} creado."));
 
-        var routing = await FindAutomaticAssigneeAsync(
-            organizationId,
-            requesterId,
-            cancellationToken);
+        // El usuario técnico del buzón sirve como actor de respaldo.
+        // Su zona no representa la ubicación de un remitente externo.
+        var routing = string.Equals(
+                        ticket.Source,
+                        "email",
+                        StringComparison.OrdinalIgnoreCase) &&
+                    requesterId == actorUserId
+            ? null
+            : await FindAutomaticAssigneeAsync(
+                organizationId,
+                requesterId,
+                cancellationToken);
 
         if (routing is not null)
         {

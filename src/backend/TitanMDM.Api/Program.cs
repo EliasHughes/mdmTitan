@@ -158,6 +158,7 @@ builder.Services
         
 
 builder.Services.AddHostedService<HelpdeskMonitoringService>();
+builder.Services.AddHostedService<HelpdeskMailWorker>();
 
 
 /*
