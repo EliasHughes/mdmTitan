@@ -141,6 +141,9 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<HelpdeskTicket> HelpdeskTickets =>
         Set<HelpdeskTicket>();
 
+    public DbSet<HelpdeskEmailMessage> HelpdeskEmailMessages =>
+    Set<HelpdeskEmailMessage>();
+
     public DbSet<HelpdeskTicketComment> HelpdeskTicketComments =>
         Set<HelpdeskTicketComment>();
 
@@ -193,6 +196,8 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<HelpdeskAssistantAccess>
         HelpdeskAssistantAccess =>
             Set<HelpdeskAssistantAccess>();
+    
+    
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)

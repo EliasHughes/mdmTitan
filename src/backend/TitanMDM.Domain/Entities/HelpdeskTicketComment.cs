@@ -36,4 +36,22 @@ public sealed class HelpdeskTicketComment
     public string Body { get; private set; } = string.Empty;
     public bool IsInternal { get; private set; }
     public DateTime CreatedAtUtc { get; private set; }
+
+    public string? ExternalAuthorName { get; private set; }
+    public string? ExternalAuthorEmail { get; private set; }
+
+    public void SetEmailAuthor(string name, string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || email.Length > 320)
+            throw new ArgumentException(
+                "Valid author email is required.",
+                nameof(email));
+
+        ExternalAuthorName = string.IsNullOrWhiteSpace(name)
+            ? email.Trim()
+            : name.Trim()[..Math.Min(name.Trim().Length, 200)];
+
+        ExternalAuthorEmail = email.Trim().ToLowerInvariant();
+    }
 }
+

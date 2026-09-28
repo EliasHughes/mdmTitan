@@ -44,6 +44,9 @@ public sealed record HelpdeskTicketDetailsDto(
     string? EntraUserPrincipalName,
     DateTime CreatedAtUtc,
     DateTime UpdatedAtUtc,
+    DateTime? FirstResponseDueAtUtc,
+    DateTime? ResolveDueAtUtc,
+    bool SlaBreached,
     IReadOnlyList<HelpdeskCommentDto> Comments,
     IReadOnlyList<HelpdeskEventDto> Timeline);
 

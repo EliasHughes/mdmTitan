@@ -16,6 +16,8 @@ import {
   UserCog,
   Users,
   Workflow,
+  Headphones,
+  Inbox,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -214,6 +216,23 @@ export const navigationItems:
       icon:
         RadioTower,
     },
+    {
+  label: 'Mesa de ayuda',
+  path: '/helpdesk?workspace=helpdesk',
+  permission: 'tickets.view',
+  icon: Headphones,
+},
+{
+  label: 'Operación de la mesa',
+  path: '/helpdesk/operations?workspace=helpdesk',
+  permission: 'helpdesk.manage',
+  icon: MapPinned,
+},
+{
+  label: 'Mis solicitudes',
+  path: '/my-support',
+  icon: Inbox,
+},
 
     {
       label:

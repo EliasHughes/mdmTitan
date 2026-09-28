@@ -23,4 +23,10 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+  <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  <ProjectReference Include="..\TitanMDM.Domain\TitanMDM.Domain.csproj" />
+  <ProjectReference Include="..\TitanMDM.Application\TitanMDM.Application.csproj" />
+</ItemGroup>
+
 </Project>

@@ -76,15 +76,19 @@ public sealed class HelpdeskTicket
     }
 
     public void Transition(string status)
-    {
-        if (string.IsNullOrWhiteSpace(status))
-            throw new ArgumentException("Status is required.", nameof(status));
+{
+    if (string.IsNullOrWhiteSpace(status))
+        throw new ArgumentException("Status is required.", nameof(status));
 
-        Status = status.Trim().ToLowerInvariant();
-        if (Status is "resolved" or "closed")
-            ResolvedAtUtc ??= DateTime.UtcNow;
-        Touch();
-    }
+    Status = status.Trim().ToLowerInvariant();
+
+    if (Status is "resolved" or "closed")
+        ResolvedAtUtc ??= DateTime.UtcNow;
+    else
+        ResolvedAtUtc = null;
+
+    Touch();
+}
 
     public void MarkFirstResponse()
     {
@@ -108,6 +112,26 @@ public sealed class HelpdeskTicket
     {
         EntraObjectId = string.IsNullOrWhiteSpace(objectId) ? null : objectId.Trim();
         EntraUserPrincipalName = string.IsNullOrWhiteSpace(upn) ? null : upn.Trim().ToLowerInvariant();
+        Touch();
+
+        
+    }
+
+    public string? ExternalRequesterName { get; private set; }
+    public string? ExternalRequesterEmail { get; private set; }
+
+    public void SetEmailRequester(string name, string email)
+    {
+        if (string.IsNullOrWhiteSpace(email) || email.Length > 320)
+            throw new ArgumentException(
+                "Valid requester email is required.",
+                nameof(email));
+
+        ExternalRequesterName = string.IsNullOrWhiteSpace(name)
+            ? email.Trim()
+            : name.Trim()[..Math.Min(name.Trim().Length, 200)];
+
+        ExternalRequesterEmail = email.Trim().ToLowerInvariant();
         Touch();
     }
 

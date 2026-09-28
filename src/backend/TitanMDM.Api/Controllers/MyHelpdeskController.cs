@@ -240,21 +240,25 @@ public sealed class MyHelpdeskController : ControllerBase
     }
 
     private bool TryGetIdentity(out Guid organizationId, out Guid userId)
-    {
-        var organizationValue =
-            User.FindFirstValue("organization_id") ??
-            User.FindFirstValue("organizationId");
+{
+    var organizationValue =
+        User.FindFirstValue("organization_id") ??
+        User.FindFirstValue("organizationId");
 
-        var userValue =
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            User.FindFirstValue("sub") ??
-            User.FindFirstValue("user_id") ??
-            User.FindFirstValue("userId");
+    var userValue =
+        User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+        User.FindFirstValue("sub") ??
+        User.FindFirstValue("user_id") ??
+        User.FindFirstValue("userId");
 
-        return Guid.TryParse(organizationValue, out organizationId) &&
-               Guid.TryParse(userValue, out userId);
-    }
+    var validOrganization =
+        Guid.TryParse(organizationValue, out organizationId);
 
+    var validUser =
+        Guid.TryParse(userValue, out userId);
+
+    return validOrganization && validUser;
+}
     public sealed record CreateMyTicketRequest(
         string Subject,
         string Description,

@@ -3,10 +3,33 @@ using TitanMDM.Api.Services;
 using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence.Seed;
 using TitanMDM.Api.RemoteSupport;
+using Microsoft.AspNetCore.DataProtection;
 
 var builder =
     WebApplication.CreateBuilder(
         args);
+
+
+// Este directorio debe persistir entre reinicios y publicaciones.
+// En IIS, concede lectura/escritura solo a la identidad del App Pool.
+var keyRingPath = builder.Configuration["DataProtection:KeyRingPath"];
+
+if (string.IsNullOrWhiteSpace(keyRingPath))
+{
+    keyRingPath = Path.Combine(
+        Environment.GetFolderPath(
+            Environment.SpecialFolder.CommonApplicationData),
+        "TitanMDM",
+        "DataProtectionKeys");
+}
+
+Directory.CreateDirectory(keyRingPath);
+
+builder.Services
+    .AddDataProtection()
+    .SetApplicationName("TitanMDM")
+    .PersistKeysToFileSystem(
+        new DirectoryInfo(keyRingPath));
 
 /*
  * ================================================================
@@ -136,8 +159,7 @@ builder.Services
 
 builder.Services.AddHostedService<HelpdeskMonitoringService>();
 
-builder.Services.AddHostedService<
-    TitanMDM.Api.Services.HelpdeskMonitoringWorker>();
+
 /*
  * ================================================================
  * BUILD

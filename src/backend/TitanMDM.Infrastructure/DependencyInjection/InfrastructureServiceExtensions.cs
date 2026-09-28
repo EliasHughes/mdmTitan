@@ -381,6 +381,8 @@ public static class InfrastructureServiceExtensions
             IEntraIdDirectoryService,
             EntraIdDirectoryService>();
 
+        services.AddScoped<HelpdeskEmailImportService>();
+
 
         // ============================================================
         // DATABASE SEED

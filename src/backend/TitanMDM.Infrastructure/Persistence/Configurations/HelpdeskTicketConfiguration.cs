@@ -26,5 +26,10 @@ public sealed class HelpdeskTicketConfiguration : IEntityTypeConfiguration<Helpd
         builder.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<User>().WithMany().HasForeignKey(x => x.RequesterUserId).OnDelete(DeleteBehavior.Restrict);
         builder.HasOne<Device>().WithMany().HasForeignKey(x => x.DeviceId).OnDelete(DeleteBehavior.SetNull);
+        builder.Property(x => x.ExternalRequesterName)
+        .HasMaxLength(200);
+
+        builder.Property(x => x.ExternalRequesterEmail)
+            .HasMaxLength(320);
     }
 }

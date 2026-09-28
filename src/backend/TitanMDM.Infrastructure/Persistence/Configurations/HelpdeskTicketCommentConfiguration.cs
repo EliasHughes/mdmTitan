@@ -15,5 +15,10 @@ public sealed class HelpdeskTicketCommentConfiguration : IEntityTypeConfiguratio
         builder.HasIndex(x => x.TicketId);
         builder.HasOne<HelpdeskTicket>().WithMany().HasForeignKey(x => x.TicketId).OnDelete(DeleteBehavior.Cascade);
         builder.HasOne<Organization>().WithMany().HasForeignKey(x => x.OrganizationId).OnDelete(DeleteBehavior.Restrict);
+        builder.Property(x => x.ExternalAuthorName)
+        .HasMaxLength(200);
+
+        builder.Property(x => x.ExternalAuthorEmail)
+            .HasMaxLength(320);
     }
 }

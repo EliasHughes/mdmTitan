@@ -81,6 +81,7 @@ public sealed class HelpdeskService : IHelpdeskService
             .ToDictionaryAsync(x => x.Id, cancellationToken);
 
         var now = DateTime.UtcNow;
+               
         var items = rows.Select(ticket =>
         {
             users.TryGetValue(ticket.RequesterUserId, out var requester);
@@ -94,12 +95,12 @@ public sealed class HelpdeskService : IHelpdeskService
                 devices.TryGetValue(ticket.DeviceId.Value, out device);
 
             var breached =
-                ticket.FirstResponseDueAtUtc.HasValue &&
-                ticket.FirstRespondedAtUtc is null &&
-                ticket.FirstResponseDueAtUtc < now ||
-                ticket.ResolveDueAtUtc.HasValue &&
-                ticket.ResolvedAtUtc is null &&
-                ticket.ResolveDueAtUtc < now;
+                (ticket.FirstResponseDueAtUtc.HasValue &&
+                 ticket.FirstRespondedAtUtc is null &&
+                 ticket.FirstResponseDueAtUtc < now) ||
+                (ticket.ResolveDueAtUtc.HasValue &&
+                 ticket.ResolvedAtUtc is null &&
+                 ticket.ResolveDueAtUtc < now);
 
             return new HelpdeskTicketListItemDto(
                 ticket.Id,
@@ -366,7 +367,7 @@ public sealed class HelpdeskService : IHelpdeskService
     {
         var allowed = new[]
         {
-            "open", "pendinguser", "resolved", "closed"
+            "open",  "inprogress", "pendinguser", "resolved", "closed"
         };
 
         var status = request.Status?.Trim().ToLowerInvariant();
@@ -600,6 +601,13 @@ public sealed class HelpdeskService : IHelpdeskService
             ticket.EntraUserPrincipalName,
             ticket.CreatedAtUtc,
             ticket.UpdatedAtUtc,
+            ticket.FirstResponseDueAtUtc,
+            ticket.ResolveDueAtUtc,
+            ticket.Status is not ("resolved" or "closed") &&
+                ((ticket.FirstRespondedAtUtc is null &&
+                  ticket.FirstResponseDueAtUtc < DateTime.UtcNow) ||
+                 (ticket.ResolvedAtUtc is null &&
+                  ticket.ResolveDueAtUtc < DateTime.UtcNow)),
             comments.Select(item =>
             {
                 authors.TryGetValue(item.AuthorUserId, out var author);

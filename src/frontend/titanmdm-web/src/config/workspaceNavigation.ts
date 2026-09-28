@@ -59,6 +59,11 @@ export const globalNavigation:
       icon:
         Home,
     },
+    {
+      label: 'Mis solicitudes',
+      path: '/my-support',
+      icon: Inbox,
+    },
   ]
 
 /*
@@ -445,6 +450,18 @@ const administrationNavigation:
  */
 
 const helpDeskNavigation: WorkspaceNavigationItem[] = [
+  {
+    label: 'Operación de la mesa',
+    path: '/helpdesk/operations?workspace=helpdesk',
+    permission: 'helpdesk.manage',
+    icon: Users,
+  },
+  {
+    label: 'Avance del proyecto',
+    path: '/helpdesk/avance?workspace=helpdesk',
+    permission: 'tickets.view',
+    icon: ClipboardCheck,
+  },
   {
     label: 'Inbox',
     path: '/helpdesk?workspace=helpdesk',
