@@ -2,6 +2,8 @@ using Microsoft.EntityFrameworkCore;
 using TitanMDM.Application.Helpdesk;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Persistence;
+using System.Security.Cryptography;
+using System.Text;
 
 namespace TitanMDM.Infrastructure.Helpdesk;
 
@@ -40,18 +42,25 @@ public sealed class HelpdeskEmailImportService
                 "Organization and mailbox actor are required.");
         }
 
-        if (string.IsNullOrWhiteSpace(message.InternetMessageId) ||
-            message.InternetMessageId.Length > 998 ||
-            string.IsNullOrWhiteSpace(message.FromEmail) ||
-            message.FromEmail.Length > 320 ||
-            string.IsNullOrWhiteSpace(message.Mailbox))
+       if (string.IsNullOrWhiteSpace(message.InternetMessageId) ||
+    message.InternetMessageId.Trim().Length > 998 ||
+    string.IsNullOrWhiteSpace(message.FromEmail) ||
+    message.FromEmail.Trim().Length > 320 ||
+    string.IsNullOrWhiteSpace(message.Mailbox) ||
+    message.Mailbox.Trim().Length > 320 ||
+    message.ConversationId?.Trim().Length > 512)
         {
             throw new ArgumentException(
-                "Mail identity and sender are required.");
+                "Mail identity and sender are invalid.");
         }
 
         var mailbox = message.Mailbox.Trim().ToLowerInvariant();
         var fromEmail = message.FromEmail.Trim().ToLowerInvariant();
+        var internetMessageId = message.InternetMessageId.Trim();
+
+        var messageKey = Convert.ToHexString(
+            SHA256.HashData(
+                Encoding.UTF8.GetBytes(internetMessageId)));
 
         var subject = string.IsNullOrWhiteSpace(message.Subject)
             ? "Solicitud recibida por correo"
@@ -72,7 +81,7 @@ public sealed class HelpdeskEmailImportService
             .FirstOrDefaultAsync(
                 x => x.OrganizationId == organizationId &&
                      x.Mailbox == mailbox &&
-                     x.InternetMessageId == message.InternetMessageId,
+                     x.MessageKey == messageKey,
                 cancellationToken);
 
         if (existing is not null)

@@ -48,9 +48,8 @@ public sealed class HelpdeskTicketComment
                 nameof(email));
 
         ExternalAuthorName = string.IsNullOrWhiteSpace(name)
-            ? email.Trim()
-            : name.Trim()[..Math.Min(name.Trim().Length, 200)];
-
+    ? email.Trim()[..Math.Min(email.Trim().Length, 200)]
+    : name.Trim()[..Math.Min(name.Trim().Length, 200)];
         ExternalAuthorEmail = email.Trim().ToLowerInvariant();
     }
 }

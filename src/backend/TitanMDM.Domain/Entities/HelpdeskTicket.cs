@@ -128,8 +128,8 @@ public sealed class HelpdeskTicket
                 nameof(email));
 
         ExternalRequesterName = string.IsNullOrWhiteSpace(name)
-            ? email.Trim()
-            : name.Trim()[..Math.Min(name.Trim().Length, 200)];
+        ? email.Trim()[..Math.Min(email.Trim().Length, 200)]
+        : name.Trim()[..Math.Min(name.Trim().Length, 200)];
 
         ExternalRequesterEmail = email.Trim().ToLowerInvariant();
         Touch();

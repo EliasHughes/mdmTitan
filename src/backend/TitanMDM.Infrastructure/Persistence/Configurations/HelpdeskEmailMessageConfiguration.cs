@@ -21,6 +21,10 @@ public sealed class HelpdeskEmailMessageConfiguration
             .HasMaxLength(998)
             .IsRequired();
 
+        builder.Property(x => x.MessageKey)
+            .HasMaxLength(64)
+            .IsRequired();
+
         builder.Property(x => x.ConversationId)
             .HasMaxLength(512);
 
@@ -28,7 +32,7 @@ public sealed class HelpdeskEmailMessageConfiguration
         {
             x.OrganizationId,
             x.Mailbox,
-            x.InternetMessageId
+            x.MessageKey
         }).IsUnique();
 
         builder.HasIndex(x => new
