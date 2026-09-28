@@ -473,7 +473,12 @@ const helpDeskNavigation: WorkspaceNavigationItem[] = [
     path: '/helpdesk/entra?workspace=helpdesk',
     permission: 'helpdesk.manage',
     icon: CloudCog,
-  },
+  },{
+  label: 'Especialidades',
+  path: '/helpdesk/especialidades?workspace=helpdesk',
+  permission: 'helpdesk.manage',
+  icon: Users,
+},
 ]
 
 /*

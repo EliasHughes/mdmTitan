@@ -119,6 +119,8 @@ import { HelpdeskEntraSettingsPage } from './pages/helpdesk/HelpdeskEntraSetting
 
 import { HelpdeskOperationsPage } from './pages/helpdesk/HelpdeskOperationsPage'
 import { HelpdeskProgressPage } from './pages/helpdesk/HelpdeskProgressPage'
+import { HelpdeskSpecialtiesPage } from './pages/helpdesk/HelpdeskSpecialtiesPage'
+import { HelpdeskReportsPage } from './pages/helpdesk/HelpdeskReportsPage'
 
 function App() {
   return (
@@ -192,6 +194,15 @@ function App() {
   }
 />
 
+<Route
+  path="helpdesk/especialidades"
+  element={
+    <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
+      <HelpdeskSpecialtiesPage />
+    </PermissionRoute>
+  }
+/>
+
         <Route
           path="helpdesk/entra"
           element={
@@ -209,6 +220,14 @@ function App() {
             </PermissionRoute>
           }
         />
+        <Route
+  path="helpdesk/reportes"
+  element={
+    <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
+      <HelpdeskReportsPage />
+    </PermissionRoute>
+  }
+/>
 
         <Route
           path="devices"

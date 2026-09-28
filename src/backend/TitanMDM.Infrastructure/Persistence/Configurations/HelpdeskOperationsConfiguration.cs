@@ -48,6 +48,11 @@ public sealed class HelpdeskTeamConfiguration
             .WithMany()
             .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
+
+        builder.Property(x => x.Categories)
+            .HasMaxLength(800)
+            .HasDefaultValue("")
+            .IsRequired();
     }
 }
 
@@ -167,5 +172,7 @@ public sealed class HelpdeskAssistantAccessConfiguration
             .WithMany()
             .HasForeignKey(x => x.OrganizationId)
             .OnDelete(DeleteBehavior.Restrict);
+
+       
     }
 }

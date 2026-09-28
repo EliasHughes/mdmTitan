@@ -121,6 +121,9 @@ builder.Services.AddScoped<RemoteSupportParticipantService>();
 
 builder.Services.AddScoped<RemoteControlLeaseService>();
 
+builder.Services.AddHostedService<HelpdeskMonitoringService>();
+builder.Services.AddHostedService<HelpdeskRoutingWorker>();
+builder.Services.AddHostedService<HelpdeskMailWorker>();
 /*
  * ================================================================
  * INFRASTRUCTURE
