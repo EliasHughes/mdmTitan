@@ -597,7 +597,7 @@ public sealed class HelpdeskService : IHelpdeskService
             cancellationToken);
     }
 
-   private async Task<RoutingCandidate?> FindAutomaticAssigneeAsync(
+  private async Task<RoutingCandidate?> FindAutomaticAssigneeAsync(
     Guid organizationId,
     Guid requesterId,
     string category,
@@ -612,7 +612,7 @@ public sealed class HelpdeskService : IHelpdeskService
         .Distinct()
         .ToListAsync(cancellationToken);
 
-    // La ubicación debe ser inequívoca. No asignamos una zona por intuición.
+    // Una ubicación ausente o ambigua requiere corrección administrativa.
     if (userZones.Count != 1)
         return null;
 
@@ -633,12 +633,15 @@ public sealed class HelpdeskService : IHelpdeskService
     var zoneChain = new List<Guid>();
     var currentZoneId = userZones[0];
 
-    // Índice 0 = zona exacta; índices posteriores = zonas superiores.
+    // La primera zona es la ubicación exacta del solicitante.
+    // Después vienen sus zonas superiores.
     for (var depth = 0; depth < 12; depth++)
     {
         if (!zonesById.TryGetValue(currentZoneId, out var zone) ||
             zoneChain.Contains(currentZoneId))
+        {
             break;
+        }
 
         zoneChain.Add(currentZoneId);
 
@@ -677,9 +680,6 @@ public sealed class HelpdeskService : IHelpdeskService
     if (teams.Count == 0)
         return null;
 
-    // Elegimos primero los grupos capaces de atender la categoría.
-    // Un especialista que cubre la planta tiene preferencia sobre
-    // un grupo general que cubre solamente una nave.
     var specialistTeamIds = teams.Values
         .Where(x => x.HandlesCategory(category))
         .Select(x => x.Id)
@@ -692,7 +692,9 @@ public sealed class HelpdeskService : IHelpdeskService
 
     if (specialistTeamIds.Count == 0 &&
         generalTeamIds.Count == 0)
+    {
         return null;
+    }
 
     var eligibleUserIds = await (
         from userRole in _db.UserRoles.AsNoTracking()
@@ -759,85 +761,60 @@ public sealed class HelpdeskService : IHelpdeskService
             x => x.Count,
             cancellationToken);
 
-    // Primero se intenta con especialistas. Si ninguno puede tomar
-    // el caso, un grupo general con cobertura sirve de respaldo.
-    foreach (var teamIds in new[] { specialistTeamIds, generalTeamIds })
+    // Primero especialistas; después grupos generales.
+    foreach (var candidateTeamIds in new[]
     {
-        if (teamIds.Count == 0)
+        specialistTeamIds,
+        generalTeamIds
+    })
+    {
+        if (candidateTeamIds.Count == 0)
             continue;
 
-        var teamCoverage = coverage
-            .Where(x =>
-                teamIds.Contains(x.TeamId) &&
-                teams.ContainsKey(x.TeamId))
-            .ToList();
+        // Se recorre cada nivel geográfico. Si en la zona exacta
+        // todos están llenos, se intenta la zona superior.
+        foreach (var zoneId in zoneChain)
+        {
+            var teamIdsAtZone = coverage
+                .Where(x =>
+                    x.ZoneId == zoneId &&
+                    candidateTeamIds.Contains(x.TeamId) &&
+                    teams.ContainsKey(x.TeamId))
+                .Select(x => x.TeamId)
+                .ToHashSet();
 
-        if (teamCoverage.Count == 0)
-            continue;
+            if (teamIdsAtZone.Count == 0)
+                continue;
 
-        // Dentro de esta clase de grupo se prefiere la cobertura
-        // geográfica más específica.
-        var distances = teamCoverage
-            .Select(x => new
-            {
-                x.TeamId,
-                x.ZoneId,
-                Distance = zoneChain.IndexOf(x.ZoneId)
-            })
-            .Where(x => x.Distance >= 0)
-            .ToList();
+            var selected = availableMembers
+                .Where(x =>
+                    teamIdsAtZone.Contains(x.TeamId) &&
+                    users.ContainsKey(x.UserId))
+                .Select(x => new
+                {
+                    Member = x,
+                    Load = loads.GetValueOrDefault(x.UserId)
+                })
+                .Where(x => x.Load < x.Member.MaxOpenTickets)
+                .OrderBy(x =>
+                    (double)x.Load / x.Member.MaxOpenTickets)
+                .ThenBy(x => x.Load)
+                .ThenBy(x => x.Member.UserId)
+                .FirstOrDefault();
 
-        if (distances.Count == 0)
-            continue;
+            if (selected is null)
+                continue;
 
-        var bestDistance = distances.Min(x => x.Distance);
-
-        var nearestCoverage = distances
-            .Where(x => x.Distance == bestDistance)
-            .ToList();
-
-        var nearestTeamIds = nearestCoverage
-            .Select(x => x.TeamId)
-            .ToHashSet();
-
-        var selected = availableMembers
-            .Where(x =>
-                nearestTeamIds.Contains(x.TeamId) &&
-                users.ContainsKey(x.UserId))
-            .Select(x => new
-            {
-                Member = x,
-                Load = loads.GetValueOrDefault(x.UserId)
-            })
-            .Where(x => x.Load < x.Member.MaxOpenTickets)
-            .OrderBy(x =>
-                (double)x.Load / x.Member.MaxOpenTickets)
-            .ThenBy(x => x.Load)
-            .ThenBy(x => x.Member.UserId)
-            .FirstOrDefault();
-
-        if (selected is null)
-            continue;
-
-        var selectedCoverage = nearestCoverage
-            .First(x => x.TeamId == selected.Member.TeamId);
-
-        var zoneName = zonesById.TryGetValue(
-            selectedCoverage.ZoneId,
-            out var coveredZone)
-            ? coveredZone.Name
-            : "zona asignada";
-
-        return new RoutingCandidate(
-            selected.Member.UserId,
-            users[selected.Member.UserId].FullName,
-            teams[selected.Member.TeamId].Name,
-            zoneName);
+            return new RoutingCandidate(
+                selected.Member.UserId,
+                users[selected.Member.UserId].FullName,
+                teams[selected.Member.TeamId].Name,
+                zonesById[zoneId].Name);
+        }
     }
 
     return null;
 }
-
     private async Task<HelpdeskTicketDetailsDto> MapDetailsAsync(
         HelpdeskTicket ticket,
         CancellationToken cancellationToken)

@@ -122,6 +122,9 @@ import { HelpdeskProgressPage } from './pages/helpdesk/HelpdeskProgressPage'
 import { HelpdeskSpecialtiesPage } from './pages/helpdesk/HelpdeskSpecialtiesPage'
 import { HelpdeskReportsPage } from './pages/helpdesk/HelpdeskReportsPage'
 import { EntraLoginCallbackPage } from './pages/EntraLoginCallbackPage'
+import { HelpdeskCoveragePage } from './pages/helpdesk/HelpdeskCoveragePage'
+
+
 
 function App() {
   return (
@@ -203,6 +206,14 @@ function App() {
   element={
     <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
       <HelpdeskSpecialtiesPage />
+    </PermissionRoute>
+  }
+/>
+<Route
+  path="helpdesk/cobertura"
+  element={
+    <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
+      <HelpdeskCoveragePage />
     </PermissionRoute>
   }
 />
