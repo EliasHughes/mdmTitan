@@ -121,6 +121,7 @@ import { HelpdeskOperationsPage } from './pages/helpdesk/HelpdeskOperationsPage'
 import { HelpdeskProgressPage } from './pages/helpdesk/HelpdeskProgressPage'
 import { HelpdeskSpecialtiesPage } from './pages/helpdesk/HelpdeskSpecialtiesPage'
 import { HelpdeskReportsPage } from './pages/helpdesk/HelpdeskReportsPage'
+import { EntraLoginCallbackPage } from './pages/EntraLoginCallbackPage'
 
 function App() {
   return (
@@ -131,7 +132,10 @@ function App() {
           <LoginPage />
         }
       />
-
+<Route
+  path="/login/entra"
+  element={<EntraLoginCallbackPage />}
+/>
       <Route
         element={
           <ProtectedRoute>

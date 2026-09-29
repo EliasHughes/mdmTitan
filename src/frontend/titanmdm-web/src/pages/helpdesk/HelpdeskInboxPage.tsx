@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   AlertCircle,
@@ -30,8 +30,8 @@ const PAGE_SIZE = 25
 
 const STATUS_LABELS: Record<string, string> = {
   new: 'Nuevo',
-  open: 'Abierto',
-  pendinguser: 'Pendiente usuario',
+  open: 'En proceso',
+  pendinguser: 'En espera del usuario',
   resolved: 'Resuelto',
   closed: 'Cerrado',
 }
@@ -51,30 +51,15 @@ const ALERT_LABELS: Record<string, string> = {
   resolution_overdue: 'Resolución vencida',
 }
 
-interface CountByStatus {
-  status: string
-  count: number
-}
-
-interface CountByPriority {
-  priority: string
-  count: number
-}
-
-interface CountByCategory {
-  category: string
-  count: number
-}
-
 interface MonitoringSummary {
   total: number
   active: number
   unassigned: number
   overdueFirstResponse: number
   overdueResolution: number
-  byStatus: CountByStatus[]
-  byPriority: CountByPriority[]
-  byCategory: CountByCategory[]
+  byStatus: { status: string; count: number }[]
+  byPriority: { priority: string; count: number }[]
+  byCategory: { category: string; count: number }[]
   generatedAtUtc: string
 }
 
@@ -158,7 +143,6 @@ export function HelpdeskInboxPage() {
           params: { limit: 8 },
         }),
       ])
-
       setSummary(summaryResponse.data)
       setAlerts(alertsResponse.data)
       setMonitoringError(false)
@@ -193,7 +177,7 @@ export function HelpdeskInboxPage() {
     setPage(1)
   }
 
-  async function createTicket(event: React.FormEvent<HTMLFormElement>) {
+  async function createTicket(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
     if (!subject.trim() || !description.trim() || creating) return
 
@@ -209,7 +193,6 @@ export function HelpdeskInboxPage() {
         category: category.trim() || 'general',
         source: 'console',
       })
-
       setShowCreate(false)
       navigate(`/helpdesk/tickets/${created.id}?workspace=helpdesk`)
     } catch {
@@ -245,21 +228,21 @@ export function HelpdeskInboxPage() {
           <button
             type="button"
             className="helpdesk-ui-button helpdesk-ui-button--secondary"
-            onClick={refresh}
-            disabled={loading}
-          >
-
-          <button
-            type="button"
-            className="helpdesk-ui-button helpdesk-ui-button--secondary"
             onClick={() => navigate('/helpdesk/avance')}
           >
             Ver avance del proyecto
           </button>
 
+          <button
+            type="button"
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
+            onClick={refresh}
+            disabled={loading}
+          >
             <RefreshCw size={16} />
             Actualizar
           </button>
+
           {canCreate && (
             <button
               type="button"
@@ -284,8 +267,8 @@ export function HelpdeskInboxPage() {
       {monitoringError && (
         <div className="helpdesk-inbox__error" role="alert">
           <AlertCircle size={17} />
-          Los KPI y alertas no están disponibles. Comprueba que el backend tenga
-          HelpdeskMonitoringController y vuelve a actualizar.
+          Los KPI y alertas no están disponibles. Comprueba el servicio de
+          monitoreo y vuelve a actualizar.
         </div>
       )}
 
@@ -375,8 +358,9 @@ export function HelpdeskInboxPage() {
       <section className="helpdesk-monitoring__alerts">
         <div className="helpdesk-monitoring__heading">
           <h2>Alertas recientes</h2>
-          <p>Tickets sin atender y plazos de servicio próximos o vencidos</p>
+          <p>Tickets sin atender y plazos próximos o vencidos</p>
         </div>
+
         {alerts.length === 0 ? (
           <p className="helpdesk-monitoring__no-alerts">No hay alertas registradas.</p>
         ) : (
@@ -619,10 +603,7 @@ export function HelpdeskInboxPage() {
                 </label>
                 <label>
                   Prioridad
-                  <select
-                    value={priority}
-                    onChange={(event) => setPriority(event.target.value)}
-                  >
+                  <select value={priority} onChange={(event) => setPriority(event.target.value)}>
                     {Object.entries(PRIORITY_LABELS).map(([value, label]) => (
                       <option key={value} value={value}>{label}</option>
                     ))}

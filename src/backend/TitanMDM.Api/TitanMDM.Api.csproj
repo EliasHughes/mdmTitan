@@ -19,6 +19,7 @@
   <ItemGroup>
     <ProjectReference Include="..\TitanMDM.Application\TitanMDM.Application.csproj" />
     <ProjectReference Include="..\TitanMDM.Infrastructure\TitanMDM.Infrastructure.csproj" />
+    <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" Version="10.0.12" />
   </ItemGroup>
 
 </Project>

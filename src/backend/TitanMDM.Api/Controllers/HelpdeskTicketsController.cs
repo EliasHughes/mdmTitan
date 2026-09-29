@@ -1,4 +1,3 @@
-
 using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
@@ -7,8 +6,8 @@ using TitanMDM.Application.Helpdesk;
 namespace TitanMDM.Api.Controllers;
 
 [ApiController]
-[Route("api/helpdesk/tickets")]
 [Authorize]
+[Route("api/helpdesk/tickets")]
 public sealed class HelpdeskTicketsController : ControllerBase
 {
     private const string HelpdeskView = "helpdesk.view";
@@ -45,7 +44,14 @@ public sealed class HelpdeskTicketsController : ControllerBase
 
         var result = await _helpdeskService.GetTicketsAsync(
             organizationId.Value,
-            new HelpdeskTicketQuery(search, status, priority, deviceId, assigneeUserId, page, pageSize),
+            new HelpdeskTicketQuery(
+                search,
+                status,
+                priority,
+                deviceId,
+                assigneeUserId,
+                page,
+                pageSize),
             cancellationToken);
 
         return Ok(result);
@@ -86,13 +92,20 @@ public sealed class HelpdeskTicketsController : ControllerBase
         if (organizationId is null || actorUserId is null)
             return Unauthorized(new { message = "El token no contiene una organización o usuario válido." });
 
-        var created = await _helpdeskService.CreateTicketAsync(
-            organizationId.Value,
-            actorUserId.Value,
-            request,
-            cancellationToken);
+        try
+        {
+            var created = await _helpdeskService.CreateTicketAsync(
+                organizationId.Value,
+                actorUserId.Value,
+                request,
+                cancellationToken);
 
-        return Ok(created);
+            return Ok(created);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{ticketId:guid}/comments")]
@@ -101,7 +114,8 @@ public sealed class HelpdeskTicketsController : ControllerBase
         [FromBody] AddHelpdeskCommentRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(TicketsComment))
+        if (!HasPermission(TicketsComment) ||
+            !HasAnyPermission(HelpdeskView, TicketsView))
             return Forbid();
 
         var organizationId = GetOrganizationId();
@@ -109,16 +123,23 @@ public sealed class HelpdeskTicketsController : ControllerBase
         if (organizationId is null || actorUserId is null)
             return Unauthorized(new { message = "El token no contiene una organización o usuario válido." });
 
-        var ticket = await _helpdeskService.AddCommentAsync(
-            organizationId.Value,
-            ticketId,
-            actorUserId.Value,
-            request,
-            cancellationToken);
+        try
+        {
+            var ticket = await _helpdeskService.AddCommentAsync(
+                organizationId.Value,
+                ticketId,
+                actorUserId.Value,
+                request,
+                cancellationToken);
 
-        return ticket is null
-            ? NotFound(new { message = "El ticket no existe." })
-            : Ok(ticket);
+            return ticket is null
+                ? NotFound(new { message = "El ticket no existe." })
+                : Ok(ticket);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     [HttpPost("{ticketId:guid}/assign")]
@@ -127,7 +148,8 @@ public sealed class HelpdeskTicketsController : ControllerBase
         [FromBody] AssignHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(TicketsAssign))
+        if (!HasPermission(TicketsAssign) ||
+            !HasAnyPermission(HelpdeskView, TicketsView))
             return Forbid();
 
         var organizationId = GetOrganizationId();
@@ -148,6 +170,10 @@ public sealed class HelpdeskTicketsController : ControllerBase
                 ? NotFound(new { message = "El ticket no existe." })
                 : Ok(ticket);
         }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
         catch (InvalidOperationException ex)
         {
             return BadRequest(new { message = ex.Message });
@@ -160,13 +186,10 @@ public sealed class HelpdeskTicketsController : ControllerBase
         [FromBody] TransitionHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(TicketsClose) &&
-            !string.Equals(request.Status, "open", StringComparison.OrdinalIgnoreCase))
-        {
-            return Forbid();
-        }
-
-        if (!HasAnyPermission(HelpdeskView, TicketsView))
+        // Reabrir un ticket también modifica su estado: leer tickets
+        // nunca debe conceder permiso para cambiarlo.
+        if (!HasPermission(TicketsClose) ||
+            !HasAnyPermission(HelpdeskView, TicketsView))
             return Forbid();
 
         var organizationId = GetOrganizationId();
@@ -174,22 +197,38 @@ public sealed class HelpdeskTicketsController : ControllerBase
         if (organizationId is null || actorUserId is null)
             return Unauthorized(new { message = "El token no contiene una organización o usuario válido." });
 
-        var ticket = await _helpdeskService.TransitionAsync(
-            organizationId.Value,
-            ticketId,
-            actorUserId.Value,
-            request,
-            cancellationToken);
+        try
+        {
+            var ticket = await _helpdeskService.TransitionAsync(
+                organizationId.Value,
+                ticketId,
+                actorUserId.Value,
+                request,
+                cancellationToken);
 
-        return ticket is null
-            ? NotFound(new { message = "El ticket no existe." })
-            : Ok(ticket);
+            return ticket is null
+                ? NotFound(new { message = "El ticket no existe." })
+                : Ok(ticket);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return BadRequest(new { message = ex.Message });
+        }
     }
 
     private Guid? GetOrganizationId()
     {
-        var value = User.FindFirstValue("organization_id") ?? User.FindFirstValue("organizationId");
-        return Guid.TryParse(value, out var organizationId) ? organizationId : null;
+        var value =
+            User.FindFirstValue("organization_id") ??
+            User.FindFirstValue("organizationId");
+
+        return Guid.TryParse(value, out var organizationId)
+            ? organizationId
+            : null;
     }
 
     private Guid? GetUserId()
@@ -200,18 +239,19 @@ public sealed class HelpdeskTicketsController : ControllerBase
             User.FindFirstValue("user_id") ??
             User.FindFirstValue("userId");
 
-        return Guid.TryParse(value, out var userId) ? userId : null;
+        return Guid.TryParse(value, out var userId)
+            ? userId
+            : null;
     }
 
-    private bool HasPermission(string permission)
-    {
-        return User.Claims.Any(claim =>
+    private bool HasPermission(string permission) =>
+        User.Claims.Any(claim =>
             claim.Type == "permission" &&
-            string.Equals(claim.Value, permission, StringComparison.OrdinalIgnoreCase));
-    }
+            string.Equals(
+                claim.Value,
+                permission,
+                StringComparison.OrdinalIgnoreCase));
 
-    private bool HasAnyPermission(params string[] permissions)
-    {
-        return permissions.Any(HasPermission);
-    }
+    private bool HasAnyPermission(params string[] permissions) =>
+        permissions.Any(HasPermission);
 }

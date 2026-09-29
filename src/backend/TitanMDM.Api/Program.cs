@@ -4,6 +4,8 @@ using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence.Seed;
 using TitanMDM.Api.RemoteSupport;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Authentication.Cookies;
+using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 
 var builder =
     WebApplication.CreateBuilder(
@@ -124,6 +126,12 @@ builder.Services.AddScoped<RemoteControlLeaseService>();
 builder.Services.AddHostedService<HelpdeskMonitoringService>();
 builder.Services.AddHostedService<HelpdeskRoutingWorker>();
 builder.Services.AddHostedService<HelpdeskMailWorker>();
+
+builder.Services.AddHostedService<HelpdeskMonitoringService>();
+builder.Services.AddHostedService<HelpdeskRoutingWorker>();
+builder.Services.AddHostedService<HelpdeskMailWorker>();
+
+
 /*
  * ================================================================
  * INFRASTRUCTURE
@@ -134,6 +142,69 @@ builder.Services
     .AddTitanMdmInfrastructure(
         builder.Configuration);
 
+
+// Inicio de sesión corporativo. La autenticación JWT existente
+// continúa siendo el esquema predeterminado de las API.
+if (builder.Configuration.GetValue<bool>("EntraLogin:Enabled"))
+{
+    var tenantId = builder.Configuration["EntraLogin:TenantId"];
+    var clientId = builder.Configuration["EntraLogin:ClientId"];
+    var clientSecret = builder.Configuration["EntraLogin:ClientSecret"];
+
+    if (!Guid.TryParse(tenantId, out _) ||
+        !Guid.TryParse(clientId, out _) ||
+        string.IsNullOrWhiteSpace(clientSecret))
+    {
+        throw new InvalidOperationException(
+            "EntraLogin requiere TenantId, ClientId y ClientSecret válidos.");
+    }
+
+    builder.Services
+        .AddAuthentication()
+        .AddCookie(
+            "TitanEntraTemp",
+            options =>
+            {
+                options.Cookie.Name = "__TitanEntraTemp";
+                options.Cookie.HttpOnly = true;
+                options.Cookie.SameSite =
+                    Microsoft.AspNetCore.Http.SameSiteMode.Lax;
+                options.Cookie.Path = "/api/auth/entra";
+                options.Cookie.SecurePolicy =
+                    CookieSecurePolicy.SameAsRequest;
+
+                options.ExpireTimeSpan =
+                    TimeSpan.FromMinutes(2);
+
+                options.SlidingExpiration = false;
+            })
+        .AddOpenIdConnect(
+            "TitanEntraOidc",
+            options =>
+            {
+                options.Authority =
+                    $"https://login.microsoftonline.com/{tenantId}/v2.0";
+
+                options.ClientId = clientId;
+                options.ClientSecret = clientSecret;
+                options.SignInScheme = "TitanEntraTemp";
+                options.CallbackPath = "/signin-entra";
+                options.ResponseType = "code";
+
+                options.RequireHttpsMetadata = true;
+                options.SaveTokens = false;
+                options.MapInboundClaims = false;
+
+                options.Scope.Clear();
+                options.Scope.Add("openid");
+                options.Scope.Add("profile");
+                options.Scope.Add("email");
+
+                options.TokenValidationParameters.ValidateIssuer = true;
+                options.TokenValidationParameters.ValidateAudience = true;
+                options.TokenValidationParameters.NameClaimType = "name";
+            });
+}
 /*
  * ================================================================
  * CORS
@@ -159,11 +230,6 @@ builder.Services
         });
 
         
-
-builder.Services.AddHostedService<HelpdeskMonitoringService>();
-builder.Services.AddHostedService<HelpdeskMailWorker>();
-
-
 /*
  * ================================================================
  * BUILD

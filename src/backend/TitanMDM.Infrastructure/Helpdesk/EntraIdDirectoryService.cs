@@ -69,119 +69,102 @@ public sealed class EntraIdDirectoryService : IEntraIdDirectoryService
     }
 
     public async Task<EntraSyncResultDto> SyncDirectoryAsync(
-        Guid organizationId,
-        CancellationToken cancellationToken = default)
+    Guid organizationId,
+    CancellationToken cancellationToken = default)
+{
+    var settings = await GetOrCreateSettingsAsync(
+        organizationId,
+        cancellationToken);
+
+    if (!settings.IsEnabled)
     {
-        var settings = await GetOrCreateSettingsAsync(
-            organizationId,
-            cancellationToken);
-
-        if (!settings.IsEnabled)
-        {
-            throw new InvalidOperationException(
-                "Entra ID no está habilitado.");
-        }
-
-        if (string.IsNullOrWhiteSpace(settings.TenantId) ||
-            string.IsNullOrWhiteSpace(settings.ClientId) ||
-            string.IsNullOrWhiteSpace(settings.ClientSecretProtected))
-        {
-            throw new InvalidOperationException(
-                "Falta Tenant ID, Client ID o Client Secret.");
-        }
-
-        var token = await RequestTokenAsync(
-            settings,
-            cancellationToken);
-
-        var graphUsers = await FetchUsersAsync(
-            token,
-            settings.AllowedGroupIds,
-            cancellationToken);
-
-        var existing = await _db.EntraDirectoryUsers
-            .Where(x => x.OrganizationId == organizationId)
-            .ToListAsync(cancellationToken);
-
-        var byObjectId = existing.ToDictionary(
-            x => x.EntraObjectId,
-            StringComparer.OrdinalIgnoreCase);
-
-        var titanUsers = await _db.Users
-            .Where(x => x.OrganizationId == organizationId)
-            .ToListAsync(cancellationToken);
-
-        var imported = 0;
-        var updated = 0;
-        var linked = 0;
-
-        foreach (var graphUser in graphUsers)
-        {
-            var linkedUser = graphUser.AccountEnabled
-                ? titanUsers.FirstOrDefault(x =>
-                    x.IsActive &&
-                    (string.Equals(
-                         x.Email,
-                         graphUser.Mail,
-                         StringComparison.OrdinalIgnoreCase) ||
-                     string.Equals(
-                         x.Email,
-                         graphUser.UserPrincipalName,
-                         StringComparison.OrdinalIgnoreCase)))
-                : null;
-
-            if (linkedUser is not null)
-            {
-                linked++;
-            }
-
-            if (byObjectId.TryGetValue(
-                    graphUser.Id,
-                    out var current))
-            {
-                current.Update(
-                    graphUser.DisplayName,
-                    graphUser.Mail,
-                    graphUser.JobTitle,
-                    graphUser.Department,
-                    linkedUser?.Id,
-                    graphUser.AccountEnabled);
-
-                updated++;
-            }
-            else
-            {
-                var created = new EntraDirectoryUser(
-                    organizationId,
-                    graphUser.Id,
-                    graphUser.DisplayName,
-                    graphUser.UserPrincipalName,
-                    graphUser.Mail);
-
-                created.Update(
-                    graphUser.DisplayName,
-                    graphUser.Mail,
-                    graphUser.JobTitle,
-                    graphUser.Department,
-                    linkedUser?.Id,
-                    graphUser.AccountEnabled);
-
-                _db.EntraDirectoryUsers.Add(created);
-                imported++;
-            }
-        }
-
-        settings.MarkSync(
-            $"ok imported={imported} updated={updated}");
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return new EntraSyncResultDto(
-            imported,
-            updated,
-            linked,
-            settings.LastSyncStatus ?? "ok");
+        throw new InvalidOperationException(
+            "Entra ID no está habilitado.");
     }
+
+    if (string.IsNullOrWhiteSpace(settings.TenantId) ||
+        string.IsNullOrWhiteSpace(settings.ClientId) ||
+        string.IsNullOrWhiteSpace(settings.ClientSecretProtected))
+    {
+        throw new InvalidOperationException(
+            "Falta Tenant ID, Client ID o Client Secret.");
+    }
+
+    var token = await RequestTokenAsync(
+        settings,
+        cancellationToken);
+
+    var graphUsers = await FetchUsersAsync(
+        token,
+        settings.AllowedGroupIds,
+        cancellationToken);
+
+    var existing = await _db.EntraDirectoryUsers
+        .Where(x => x.OrganizationId == organizationId)
+        .ToListAsync(cancellationToken);
+
+    var byObjectId = existing.ToDictionary(
+        x => x.EntraObjectId,
+        StringComparer.OrdinalIgnoreCase);
+
+    var imported = 0;
+    var updated = 0;
+    var linked = 0;
+
+    foreach (var graphUser in graphUsers)
+    {
+        if (byObjectId.TryGetValue(
+                graphUser.Id,
+                out var current))
+        {
+            // El vínculo fue asignado desde TitanMDM a este Object ID.
+            // Nunca se sustituye por una coincidencia de correo.
+            current.Update(
+                graphUser.DisplayName,
+                graphUser.Mail,
+                graphUser.JobTitle,
+                graphUser.Department,
+                current.LinkedTitanUserId,
+                graphUser.AccountEnabled);
+
+            if (current.LinkedTitanUserId.HasValue)
+                linked++;
+
+            updated++;
+        }
+        else
+        {
+            var created = new EntraDirectoryUser(
+                organizationId,
+                graphUser.Id,
+                graphUser.DisplayName,
+                graphUser.UserPrincipalName,
+                graphUser.Mail);
+
+            created.Update(
+                graphUser.DisplayName,
+                graphUser.Mail,
+                graphUser.JobTitle,
+                graphUser.Department,
+                linkedTitanUserId: null,
+                graphUser.AccountEnabled);
+
+            _db.EntraDirectoryUsers.Add(created);
+            imported++;
+        }
+    }
+
+    settings.MarkSync(
+        $"ok imported={imported} updated={updated}");
+
+    await _db.SaveChangesAsync(cancellationToken);
+
+    return new EntraSyncResultDto(
+        imported,
+        updated,
+        linked,
+        settings.LastSyncStatus ?? "ok");
+}
 
     public async Task<IReadOnlyList<EntraDirectoryUserDto>> SearchDirectoryAsync(
         Guid organizationId,

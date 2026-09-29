@@ -430,6 +430,19 @@ export function LoginPage() {
                     : 'Iniciar sesión'}
                 </button>
               </form>
+              <a
+  href="/api/auth/entra/start"
+  className="login-submit"
+  style={{
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 12,
+    textDecoration: 'none',
+  }}
+>
+  Iniciar sesión con Microsoft
+</a>
 
               <div className="login-security">
                 <ShieldCheck size={17} />
