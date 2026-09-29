@@ -1,14 +1,22 @@
 import {
   ChevronLeft,
   ChevronRight,
+  Clock3,
+  Headphones,
+  Home,
+  MonitorCog,
+  Settings,
   ShieldCheck,
+  Smartphone,
 } from 'lucide-react'
-import { NavLink } from 'react-router-dom'
-
+import {
+  NavLink,
+  useLocation,
+} from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
-import { navigationItems } from '../../config/navigation'
+import { useWorkspace } from '../../workspace/WorkspaceContext'
 
-interface SidebarProps {
+interface Props {
   collapsed: boolean
   onToggle: () => void
 }
@@ -16,18 +24,89 @@ interface SidebarProps {
 export function Sidebar({
   collapsed,
   onToggle,
-}: SidebarProps) {
+}: Props) {
   const { hasPermission } = useAuth()
+  const { activeWorkspaceId } =
+    useWorkspace()
+  const location = useLocation()
 
-  const allowedItems =
-  navigationItems.filter(
-    item =>
-      !item.permission
-      ||
-      hasPermission(
-        item.permission,
-      ),
-  )
+  const canHelpdesk =
+    hasPermission('helpdesk.view') ||
+    hasPermission('tickets.view') ||
+    hasPermission('tickets.create')
+
+  const canAdmin =
+    hasPermission('settings.view') ||
+    hasPermission('settings.manage') ||
+    hasPermission('users.view') ||
+    hasPermission('roles.view')
+
+  const modules = [
+    {
+      label: 'Inicio',
+      path: '/',
+      icon: Home,
+      enabled: true,
+      active:
+        location.pathname === '/',
+    },
+    {
+      label: 'Windows',
+      path:
+        '/dashboard?workspace=windows',
+      icon: MonitorCog,
+      enabled:
+        hasPermission(
+          'workspace.windows.view',
+        ),
+      active:
+        activeWorkspaceId ===
+        'windows',
+    },
+    {
+      label: 'Android',
+      path:
+        '/dashboard?workspace=android',
+      icon: Smartphone,
+      enabled:
+        hasPermission(
+          'workspace.android.view',
+        ),
+      active:
+        activeWorkspaceId ===
+        'android',
+    },
+    {
+      label: 'Mesa de ayuda',
+      path:
+        hasPermission(
+          'tickets.view',
+        ) ||
+        hasPermission(
+          'helpdesk.view',
+        )
+          ? '/helpdesk?workspace=helpdesk'
+          : '/my-support?workspace=helpdesk',
+      icon: Headphones,
+      enabled: canHelpdesk,
+      active:
+        activeWorkspaceId ===
+          'helpdesk' ||
+        location.pathname.startsWith(
+          '/my-support',
+        ),
+    },
+    {
+      label: 'Configuración',
+      path:
+        '/settings?workspace=administration',
+      icon: Settings,
+      enabled: canAdmin,
+      active:
+        activeWorkspaceId ===
+        'administration',
+    },
+  ].filter((item) => item.enabled)
 
   return (
     <aside
@@ -73,37 +152,66 @@ export function Sidebar({
       </div>
 
       <div className="sidebar__section-title">
-        {!collapsed && 'Administración'}
+        {!collapsed && 'Módulos'}
       </div>
 
-      <nav className="sidebar__nav">
-        {allowedItems.map((item) => {
+      <nav
+        className="sidebar__nav"
+        aria-label="Módulos principales"
+      >
+        {modules.map((item) => {
           const Icon = item.icon
 
           return (
             <NavLink
-              key={item.path}
+              key={item.label}
               to={item.path}
-              end={item.path === '/'}
+              end={
+                item.path === '/'
+              }
               title={
                 collapsed
                   ? item.label
                   : undefined
               }
-              className={({ isActive }) =>
-                isActive
+              className={
+                item.active
                   ? 'sidebar__link sidebar__link--active'
                   : 'sidebar__link'
               }
             >
               <Icon size={19} />
-
               {!collapsed && (
-                <span>{item.label}</span>
+                <span>
+                  {item.label}
+                </span>
               )}
             </NavLink>
           )
         })}
+
+        {canAdmin && (
+          <div
+            className="sidebar__link sidebar__link--future"
+            aria-label="Ponches: próximo módulo"
+            title={
+              collapsed
+                ? 'Ponches · Próximamente'
+                : undefined
+            }
+          >
+            <Clock3 size={19} />
+
+            {!collapsed && (
+              <span>
+                Ponches
+                <small>
+                  Próximamente
+                </small>
+              </span>
+            )}
+          </div>
+        )}
       </nav>
 
       <div className="sidebar__footer">
@@ -112,8 +220,12 @@ export function Sidebar({
 
           {!collapsed && (
             <div>
-              <strong>Sistema protegido</strong>
-              <span>TitanMDM Security</span>
+              <strong>
+                Sistema protegido
+              </strong>
+              <span>
+                TitanMDM Security
+              </span>
             </div>
           )}
         </div>

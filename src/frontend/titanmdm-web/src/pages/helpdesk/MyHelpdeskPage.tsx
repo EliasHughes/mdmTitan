@@ -1,5 +1,13 @@
-import { useCallback, useEffect, useState } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+import {
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+} from 'react'
+import {
+  useNavigate,
+  useParams,
+} from 'react-router-dom'
 import {
   ArrowLeft,
   Headphones,
@@ -9,6 +17,9 @@ import {
   Sparkles,
 } from 'lucide-react'
 import apiClient from '../../api/apiClient'
+import {
+  HelpdeskCategorySelect,
+} from './HelpdeskCategorySelect'
 import './HelpdeskPages.css'
 
 interface MyTicket {
@@ -31,7 +42,8 @@ interface MyComment {
   createdAtUtc: string
 }
 
-interface MyTicketDetails extends MyTicket {
+interface MyTicketDetails
+  extends MyTicket {
   comments: MyComment[]
   activity: {
     id: string
@@ -47,70 +59,122 @@ interface AssistantSuggestion {
   recommendations: string[]
 }
 
-const statusNames: Record<string, string> = {
-  new: 'Recibido',
-  open: 'En atención',
-  inprogress: 'En proceso',
-  pendinguser: 'Esperando tu respuesta',
-  resolved: 'Resuelto',
-  closed: 'Cerrado',
-}
+const statusNames:
+  Record<string, string> = {
+    new: 'Recibido',
+    open: 'En atención',
+    inprogress: 'En proceso',
+    pendinguser:
+      'Esperando tu respuesta',
+    resolved: 'Resuelto',
+    closed: 'Cerrado',
+  }
 
 function formatDate(value: string) {
   const date = new Date(value)
 
-  return Number.isNaN(date.getTime())
+  return Number.isNaN(
+    date.getTime(),
+  )
     ? '—'
-    : new Intl.DateTimeFormat('es-DO', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(date)
+    : new Intl.DateTimeFormat(
+        'es-DO',
+        {
+          dateStyle: 'medium',
+          timeStyle: 'short',
+        },
+      ).format(date)
 }
 
 export function MyHelpdeskPage() {
   const { ticketId } = useParams()
   const navigate = useNavigate()
 
-  const [tickets, setTickets] = useState<MyTicket[]>([])
-  const [ticket, setTicket] = useState<MyTicketDetails | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [showCreate, setShowCreate] = useState(false)
-  const [subject, setSubject] = useState('')
-  const [description, setDescription] = useState('')
-  const [category, setCategory] = useState('general')
-  const [reply, setReply] = useState('')
+  const [tickets, setTickets] =
+    useState<MyTicket[]>([])
+  const [ticket, setTicket] =
+    useState<
+      MyTicketDetails | null
+    >(null)
+  const [loading, setLoading] =
+    useState(true)
+  const [saving, setSaving] =
+    useState(false)
+  const [error, setError] =
+    useState('')
+  const [
+    showCreate,
+    setShowCreate,
+  ] = useState(false)
+  const [subject, setSubject] =
+    useState('')
+  const [
+    description,
+    setDescription,
+  ] = useState('')
+  const [
+    category,
+    setCategory,
+  ] = useState('general')
+  const [reply, setReply] =
+    useState('')
 
-  const [assistantEnabled, setAssistantEnabled] = useState(false)
-  const [suggesting, setSuggesting] = useState(false)
-  const [suggestion, setSuggestion] =
-    useState<AssistantSuggestion | null>(null)
-  const [suggestionError, setSuggestionError] = useState('')
+  const [
+    assistantEnabled,
+    setAssistantEnabled,
+  ] = useState(false)
+  const [
+    suggesting,
+    setSuggesting,
+  ] = useState(false)
+  const [
+    suggestion,
+    setSuggestion,
+  ] =
+    useState<
+      AssistantSuggestion | null
+    >(null)
+  const [
+    suggestionError,
+    setSuggestionError,
+  ] = useState('')
 
-  const load = useCallback(async () => {
-    setLoading(true)
-    setError('')
+  const load = useCallback(
+    async () => {
+      setLoading(true)
+      setError('')
 
-    try {
-      if (ticketId) {
-        const result = await apiClient.get<MyTicketDetails>(
-          `/my/helpdesk/tickets/${ticketId}`,
+      try {
+        if (ticketId) {
+          const result =
+            await apiClient.get<
+              MyTicketDetails
+            >(
+              `/my/helpdesk/tickets/${ticketId}`,
+            )
+          setTicket(result.data)
+        } else {
+          const result =
+            await apiClient.get<
+              MyTicket[]
+            >(
+              '/my/helpdesk/tickets',
+            )
+          setTickets(
+            result.data,
+          )
+          setTicket(null)
+        }
+      } catch {
+        setError(
+          'No pudimos cargar tus solicitudes.',
         )
-        setTicket(result.data)
-      } else {
-        const result = await apiClient.get<MyTicket[]>(
-          '/my/helpdesk/tickets',
-        )
-        setTickets(result.data)
-        setTicket(null)
+      } finally {
+        setLoading(false)
       }
-    } catch {
-      setError('No pudimos cargar tus solicitudes.')
-    } finally {
-      setLoading(false)
-    }
-  }, [ticketId])
+    },
+    [ticketId],
+  )
 
   useEffect(() => {
     void load()
@@ -121,21 +185,31 @@ export function MyHelpdeskPage() {
 
     let active = true
 
-    async function loadAssistantAccess() {
+    async function loadAssistant() {
       try {
-        const response = await apiClient.get<{ enabled: boolean }>(
-          '/helpdesk/operations/assistant/me',
-        )
+        const response =
+          await apiClient.get<{
+            enabled: boolean
+          }>(
+            '/helpdesk/operations/assistant/me',
+          )
 
         if (active) {
-          setAssistantEnabled(response.data.enabled === true)
+          setAssistantEnabled(
+            response.data
+              .enabled === true,
+          )
         }
       } catch {
-        if (active) setAssistantEnabled(false)
+        if (active) {
+          setAssistantEnabled(
+            false,
+          )
+        }
       }
     }
 
-    void loadAssistantAccess()
+    void loadAssistant()
 
     return () => {
       active = false
@@ -146,7 +220,9 @@ export function MyHelpdeskPage() {
     if (
       !assistantEnabled ||
       suggesting ||
-      description.trim().length < 15
+      description
+        .trim()
+        .length < 15
     ) {
       return
     }
@@ -156,15 +232,22 @@ export function MyHelpdeskPage() {
     setSuggestionError('')
 
     try {
-      const response = await apiClient.post<AssistantSuggestion>(
-        '/my/helpdesk/assistant/suggest',
-        {
-          subject: subject.trim(),
-          description: description.trim(),
-        },
-      )
+      const response =
+        await apiClient.post<
+          AssistantSuggestion
+        >(
+          '/my/helpdesk/assistant/suggest',
+          {
+            subject:
+              subject.trim(),
+            description:
+              description.trim(),
+          },
+        )
 
-      setSuggestion(response.data)
+      setSuggestion(
+        response.data,
+      )
     } catch {
       setSuggestionError(
         'El asistente no está disponible ahora. Puedes enviar tu solicitud sin sugerencias.',
@@ -174,50 +257,90 @@ export function MyHelpdeskPage() {
     }
   }
 
-  async function createTicket(event: React.FormEvent<HTMLFormElement>) {
+  async function createTicket(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault()
-    if (!subject.trim() || !description.trim() || saving) return
+
+    if (
+      !subject.trim() ||
+      !description.trim() ||
+      saving
+    ) {
+      return
+    }
 
     setSaving(true)
     setError('')
 
     try {
-      const response = await apiClient.post<{ id: string }>(
-        '/my/helpdesk/tickets',
-        {
-          subject: subject.trim(),
-          description: description.trim(),
-          type: 'incident',
-          priority: 'medium',
-          category: category.trim() || 'general',
-        },
-      )
+      const response =
+        await apiClient.post<{
+          id: string
+        }>(
+          '/my/helpdesk/tickets',
+          {
+            subject:
+              subject.trim(),
+            description:
+              description.trim(),
+            type:
+              'incident',
+            priority:
+              'medium',
+            category,
+          },
+        )
 
       setShowCreate(false)
-      navigate(`/my-support/${response.data.id}`)
+      navigate(
+        `/my-support/${response.data.id}?workspace=helpdesk`,
+      )
     } catch {
-      setError('No pudimos crear tu solicitud.')
+      setError(
+        'No pudimos crear tu solicitud.',
+      )
     } finally {
       setSaving(false)
     }
   }
 
-  async function sendReply(event: React.FormEvent<HTMLFormElement>) {
+  async function sendReply(
+    event: FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault()
-    if (!ticketId || !reply.trim() || saving) return
+
+    if (
+      !ticketId ||
+      !reply.trim() ||
+      saving
+    ) {
+      return
+    }
 
     setSaving(true)
     setError('')
 
     try {
-      const result = await apiClient.post<MyTicketDetails>(
-        `/my/helpdesk/tickets/${ticketId}/reply`,
-        { body: reply.trim() },
+      const result =
+        await apiClient.post<
+          MyTicketDetails
+        >(
+          `/my/helpdesk/tickets/${ticketId}/reply`,
+          {
+            body:
+              reply.trim(),
+          },
+        )
+
+      setTicket(
+        result.data,
       )
-      setTicket(result.data)
       setReply('')
     } catch {
-      setError('No pudimos publicar tu respuesta.')
+      setError(
+        'No pudimos publicar tu respuesta.',
+      )
     } finally {
       setSaving(false)
     }
@@ -227,14 +350,23 @@ export function MyHelpdeskPage() {
     return (
       <main className="titan-page helpdesk-page my-helpdesk">
         <button
+          type="button"
           className="my-helpdesk__back"
-          onClick={() => navigate('/my-support')}
+          onClick={() =>
+            navigate(
+              '/my-support?workspace=helpdesk',
+            )
+          }
         >
-          <ArrowLeft size={16} /> Mis solicitudes
+          <ArrowLeft size={16} />
+          Mis solicitudes
         </button>
 
         {error && (
-          <div className="helpdesk-inbox__error" role="alert">
+          <div
+            className="helpdesk-inbox__error"
+            role="alert"
+          >
             {error}
           </div>
         )}
@@ -245,87 +377,165 @@ export function MyHelpdeskPage() {
           </section>
         )}
 
-        {!loading && ticket && (
-          <>
-            <header className="my-helpdesk__hero">
-              <span className="helpdesk-inbox__eyebrow">
-                <Headphones size={15} /> Solicitud {ticket.number}
-              </span>
-              <h1>{ticket.subject}</h1>
-              <div className="my-helpdesk__meta">
-                <span
-                  className={`helpdesk-inbox__badge helpdesk-inbox__badge--${ticket.status}`}
-                >
-                  {statusNames[ticket.status] ?? ticket.status}
-                </span>
-                <span>Creada {formatDate(ticket.createdAtUtc)}</span>
-              </div>
-            </header>
-
-            <section className="my-helpdesk__card">
-              <h2>Tu solicitud</h2>
-              <p className="my-helpdesk__body">
-                {ticket.description}
-              </p>
-            </section>
-
-            <section className="my-helpdesk__card">
-              <h2>Conversación</h2>
-
-              {ticket.comments.length === 0 ? (
-                <p className="my-helpdesk__muted">
-                  Aún no hay respuestas.
-                </p>
-              ) : (
-                <div className="my-helpdesk__messages">
-                  {ticket.comments.map((item) => (
-                    <article key={item.id}>
-                      <div>
-                        <strong>{item.authorName}</strong>
-                        <time>
-                          {formatDate(item.createdAtUtc)}
-                        </time>
-                      </div>
-                      <p className="my-helpdesk__body">
-                        {item.body}
-                      </p>
-                    </article>
-                  ))}
-                </div>
-              )}
-
-              {!['resolved', 'closed'].includes(ticket.status) && (
-                <form
-                  className="my-helpdesk__form"
-                  onSubmit={(event) => void sendReply(event)}
-                >
-                  <label htmlFor="my-helpdesk-reply">
-                    Responder al equipo TIC
-                  </label>
-                  <textarea
-                    id="my-helpdesk-reply"
-                    required
-                    maxLength={4000}
-                    rows={4}
-                    value={reply}
-                    onChange={(event) =>
-                      setReply(event.target.value)
-                    }
-                    placeholder="Escribe información adicional o responde al técnico…"
+        {!loading &&
+          ticket && (
+            <>
+              <header className="my-helpdesk__hero">
+                <span className="helpdesk-inbox__eyebrow">
+                  <Headphones
+                    size={15}
                   />
-                  <button
-                    type="submit"
-                    className="helpdesk-ui-button helpdesk-ui-button--primary"
-                    disabled={saving || !reply.trim()}
+                  Solicitud{' '}
+                  {
+                    ticket.number
+                  }
+                </span>
+
+                <h1>
+                  {
+                    ticket.subject
+                  }
+                </h1>
+
+                <div className="my-helpdesk__meta">
+                  <span
+                    className={
+                      `helpdesk-inbox__badge ` +
+                      `helpdesk-inbox__badge--${ticket.status}`
+                    }
                   >
-                    <Send size={16} />
-                    {saving ? 'Enviando…' : 'Enviar respuesta'}
-                  </button>
-                </form>
-              )}
-            </section>
-          </>
-        )}
+                    {statusNames[
+                      ticket.status
+                    ] ??
+                      ticket.status}
+                  </span>
+
+                  <span>
+                    Creada{' '}
+                    {formatDate(
+                      ticket.createdAtUtc,
+                    )}
+                  </span>
+                </div>
+              </header>
+
+              <section className="my-helpdesk__card">
+                <h2>
+                  Tu solicitud
+                </h2>
+
+                <p className="my-helpdesk__body">
+                  {
+                    ticket.description
+                  }
+                </p>
+              </section>
+
+              <section className="my-helpdesk__card">
+                <h2>
+                  Conversación
+                </h2>
+
+                {ticket
+                  .comments
+                  .length === 0 ? (
+                  <p className="my-helpdesk__muted">
+                    Aún no hay
+                    respuestas.
+                  </p>
+                ) : (
+                  <div className="my-helpdesk__messages">
+                    {ticket.comments.map(
+                      (item) => (
+                        <article
+                          key={
+                            item.id
+                          }
+                        >
+                          <div>
+                            <strong>
+                              {
+                                item.authorName
+                              }
+                            </strong>
+
+                            <time>
+                              {formatDate(
+                                item.createdAtUtc,
+                              )}
+                            </time>
+                          </div>
+
+                          <p className="my-helpdesk__body">
+                            {
+                              item.body
+                            }
+                          </p>
+                        </article>
+                      ),
+                    )}
+                  </div>
+                )}
+
+                {![
+                  'resolved',
+                  'closed',
+                ].includes(
+                  ticket.status,
+                ) && (
+                  <form
+                    className="my-helpdesk__form"
+                    onSubmit={(
+                      event,
+                    ) =>
+                      void sendReply(
+                        event,
+                      )
+                    }
+                  >
+                    <label htmlFor="my-helpdesk-reply">
+                      Responder
+                      al equipo TIC
+                    </label>
+
+                    <textarea
+                      id="my-helpdesk-reply"
+                      required
+                      maxLength={4000}
+                      rows={4}
+                      value={reply}
+                      onChange={(
+                        event,
+                      ) =>
+                        setReply(
+                          event.target.value,
+                        )
+                      }
+                      placeholder="Escribe información adicional…"
+                    />
+
+                    <button
+                      type="submit"
+                      className="helpdesk-ui-button helpdesk-ui-button--primary"
+                      disabled={
+                        saving ||
+                        !reply.trim()
+                      }
+                    >
+                      <Send
+                        size={
+                          16
+                        }
+                      />
+                      {saving
+                        ? 'Enviando…'
+                        : 'Enviar respuesta'}
+                    </button>
+                  </form>
+                )}
+              </section>
+            </>
+          )}
       </main>
     )
   }
@@ -334,30 +544,48 @@ export function MyHelpdeskPage() {
     <main className="titan-page helpdesk-page my-helpdesk">
       <header className="my-helpdesk__hero">
         <span className="helpdesk-inbox__eyebrow">
-          <Headphones size={15} /> Mi centro de ayuda
+          <Headphones size={15} />
+          Mi centro de ayuda
         </span>
+
         <div className="my-helpdesk__heading">
           <div>
-            <h1>Mis solicitudes</h1>
+            <h1>
+              Mis solicitudes
+            </h1>
+
             <p>
-              Consulta el progreso de tus casos y comunícate con TIC.
+              Consulta el progreso
+              y comunícate con TIC.
             </p>
           </div>
+
           <button
+            type="button"
             className="helpdesk-ui-button helpdesk-ui-button--primary"
             onClick={() => {
-              setSuggestion(null)
-              setSuggestionError('')
-              setShowCreate(true)
+              setSuggestion(
+                null,
+              )
+              setSuggestionError(
+                '',
+              )
+              setShowCreate(
+                true,
+              )
             }}
           >
-            <Plus size={16} /> Nueva solicitud
+            <Plus size={16} />
+            Nueva solicitud
           </button>
         </div>
       </header>
 
       {error && (
-        <div className="helpdesk-inbox__error" role="alert">
+        <div
+          className="helpdesk-inbox__error"
+          role="alert"
+        >
           {error}
         </div>
       )}
@@ -369,37 +597,71 @@ export function MyHelpdeskPage() {
           <p className="my-helpdesk__muted">
             Cargando solicitudes…
           </p>
-        ) : tickets.length === 0 ? (
+        ) : tickets.length ===
+          0 ? (
           <div className="my-helpdesk__empty">
-            <MessageSquare size={26} />
-            <strong>Aún no tienes solicitudes</strong>
+            <MessageSquare
+              size={26}
+            />
+
+            <strong>
+              Aún no tienes
+              solicitudes
+            </strong>
+
             <span>
-              Cuando necesites ayuda, crea tu primer caso aquí.
+              Crea aquí tu primer
+              caso cuando necesites
+              ayuda.
             </span>
           </div>
         ) : (
           <div className="my-helpdesk__list">
-            {tickets.map((item) => (
-              <button
-                key={item.id}
-                onClick={() =>
-                  navigate(`/my-support/${item.id}`)
-                }
-              >
-                <span>
-                  <small>{item.number}</small>
-                  <strong>{item.subject}</strong>
-                  <small>
-                    {formatDate(item.createdAtUtc)}
-                  </small>
-                </span>
-                <span
-                  className={`helpdesk-inbox__badge helpdesk-inbox__badge--${item.status}`}
+            {tickets.map(
+              (item) => (
+                <button
+                  type="button"
+                  key={item.id}
+                  onClick={() =>
+                    navigate(
+                      `/my-support/${item.id}?workspace=helpdesk`,
+                    )
+                  }
                 >
-                  {statusNames[item.status] ?? item.status}
-                </span>
-              </button>
-            ))}
+                  <span>
+                    <small>
+                      {
+                        item.number
+                      }
+                    </small>
+
+                    <strong>
+                      {
+                        item.subject
+                      }
+                    </strong>
+
+                    <small>
+                      {formatDate(
+                        item.createdAtUtc,
+                      )}
+                    </small>
+                  </span>
+
+                  <span
+                    className={
+                      `helpdesk-inbox__badge ` +
+                      `helpdesk-inbox__badge--${item.status}`
+                    }
+                  >
+                    {statusNames[
+                      item.status
+                    ] ??
+                      item.status}
+                  </span>
+                </button>
+              ),
+            )}
           </div>
         )}
       </section>
@@ -407,14 +669,20 @@ export function MyHelpdeskPage() {
       {showCreate && (
         <div
           className="helpdesk-inbox__overlay"
-          onMouseDown={() => setShowCreate(false)}
+          onMouseDown={() =>
+            setShowCreate(
+              false,
+            )
+          }
         >
           <section
             className="helpdesk-inbox__dialog"
             role="dialog"
             aria-modal="true"
             aria-labelledby="my-ticket-title"
-            onMouseDown={(event) =>
+            onMouseDown={(
+              event,
+            ) =>
               event.stopPropagation()
             }
           >
@@ -423,23 +691,40 @@ export function MyHelpdeskPage() {
                 <span className="helpdesk-inbox__eyebrow">
                   Centro de ayuda
                 </span>
+
                 <h2 id="my-ticket-title">
                   Nueva solicitud
                 </h2>
+
                 <p>
-                  Cuéntanos qué ocurre para asignar el caso al equipo adecuado.
+                  Cuéntanos qué ocurre
+                  para dirigir el caso
+                  al equipo adecuado.
                 </p>
               </div>
+
               <button
                 type="button"
                 aria-label="Cerrar"
-                onClick={() => setShowCreate(false)}
+                onClick={() =>
+                  setShowCreate(
+                    false,
+                  )
+                }
               >
                 ×
               </button>
             </header>
 
-            <form onSubmit={(event) => void createTicket(event)}>
+            <form
+              onSubmit={(
+                event,
+              ) =>
+                void createTicket(
+                  event,
+                )
+              }
+            >
               <label>
                 Asunto
                 <input
@@ -447,9 +732,15 @@ export function MyHelpdeskPage() {
                   required
                   maxLength={250}
                   value={subject}
-                  onChange={(event) => {
-                    setSubject(event.target.value)
-                    setSuggestion(null)
+                  onChange={(
+                    event,
+                  ) => {
+                    setSubject(
+                      event.target.value,
+                    )
+                    setSuggestion(
+                      null,
+                    )
                   }}
                   placeholder="¿Qué necesitas resolver?"
                 />
@@ -461,70 +752,105 @@ export function MyHelpdeskPage() {
                   required
                   maxLength={4000}
                   rows={6}
-                  value={description}
-                  onChange={(event) => {
-                    setDescription(event.target.value)
-                    setSuggestion(null)
+                  value={
+                    description
+                  }
+                  onChange={(
+                    event,
+                  ) => {
+                    setDescription(
+                      event.target.value,
+                    )
+                    setSuggestion(
+                      null,
+                    )
                   }}
                   placeholder="Indica qué ocurre y cómo afecta tu trabajo"
                 />
               </label>
 
-              <label>
-                Categoría
-                <input
-                  maxLength={80}
-                  value={category}
-                  onChange={(event) =>
-                    setCategory(event.target.value)
-                  }
-                />
-              </label>
+              <HelpdeskCategorySelect
+                id="my-helpdesk-category"
+                value={category}
+                onChange={
+                  setCategory
+                }
+                disabled={
+                  saving
+                }
+              />
 
               {assistantEnabled && (
-                <div
-                  style={{
-                    padding: '14px',
-                    border: '1px solid #cbd5e1',
-                    borderRadius: '10px',
-                    marginBottom: '16px',
-                  }}
-                >
+                <div className="my-helpdesk__assistant">
                   <button
                     type="button"
                     className="helpdesk-ui-button helpdesk-ui-button--secondary"
                     disabled={
                       suggesting ||
-                      description.trim().length < 15
+                      description
+                        .trim()
+                        .length < 15
                     }
-                    onClick={() => void requestSuggestion()}
+                    onClick={() =>
+                      void requestSuggestion()
+                    }
                   >
-                    <Sparkles size={16} />
+                    <Sparkles
+                      size={16}
+                    />
                     {suggesting
                       ? 'Preparando sugerencia…'
                       : 'Pedir sugerencia al asistente'}
                   </button>
 
                   {suggestionError && (
-                    <p role="alert">{suggestionError}</p>
+                    <p role="alert">
+                      {
+                        suggestionError
+                      }
+                    </p>
                   )}
 
                   {suggestion && (
                     <div aria-live="polite">
                       <p>
-                        <strong>Asunto sugerido:</strong>{' '}
-                        {suggestion.suggestedSubject || 'Sin cambio'}
-                      </p>
-                      <p>
-                        <strong>Categoría sugerida:</strong>{' '}
-                        {suggestion.suggestedCategory}
+                        <strong>
+                          Asunto sugerido:
+                        </strong>{' '}
+                        {suggestion
+                          .suggestedSubject ||
+                          'Sin cambio'}
                       </p>
 
-                      {suggestion.recommendations.length > 0 && (
+                      <p>
+                        <strong>
+                          Categoría sugerida:
+                        </strong>{' '}
+                        {
+                          suggestion
+                            .suggestedCategory
+                        }
+                      </p>
+
+                      {suggestion
+                        .recommendations
+                        .length >
+                        0 && (
                         <ul>
                           {suggestion.recommendations.map(
-                            (item, index) => (
-                              <li key={index}>{item}</li>
+                            (
+                              item,
+                              index,
+                            ) => (
+                              <li
+                                key={
+                                  index
+                                }
+                              >
+                                {
+                                  item
+                                }
+                              </li>
                             ),
                           )}
                         </ul>
@@ -534,22 +860,32 @@ export function MyHelpdeskPage() {
                         type="button"
                         className="helpdesk-ui-button helpdesk-ui-button--secondary"
                         onClick={() => {
-                          if (suggestion.suggestedSubject) {
+                          if (
+                            suggestion.suggestedSubject
+                          ) {
                             setSubject(
                               suggestion.suggestedSubject,
                             )
                           }
+
                           setCategory(
-                            suggestion.suggestedCategory,
+                            suggestion.suggestedCategory ||
+                              'general',
                           )
-                          setSuggestion(null)
+                          setSuggestion(
+                            null,
+                          )
                         }}
                       >
-                        Aplicar asunto y categoría
+                        Aplicar sugerencia
                       </button>
+
                       <p>
-                        Revisa la sugerencia antes de enviar.
-                        El asistente no crea tickets automáticamente.
+                        Revisa los datos
+                        antes de enviar.
+                        El asistente
+                        no crea el ticket
+                        automáticamente.
                       </p>
                     </div>
                   )}
@@ -560,14 +896,21 @@ export function MyHelpdeskPage() {
                 <button
                   type="button"
                   className="helpdesk-ui-button helpdesk-ui-button--secondary"
-                  onClick={() => setShowCreate(false)}
+                  onClick={() =>
+                    setShowCreate(
+                      false,
+                    )
+                  }
                 >
                   Cancelar
                 </button>
+
                 <button
                   type="submit"
                   className="helpdesk-ui-button helpdesk-ui-button--primary"
-                  disabled={saving}
+                  disabled={
+                    saving
+                  }
                 >
                   <Plus size={16} />
                   {saving

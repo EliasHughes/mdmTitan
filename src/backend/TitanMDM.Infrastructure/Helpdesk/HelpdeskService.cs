@@ -187,97 +187,165 @@ public sealed class HelpdeskService : IHelpdeskService
                 cancellationToken);
     }
 
-    public async Task<HelpdeskTicketDetailsDto> CreateTicketAsync(
-        Guid organizationId,
-        Guid actorUserId,
-        CreateHelpdeskTicketRequest request,
-        CancellationToken cancellationToken = default)
+   public async Task<HelpdeskTicketDetailsDto> CreateTicketAsync(
+    Guid organizationId,
+    Guid actorUserId,
+    CreateHelpdeskTicketRequest request,
+    CancellationToken cancellationToken = default)
+{
+    if (string.IsNullOrWhiteSpace(request.Subject) ||
+        request.Subject.Trim().Length > 250)
     {
-        if (string.IsNullOrWhiteSpace(request.Subject) ||
-            request.Subject.Trim().Length > 250)
-        {
-            throw new ArgumentException(
-                "El asunto debe tener entre 1 y 250 caracteres.");
-        }
+        throw new ArgumentException(
+            "El asunto debe tener entre 1 y 250 caracteres.");
+    }
 
-        if (request.Description?.Length > 4000)
-        {
-            throw new ArgumentException(
-                "La descripción excede 4000 caracteres.");
-        }
+    if (request.Description?.Length > 4000)
+    {
+        throw new ArgumentException(
+            "La descripción excede 4000 caracteres.");
+    }
 
-        var requesterId =
-            request.RequesterUserId ?? actorUserId;
+    var requesterId =
+        request.RequesterUserId ?? actorUserId;
 
-        var requesterExists = await _db.Users.AnyAsync(
-            x => x.Id == requesterId &&
-                 x.OrganizationId == organizationId &&
-                 x.IsActive,
+    var requesterExists = await _db.Users.AnyAsync(
+        x => x.Id == requesterId &&
+             x.OrganizationId == organizationId &&
+             x.IsActive,
+        cancellationToken);
+
+    if (!requesterExists)
+    {
+        throw new ArgumentException(
+            "El solicitante no existe o no pertenece " +
+            "a esta organización.");
+    }
+
+    if (request.DeviceId.HasValue)
+    {
+        var deviceExists = await _db.Devices.AnyAsync(
+            x => x.Id == request.DeviceId.Value &&
+                 x.OrganizationId == organizationId,
             cancellationToken);
 
-        if (!requesterExists)
+        if (!deviceExists)
         {
             throw new ArgumentException(
-                "El solicitante no existe o no pertenece " +
-                "a esta organización.");
+                "El dispositivo no pertenece a esta organización.");
         }
+    }
 
-        if (request.DeviceId.HasValue)
+    var source = string.IsNullOrWhiteSpace(
+        request.Source)
+        ? "console"
+        : request.Source.Trim().ToLowerInvariant();
+
+    var requestedCategory =
+        string.IsNullOrWhiteSpace(
+            request.Category)
+            ? "general"
+            : request.Category
+                .Trim()
+                .ToLowerInvariant();
+
+    if (requestedCategory.Length > 80)
+    {
+        throw new ArgumentException(
+            "La categoría no puede superar 80 caracteres.");
+    }
+
+    var rawCategories = await _db.HelpdeskTeams
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.IsActive)
+        .Select(x => x.Categories)
+        .ToListAsync(cancellationToken);
+
+    var categories = rawCategories
+        .SelectMany(value =>
+            (value ?? string.Empty)
+                .Split(
+                    '|',
+                    StringSplitOptions
+                        .RemoveEmptyEntries |
+                    StringSplitOptions
+                        .TrimEntries))
+        .Select(value =>
+            value.Trim().ToLowerInvariant())
+        .Where(value =>
+            value.Length is > 0 and <= 80)
+        .Append("general")
+        .ToHashSet(
+            StringComparer.OrdinalIgnoreCase);
+
+    var category = requestedCategory;
+
+    if (!categories.Contains(category))
+    {
+        if (source == "email")
         {
-            var deviceExists = await _db.Devices.AnyAsync(
-                x => x.Id == request.DeviceId.Value &&
-                     x.OrganizationId == organizationId,
-                cancellationToken);
-
-            if (!deviceExists)
-            {
-                throw new ArgumentException(
-                    "El dispositivo no pertenece a esta organización.");
-            }
+            // Todos los correos crean ticket.
+            // Una clasificación desconocida queda
+            // para revisión en la categoría general.
+            category = "general";
         }
-
-        var number =
-            $"HD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]
-                .ToUpperInvariant();
-
-        var ticket = new HelpdeskTicket(
-            organizationId,
-            number,
-            request.Subject.Trim(),
-            request.Description ?? string.Empty,
-            request.Type ?? "incident",
-            request.Priority ?? "medium",
-            request.Category ?? "general",
-            request.Source ?? "console",
-            requesterId,
-            request.DeviceId,
-            null);
-
-        if (!string.IsNullOrWhiteSpace(request.EntraObjectId))
+        else
         {
-            var directoryUser = await _db.EntraDirectoryUsers
+            throw new ArgumentException(
+                "Selecciona una categoría activa " +
+                "del catálogo de Helpdesk.");
+        }
+    }
+
+    var number =
+        $"HD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]
+            .ToUpperInvariant();
+
+    var ticket = new HelpdeskTicket(
+        organizationId,
+        number,
+        request.Subject.Trim(),
+        request.Description ?? string.Empty,
+        request.Type ?? "incident",
+        request.Priority ?? "medium",
+        category,
+        source,
+        requesterId,
+        request.DeviceId,
+        null);
+
+    if (!string.IsNullOrWhiteSpace(
+            request.EntraObjectId))
+    {
+        var directoryUser =
+            await _db.EntraDirectoryUsers
                 .AsNoTracking()
                 .FirstOrDefaultAsync(
-                    x => x.OrganizationId == organizationId &&
-                         x.EntraObjectId ==
-                         request.EntraObjectId,
+                    x =>
+                        x.OrganizationId ==
+                            organizationId &&
+                        x.EntraObjectId ==
+                            request.EntraObjectId,
                     cancellationToken);
 
-            if (directoryUser is null)
-            {
-                throw new ArgumentException(
-                    "El solicitante de Entra ID no existe " +
-                    "en esta organización.");
-            }
-
-            ticket.LinkEntraRequester(
-                directoryUser.EntraObjectId,
-                directoryUser.UserPrincipalName);
+        if (directoryUser is null)
+        {
+            throw new ArgumentException(
+                "El solicitante de Entra ID no existe " +
+                "en esta organización.");
         }
 
-        var now = DateTime.UtcNow;
+        ticket.LinkEntraRequester(
+            directoryUser.EntraObjectId,
+            directoryUser.UserPrincipalName);
+    }
 
-        var resolutionHours = ticket.Priority switch
+    var now = DateTime.UtcNow;
+
+    var resolutionHours =
+        ticket.Priority switch
         {
             "urgent" => 4,
             "high" => 8,
@@ -285,77 +353,93 @@ public sealed class HelpdeskService : IHelpdeskService
             _ => 24
         };
 
-        ticket.ApplySla(
-            now.AddHours(
-                Math.Max(1, resolutionHours / 4)),
-            now.AddHours(resolutionHours));
+    ticket.ApplySla(
+        now.AddHours(
+            Math.Max(
+                1,
+                resolutionHours / 4)),
+        now.AddHours(
+            resolutionHours));
 
-        _db.HelpdeskTickets.Add(ticket);
+    _db.HelpdeskTickets.Add(ticket);
+
+    _db.HelpdeskTicketEvents.Add(
+        new HelpdeskTicketEvent(
+            organizationId,
+            ticket.Id,
+            actorUserId,
+            "created",
+            $"Ticket {ticket.Number} creado."));
+
+    if (category != requestedCategory)
+    {
+        _db.HelpdeskTicketEvents.Add(
+            new HelpdeskTicketEvent(
+                organizationId,
+                ticket.Id,
+                actorUserId,
+                "category_fallback",
+                "La categoría recibida por correo " +
+                "no estaba configurada. Se utilizó general."));
+    }
+
+    // En un correo externo, el usuario técnico
+    // del buzón no representa la ubicación real
+    // de la persona que escribió.
+    var externalEmail =
+        source == "email" &&
+        requesterId == actorUserId;
+
+    var routing = externalEmail
+        ? null
+        : await FindAutomaticAssigneeAsync(
+            organizationId,
+            requesterId,
+            ticket.Category,
+            cancellationToken);
+
+    if (routing is not null)
+    {
+        ticket.Assign(routing.UserId);
 
         _db.HelpdeskTicketEvents.Add(
             new HelpdeskTicketEvent(
                 organizationId,
                 ticket.Id,
                 actorUserId,
-                "created",
-                $"Ticket {ticket.Number} creado."));
-
-        // Para un remitente externo, el usuario técnico del buzón
-        // no indica la ubicación real del solicitante.
-        var externalEmail =
-            string.Equals(
-                ticket.Source,
-                "email",
-                StringComparison.OrdinalIgnoreCase) &&
-            requesterId == actorUserId;
-
-        var routing = externalEmail
-            ? null
-            : await FindAutomaticAssigneeAsync(
-                organizationId,
-                requesterId,
-                ticket.Category,
-                cancellationToken);
-
-        if (routing is not null)
-        {
-            ticket.Assign(routing.UserId);
-
-            _db.HelpdeskTicketEvents.Add(
-                new HelpdeskTicketEvent(
-                    organizationId,
-                    ticket.Id,
-                    actorUserId,
-                    "auto_assigned",
-                    $"Asignación automática: categoría " +
-                    $"{ticket.Category}, grupo {routing.TeamName}, " +
-                    $"zona {routing.ZoneName}, " +
-                    $"técnico {routing.UserName}."));
-        }
-        else
-        {
-            var explanation = externalEmail
-                ? "Remitente externo sin ubicación confirmada."
-                : "No hay un técnico disponible con cobertura, " +
-                  "categoría y capacidad para la ubicación " +
-                  "del solicitante.";
-
-            _db.HelpdeskTicketEvents.Add(
-                new HelpdeskTicketEvent(
-                    organizationId,
-                    ticket.Id,
-                    actorUserId,
-                    "routing_pending",
-                    $"Sin asignación automática: {explanation}"));
-        }
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return (await GetTicketAsync(
-            organizationId,
-            ticket.Id,
-            cancellationToken))!;
+                "auto_assigned",
+                "Asignación automática: categoría " +
+                $"{ticket.Category}, " +
+                $"grupo {routing.TeamName}, " +
+                $"zona {routing.ZoneName}, " +
+                $"técnico {routing.UserName}."));
     }
+    else
+    {
+        var explanation = externalEmail
+            ? "Remitente externo sin ubicación confirmada."
+            : "No hay un técnico disponible con " +
+              "cobertura, categoría y capacidad " +
+              "para la ubicación del solicitante.";
+
+        _db.HelpdeskTicketEvents.Add(
+            new HelpdeskTicketEvent(
+                organizationId,
+                ticket.Id,
+                actorUserId,
+                "routing_pending",
+                "Sin asignación automática: " +
+                explanation));
+    }
+
+    await _db.SaveChangesAsync(
+        cancellationToken);
+
+    return (await GetTicketAsync(
+        organizationId,
+        ticket.Id,
+        cancellationToken))!;
+}
 
     public async Task<HelpdeskTicketDetailsDto?> AddCommentAsync(
         Guid organizationId,

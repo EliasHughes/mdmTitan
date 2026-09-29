@@ -1401,3 +1401,22 @@ html[data-workspace="helpdesk"] {
       16px;
   }
 }
+
+.sidebar__link--future {
+  opacity: 0.58;
+  cursor: default;
+}
+
+.sidebar__link--future:hover {
+  color: rgba(219, 228, 248, 0.78);
+  background: transparent;
+  transform: none;
+}
+
+.sidebar__link--future small {
+  display: block;
+  margin-top: 2px;
+  color: rgba(219, 228, 248, 0.58);
+  font-size: 9px;
+  font-weight: 500;
+}

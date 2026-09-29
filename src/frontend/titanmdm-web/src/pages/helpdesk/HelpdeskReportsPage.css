@@ -1,0 +1,261 @@
+.hd-report {
+  width: min(100%, 1540px);
+  margin-inline: auto;
+  color: #20304b;
+}
+
+.hd-report *,
+.hd-report *::before,
+.hd-report *::after {
+  box-sizing: border-box;
+}
+
+.hd-report h1,
+.hd-report h2,
+.hd-report p {
+  margin: 0;
+}
+
+.hd-report__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 18px;
+  padding: 25px 28px;
+  border: 1px solid #dfe7f3;
+  border-radius: 20px;
+  background:
+    linear-gradient(
+      115deg,
+      #fff,
+      #f1f5ff
+    );
+}
+
+.hd-report__header h1 {
+  margin-top: 8px;
+  font-size: clamp(
+    27px,
+    2.4vw,
+    35px
+  );
+  letter-spacing: -0.04em;
+}
+
+.hd-report__header p {
+  max-width: 650px;
+  margin-top: 7px;
+  color: #6b7991;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.hd-report__header a {
+  text-decoration: none;
+}
+
+.hd-report__filters {
+  display: flex;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 16px;
+  border: 1px solid #e1e8f3;
+  border-radius: 16px;
+  background: #fff;
+}
+
+.hd-report__filters label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #61708b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hd-report__filters input {
+  min-height: 40px;
+  padding: 8px 11px;
+  border: 1px solid #dae3f0;
+  border-radius: 10px;
+  color: #263650;
+  background: #fff;
+  font: inherit;
+}
+
+.hd-report__metrics {
+  display: grid;
+  grid-template-columns:
+    repeat(4, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.hd-report__metric {
+  display: grid;
+  gap: 9px;
+  min-height: 126px;
+  padding: 19px;
+  border: 1px solid #e1e8f3;
+  border-radius: 17px;
+  background: #fff;
+  box-shadow: 0 6px 22px
+    rgb(31 54 101 / 5%);
+}
+
+.hd-report__metric > span {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  border-radius: 12px;
+  color: #4269dc;
+  background: #eaf0ff;
+}
+
+.hd-report__metric strong {
+  font-size: 27px;
+  line-height: 1;
+}
+
+.hd-report__metric small {
+  color: #738199;
+  font-size: 12px;
+}
+
+.hd-report__metric--violet > span {
+  color: #7958c9;
+  background: #f0eaff;
+}
+
+.hd-report__metric--amber > span {
+  color: #ad741d;
+  background: #fff2dd;
+}
+
+.hd-report__metric--red > span {
+  color: #bd4f55;
+  background: #ffecef;
+}
+
+.hd-report__timing {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 13px;
+}
+
+.hd-report__timing article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 16px 19px;
+  border: 1px solid #e1e8f3;
+  border-radius: 15px;
+  background: #fff;
+}
+
+.hd-report__timing span {
+  color: #728099;
+  font-size: 12px;
+}
+
+.hd-report__timing strong {
+  font-size: 19px;
+}
+
+.hd-report__grid {
+  display: grid;
+  grid-template-columns:
+    repeat(2, minmax(0, 1fr));
+  gap: 14px;
+}
+
+.hd-report__chart-card,
+.hd-report__agents {
+  min-width: 0;
+  padding: 20px;
+  border: 1px solid #e1e8f3;
+  border-radius: 18px;
+  background: #fff;
+  box-shadow: 0 6px 22px
+    rgb(31 54 101 / 5%);
+}
+
+.hd-report__chart-card h2,
+.hd-report__agents h2 {
+  font-size: 16px;
+}
+
+.hd-report__chart-card header p,
+.hd-report__agents header p {
+  margin-top: 5px;
+  color: #78859a;
+  font-size: 12px;
+}
+
+.hd-report__chart {
+  width: 100%;
+  height: 300px;
+  margin-top: 14px;
+}
+
+.hd-report__chart-card--wide
+.hd-report__chart {
+  height: 280px;
+}
+
+.hd-report__empty {
+  display: grid;
+  place-items: center;
+  min-height: 150px;
+  color: #8794a9;
+  font-size: 13px;
+  text-align: center;
+}
+
+.hd-report__table-wrap {
+  overflow-x: auto;
+  margin-top: 16px;
+}
+
+.hd-report__table-wrap table {
+  width: 100%;
+  border-collapse: collapse;
+  text-align: left;
+}
+
+.hd-report__table-wrap th,
+.hd-report__table-wrap td {
+  padding: 12px 14px;
+  border-bottom: 1px solid #e9edf5;
+  font-size: 12px;
+}
+
+.hd-report__table-wrap th {
+  color: #77859a;
+  background: #f7f9fd;
+}
+
+@media (max-width: 980px) {
+  .hd-report__metrics {
+    grid-template-columns:
+      repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 720px) {
+  .hd-report__grid,
+  .hd-report__timing,
+  .hd-report__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .hd-report__header,
+  .hd-report__chart-card,
+  .hd-report__agents {
+    padding: 17px;
+  }
+}
