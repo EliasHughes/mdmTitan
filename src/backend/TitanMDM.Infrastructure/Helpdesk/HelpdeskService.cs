@@ -513,222 +513,233 @@ public sealed class HelpdeskService : IHelpdeskService
             cancellationToken);
     }
 
-    private async Task<RoutingCandidate?> FindAutomaticAssigneeAsync(
-        Guid organizationId,
-        Guid requesterId,
-        string category,
-        CancellationToken cancellationToken)
-    {
-        var userZones = await _db.HelpdeskUserZones
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.UserId == requesterId)
-            .Select(x => x.ZoneId)
-            .ToListAsync(cancellationToken);
-
-        // Sin una zona única no se debe adivinar la ubicación.
-        if (userZones.Count != 1)
-            return null;
-
-        var zones = await _db.HelpdeskZones
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.IsActive)
-            .Select(x => new
-            {
-                x.Id,
-                x.Name,
-                x.ParentZoneId
-            })
-            .ToListAsync(cancellationToken);
-
-        var byId = zones.ToDictionary(x => x.Id);
-        var zoneChain = new List<Guid>();
-        var current = userZones[0];
-
-        // Primero la ubicación exacta; después sus zonas superiores.
-        for (var depth = 0; depth < 12; depth++)
-        {
-            if (!byId.TryGetValue(
-                    current,
-                    out var zone) ||
-                zoneChain.Contains(current))
-            {
-                break;
-            }
-
-            zoneChain.Add(current);
-
-            if (!zone.ParentZoneId.HasValue)
-                break;
-
-            current = zone.ParentZoneId.Value;
-        }
-
-        if (zoneChain.Count == 0)
-            return null;
-
-        var coverage = await _db.HelpdeskTeamZones
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                zoneChain.Contains(x.ZoneId))
-            .ToListAsync(cancellationToken);
-
-        if (coverage.Count == 0)
-            return null;
-
-        // La cobertura más específica tiene preferencia.
-        var bestDistance = coverage.Min(
-            x => zoneChain.IndexOf(x.ZoneId));
-
-        var matching = coverage
-            .Where(
-                x => zoneChain.IndexOf(x.ZoneId) ==
-                     bestDistance)
-            .ToList();
-
-        var teamIds = matching
-            .Select(x => x.TeamId)
-            .Distinct()
-            .ToArray();
-
-        var teams = await _db.HelpdeskTeams
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.IsActive &&
-                teamIds.Contains(x.Id))
-            .ToDictionaryAsync(
-                x => x.Id,
-                cancellationToken);
-
-        if (teams.Count == 0)
-            return null;
-
-        // Un grupo especializado tiene preferencia. Cuando no existe
-        // uno para esta categoría, usamos un grupo general.
-        var specializedTeamIds = teams.Values
-            .Where(x => x.HandlesCategory(category))
-            .Select(x => x.Id)
-            .ToHashSet();
-
-        var allowedTeamIds =
-            specializedTeamIds.Count > 0
-                ? specializedTeamIds
-                : teams.Values
-                    .Where(x =>
-                        string.IsNullOrWhiteSpace(
-                            x.Categories))
-                    .Select(x => x.Id)
-                    .ToHashSet();
-
-        if (allowedTeamIds.Count == 0)
-            return null;
-
-        matching = matching
-            .Where(x =>
-                allowedTeamIds.Contains(x.TeamId))
-            .ToList();
-
-        if (matching.Count == 0)
-            return null;
-
-        var eligibleUserIds = await (
-            from userRole in _db.UserRoles.AsNoTracking()
-            join rolePermission in
-                _db.RolePermissions.AsNoTracking()
-                on userRole.RoleId equals
-                rolePermission.RoleId
-            join permission in
-                _db.Permissions.AsNoTracking()
-                on rolePermission.PermissionId equals
-                permission.Id
-            where permission.IsActive &&
-                  permission.Code == "tickets.comment"
-            select userRole.UserId
-        )
+   private async Task<RoutingCandidate?> FindAutomaticAssigneeAsync(
+    Guid organizationId,
+    Guid requesterId,
+    string category,
+    CancellationToken cancellationToken)
+{
+    var userZones = await _db.HelpdeskUserZones
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.UserId == requesterId)
+        .Select(x => x.ZoneId)
         .Distinct()
         .ToListAsync(cancellationToken);
 
-        var members = await _db.HelpdeskTeamMembers
-            .AsNoTracking()
+    // La ubicación debe ser inequívoca. No asignamos una zona por intuición.
+    if (userZones.Count != 1)
+        return null;
+
+    var zones = await _db.HelpdeskZones
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.IsActive)
+        .Select(x => new
+        {
+            x.Id,
+            x.Name,
+            x.ParentZoneId
+        })
+        .ToListAsync(cancellationToken);
+
+    var zonesById = zones.ToDictionary(x => x.Id);
+    var zoneChain = new List<Guid>();
+    var currentZoneId = userZones[0];
+
+    // Índice 0 = zona exacta; índices posteriores = zonas superiores.
+    for (var depth = 0; depth < 12; depth++)
+    {
+        if (!zonesById.TryGetValue(currentZoneId, out var zone) ||
+            zoneChain.Contains(currentZoneId))
+            break;
+
+        zoneChain.Add(currentZoneId);
+
+        if (!zone.ParentZoneId.HasValue)
+            break;
+
+        currentZoneId = zone.ParentZoneId.Value;
+    }
+
+    if (zoneChain.Count == 0)
+        return null;
+
+    var coverage = await _db.HelpdeskTeamZones
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            zoneChain.Contains(x.ZoneId))
+        .ToListAsync(cancellationToken);
+
+    if (coverage.Count == 0)
+        return null;
+
+    var coveredTeamIds = coverage
+        .Select(x => x.TeamId)
+        .Distinct()
+        .ToArray();
+
+    var teams = await _db.HelpdeskTeams
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.IsActive &&
+            coveredTeamIds.Contains(x.Id))
+        .ToDictionaryAsync(x => x.Id, cancellationToken);
+
+    if (teams.Count == 0)
+        return null;
+
+    // Elegimos primero los grupos capaces de atender la categoría.
+    // Un especialista que cubre la planta tiene preferencia sobre
+    // un grupo general que cubre solamente una nave.
+    var specialistTeamIds = teams.Values
+        .Where(x => x.HandlesCategory(category))
+        .Select(x => x.Id)
+        .ToHashSet();
+
+    var generalTeamIds = teams.Values
+        .Where(x => string.IsNullOrWhiteSpace(x.Categories))
+        .Select(x => x.Id)
+        .ToHashSet();
+
+    if (specialistTeamIds.Count == 0 &&
+        generalTeamIds.Count == 0)
+        return null;
+
+    var eligibleUserIds = await (
+        from userRole in _db.UserRoles.AsNoTracking()
+        join rolePermission in _db.RolePermissions.AsNoTracking()
+            on userRole.RoleId equals rolePermission.RoleId
+        join permission in _db.Permissions.AsNoTracking()
+            on rolePermission.PermissionId equals permission.Id
+        where permission.IsActive &&
+              permission.Code == "tickets.comment"
+        select userRole.UserId
+    )
+    .Distinct()
+    .ToListAsync(cancellationToken);
+
+    if (eligibleUserIds.Count == 0)
+        return null;
+
+    var availableMembers = await _db.HelpdeskTeamMembers
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            coveredTeamIds.Contains(x.TeamId) &&
+            x.IsAvailable &&
+            x.AcceptsAutomaticAssignments &&
+            x.MaxOpenTickets > 0 &&
+            eligibleUserIds.Contains(x.UserId))
+        .ToListAsync(cancellationToken);
+
+    if (availableMembers.Count == 0)
+        return null;
+
+    var memberUserIds = availableMembers
+        .Select(x => x.UserId)
+        .Distinct()
+        .ToArray();
+
+    var users = await _db.Users
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.IsActive &&
+            memberUserIds.Contains(x.Id))
+        .ToDictionaryAsync(x => x.Id, cancellationToken);
+
+    if (users.Count == 0)
+        return null;
+
+    var loads = await _db.HelpdeskTickets
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == organizationId &&
+            x.AssigneeUserId.HasValue &&
+            memberUserIds.Contains(x.AssigneeUserId.Value) &&
+            x.Status != "resolved" &&
+            x.Status != "closed")
+        .GroupBy(x => x.AssigneeUserId!.Value)
+        .Select(x => new
+        {
+            UserId = x.Key,
+            Count = x.Count()
+        })
+        .ToDictionaryAsync(
+            x => x.UserId,
+            x => x.Count,
+            cancellationToken);
+
+    // Primero se intenta con especialistas. Si ninguno puede tomar
+    // el caso, un grupo general con cobertura sirve de respaldo.
+    foreach (var teamIds in new[] { specialistTeamIds, generalTeamIds })
+    {
+        if (teamIds.Count == 0)
+            continue;
+
+        var teamCoverage = coverage
             .Where(x =>
-                x.OrganizationId == organizationId &&
-                allowedTeamIds.Contains(x.TeamId) &&
-                x.IsAvailable &&
-                x.AcceptsAutomaticAssignments &&
-                eligibleUserIds.Contains(x.UserId))
-            .ToListAsync(cancellationToken);
+                teamIds.Contains(x.TeamId) &&
+                teams.ContainsKey(x.TeamId))
+            .ToList();
 
-        if (members.Count == 0)
-            return null;
+        if (teamCoverage.Count == 0)
+            continue;
 
-        var memberUserIds = members
-            .Select(x => x.UserId)
-            .Distinct()
-            .ToArray();
-
-        var users = await _db.Users
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.IsActive &&
-                memberUserIds.Contains(x.Id))
-            .ToDictionaryAsync(
-                x => x.Id,
-                cancellationToken);
-
-        var loads = await _db.HelpdeskTickets
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.AssigneeUserId.HasValue &&
-                memberUserIds.Contains(
-                    x.AssigneeUserId.Value) &&
-                x.Status != "resolved" &&
-                x.Status != "closed")
-            .GroupBy(x =>
-                x.AssigneeUserId!.Value)
+        // Dentro de esta clase de grupo se prefiere la cobertura
+        // geográfica más específica.
+        var distances = teamCoverage
             .Select(x => new
             {
-                UserId = x.Key,
-                Count = x.Count()
+                x.TeamId,
+                x.ZoneId,
+                Distance = zoneChain.IndexOf(x.ZoneId)
             })
-            .ToDictionaryAsync(
-                x => x.UserId,
-                x => x.Count,
-                cancellationToken);
+            .Where(x => x.Distance >= 0)
+            .ToList();
 
-        var selected = members
-            .Where(x => users.ContainsKey(x.UserId))
+        if (distances.Count == 0)
+            continue;
+
+        var bestDistance = distances.Min(x => x.Distance);
+
+        var nearestCoverage = distances
+            .Where(x => x.Distance == bestDistance)
+            .ToList();
+
+        var nearestTeamIds = nearestCoverage
+            .Select(x => x.TeamId)
+            .ToHashSet();
+
+        var selected = availableMembers
+            .Where(x =>
+                nearestTeamIds.Contains(x.TeamId) &&
+                users.ContainsKey(x.UserId))
             .Select(x => new
             {
                 Member = x,
                 Load = loads.GetValueOrDefault(x.UserId)
             })
-            .Where(x =>
-                x.Load < x.Member.MaxOpenTickets)
+            .Where(x => x.Load < x.Member.MaxOpenTickets)
             .OrderBy(x =>
-                (double)x.Load /
-                x.Member.MaxOpenTickets)
+                (double)x.Load / x.Member.MaxOpenTickets)
             .ThenBy(x => x.Load)
             .ThenBy(x => x.Member.UserId)
             .FirstOrDefault();
 
         if (selected is null)
-            return null;
+            continue;
 
-        var team = teams[selected.Member.TeamId];
+        var selectedCoverage = nearestCoverage
+            .First(x => x.TeamId == selected.Member.TeamId);
 
-        var coverageZoneId = matching
-            .First(x => x.TeamId == team.Id)
-            .ZoneId;
-
-        var zoneName = byId.TryGetValue(
-            coverageZoneId,
+        var zoneName = zonesById.TryGetValue(
+            selectedCoverage.ZoneId,
             out var coveredZone)
             ? coveredZone.Name
             : "zona asignada";
@@ -736,9 +747,12 @@ public sealed class HelpdeskService : IHelpdeskService
         return new RoutingCandidate(
             selected.Member.UserId,
             users[selected.Member.UserId].FullName,
-            team.Name,
+            teams[selected.Member.TeamId].Name,
             zoneName);
     }
+
+    return null;
+}
 
     private async Task<HelpdeskTicketDetailsDto> MapDetailsAsync(
         HelpdeskTicket ticket,

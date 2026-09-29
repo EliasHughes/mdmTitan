@@ -1,186 +1,96 @@
-import {
-  MessageCircle,
-  Settings2,
-} from 'lucide-react'
-
-import {
-  useCallback,
-  useEffect,
-  useRef,
-  useState,
-} from 'react'
-
+import { MessageCircle, Settings2 } from 'lucide-react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   useTitanAssistant,
   type TitanAnimationState,
+  type TitanPosition,
 } from '../context/TitanAssistantContext'
-
-import {
-  getTitanContextualGreeting,
-} from '../config/titanContextualMessages'
-
-import {
-  TitanAnchorRegistry,
-} from '../engine/TitanAnchorRegistry'
-
-import {
-  TitanBehaviorEngine,
-} from '../engine/TitanBehaviorEngine'
-
 import {
   TitanMovementEngine,
   type TitanMovementSnapshot,
 } from '../engine/TitanMovementEngine'
-
-import {
-  TitanAvatarCanvas,
-} from './TitanAvatarCanvas'
-
-import {
-  TitanSpeechBubble,
-} from './TitanSpeechBubble'
-
-import {
-  TitanPreferencesPanel,
-} from './TitanPreferencesPanel'
-
+import { TitanAvatarCanvas } from './TitanAvatarCanvas'
+import { TitanSpeechBubble } from './TitanSpeechBubble'
+import { TitanPreferencesPanel } from './TitanPreferencesPanel'
+import { TitanAgentChatPanel } from './TitanAgentChatPanel'
 import '../styles/titan-assistant.css'
 
-const TITAN_WIDTH = 130
+const WIDTH = 130
+const HEIGHT = 190
+const MARGIN = 14
 
-const TITAN_HEIGHT = 190
+type Side = 'left' | 'right'
 
-function defaultPosition() {
+function edgePosition(
+  side: Side,
+  level: 'bottom' | 'middle' = 'bottom',
+  peek = false,
+): TitanPosition {
+  const y = level === 'middle'
+    ? Math.max(85, Math.round(window.innerHeight * 0.48) - HEIGHT / 2)
+    : Math.max(85, window.innerHeight - HEIGHT - 24)
+
   return {
-    x: Math.max(
-      15,
-      window.innerWidth -
-        TITAN_WIDTH -
-        25,
-    ),
-
-    y: Math.max(
-      80,
-      window.innerHeight -
-        TITAN_HEIGHT -
-        25,
-    ),
+    x: side === 'right'
+      ? window.innerWidth - (peek ? 65 : WIDTH + MARGIN)
+      : peek ? -65 : MARGIN,
+    y,
   }
 }
 
-function clampPosition(
-  x: number,
-  y: number,
-) {
-  return {
-    x: Math.max(
-      8,
-      Math.min(
-        window.innerWidth -
-          TITAN_WIDTH -
-          8,
-        x,
-      ),
+function hasBlockingOverlay(): boolean {
+  return Boolean(
+    document.querySelector(
+      '[role="dialog"], [aria-modal="true"], ' +
+      '[role="menu"], [data-titan-blocking="true"]',
     ),
-
-    y: Math.max(
-      68,
-      Math.min(
-        window.innerHeight -
-          TITAN_HEIGHT -
-          8,
-        y,
-      ),
-    ),
-  }
+  )
 }
 
-function mapLocomotionToAnimation(
-  snapshot:
-    TitanMovementSnapshot,
+function isSpaceOccupied(position: TitanPosition): boolean {
+  const samples = [
+    [position.x + 38, position.y + 42],
+    [position.x + 65, position.y + 95],
+    [position.x + 64, position.y + 155],
+  ]
+
+  return samples.some(([x, y]) => {
+    if (
+      x < 0 || y < 0 ||
+      x >= window.innerWidth ||
+      y >= window.innerHeight
+    ) {
+      return false
+    }
+
+    return document.elementsFromPoint(x, y).some((element) => {
+      if (element.closest('.titan-assistant')) return false
+
+      return Boolean(element.closest(
+        'button, a, input, textarea, select, ' +
+        '[role="dialog"], [role="menu"], ' +
+        '[data-titan-blocking="true"]',
+      ))
+    })
+  })
+}
+
+function visualState(
+  snapshot: TitanMovementSnapshot,
 ): TitanAnimationState {
-  switch (
-    snapshot.state
-  ) {
+  switch (snapshot.state) {
     case 'walking':
       return 'walking'
-
     case 'prepare-takeoff':
       return 'prepare-takeoff'
-
     case 'takeoff':
       return 'takeoff'
-
     case 'flying':
       return 'flying'
-
     case 'landing':
       return 'landing'
-
     default:
       return 'idle'
-  }
-}
-
-function anchorForModule(
-  module: string,
-): string | null {
-  switch (module) {
-    case 'dashboard':
-      return 'sidebar.dashboard'
-
-    case 'devices':
-    case 'device-detail':
-      return 'sidebar.devices'
-
-    case 'groups':
-      return 'sidebar.groups'
-
-    case 'enrollment':
-      return 'sidebar.enrollment'
-
-    case 'policies':
-    case 'policy-editor':
-      return 'sidebar.policies'
-
-    case 'apps':
-      return 'sidebar.apps'
-
-    case 'security':
-      return 'sidebar.security'
-
-    case 'compliance':
-      return 'sidebar.compliance'
-
-    case 'kiosk':
-      return 'sidebar.kiosk'
-
-    case 'geofencing':
-      return 'sidebar.geofencing'
-
-    case 'automation':
-      return 'sidebar.automation'
-
-    case 'remote':
-      return 'sidebar.remote'
-
-    case 'reports':
-      return 'sidebar.reports'
-
-    case 'audit':
-      return 'sidebar.audit'
-
-    case 'users':
-      return 'sidebar.users'
-
-    case 'roles':
-      return 'sidebar.roles'
-
-    case 'settings':
-      return 'sidebar.settings'
-
-    default:
-      return null
   }
 }
 
@@ -188,803 +98,351 @@ export function TitanAssistant() {
   const {
     user,
     page,
-
     preferences,
     runtime,
-
     setPosition,
     setVelocity,
     setDirection,
     setAnimation,
-
     say,
     clearMessage,
-  } =
-    useTitanAssistant()
+  } = useTitanAssistant()
 
-  const rootRef =
-    useRef<HTMLDivElement>(
-      null,
-    )
+  const rootRef = useRef<HTMLDivElement>(null)
+  const engineRef = useRef<TitanMovementEngine | null>(null)
+  const sideRef = useRef<Side>('right')
+  const levelRef = useRef<'bottom' | 'middle'>('bottom')
+  const peekRef = useRef(false)
 
-  const movementRef =
-    useRef<
-      TitanMovementEngine | null
-    >(null)
+  const [snapshot, setSnapshot] = useState<TitanMovementSnapshot | null>(
+    null,
+  )
+  const [animation, setVisualAnimation] =
+    useState<TitanAnimationState>('idle')
+  const [chatOpen, setChatOpen] = useState(false)
+  const [preferencesOpen, setPreferencesOpen] = useState(false)
+  const [blocked, setBlocked] = useState(false)
+  const [pointer, setPointer] = useState({ x: 0, y: 0 })
 
-  const behaviorRef =
-    useRef(
-      new TitanBehaviorEngine(),
-    )
+  const moveWithinEdge = useCallback((
+    level: 'bottom' | 'middle',
+    peek = false,
+  ) => {
+    const engine = engineRef.current
+    if (!engine) return
 
-  const contextualTimerRef =
-    useRef<number | null>(
-      null,
-    )
+    const target = edgePosition(sideRef.current, level, peek)
 
-  const pointerReactionTimerRef =
-    useRef<number | null>(
-      null,
-    )
+    levelRef.current = level
+    peekRef.current = peek
 
-  const pointerRef =
-    useRef({
-      x: 0,
-      y: 0,
-    })
+    if (preferences.reducedMotion) {
+      engine.setPosition(target)
+      return
+    }
 
-  const [
-    movement,
-    setMovement,
-  ] =
-    useState<TitanMovementSnapshot>(
-      {
-        position:
-          runtime.position.x ===
-            0 &&
-          runtime.position.y ===
-            0
-            ? defaultPosition()
-            : runtime.position,
-
-        velocity: {
-          x: 0,
-          y: 0,
-        },
-
-        speed: 0,
-
-        direction:
-          runtime.direction,
-
-        state: 'idle',
-
-        moving: false,
-
-        target: null,
-      },
-    )
-
-  const [
-    visualState,
-    setVisualState,
-  ] =
-    useState<TitanAnimationState>(
-      'idle',
-    )
-
-  const [
-    chatOpen,
-    setChatOpen,
-  ] =
-    useState(false)
-
-  const [
-    preferencesOpen,
-    setPreferencesOpen,
-  ] =
-    useState(false)
-
-  const [
-    pointer,
-    setPointer,
-  ] =
-    useState({
-      x: 0,
-      y: 0,
-    })
+    // La trayectoria mantiene X junto al borde.
+    // El motor mueve piernas y brazos según la velocidad.
+    engine.moveTo(target, { allowFlight: false })
+  }, [preferences.reducedMotion])
 
   useEffect(() => {
-    const initial =
-      runtime.position.x ===
-        0 &&
-      runtime.position.y ===
-        0
-        ? defaultPosition()
-        : clampPosition(
-            runtime.position.x,
-            runtime.position.y,
-          )
+    const initial = edgePosition('right')
+    const engine = new TitanMovementEngine(initial)
 
-    const engine =
-      new TitanMovementEngine(
-        initial,
+    engine.setAllowFlight(false)
+
+    engine.setListener((next) => {
+      setSnapshot(next)
+      setVisualAnimation(
+        peekRef.current && !next.moving
+          ? 'peeking'
+          : visualState(next),
       )
 
-    engine.setAllowFlight(
-      preferences.allowFlight,
-    )
+      if (rootRef.current) {
+        rootRef.current.style.transform =
+          `translate3d(${next.position.x}px, ` +
+          `${next.position.y}px, 0)`
+      }
+    })
 
-    engine.setListener(
-      (snapshot) => {
-        setMovement(
-          snapshot,
-        )
+    engine.setArrivalListener((next) => {
+      setPosition(next.position)
+      setVelocity({ x: 0, y: 0 })
+      setDirection(next.direction)
 
-        setVisualState(
-          mapLocomotionToAnimation(
-            snapshot,
-          ),
-        )
+      const arrivedState: TitanAnimationState =
+        peekRef.current ? 'peeking' : 'idle'
 
-        if (
-          rootRef.current
-        ) {
-          rootRef.current.style.transform =
-            `translate3d(${snapshot.position.x}px, ${snapshot.position.y}px, 0)`
-        }
-      },
-    )
+      setVisualAnimation(arrivedState)
+      setAnimation(arrivedState, 'autonomous')
+    })
 
-    engine.setArrivalListener(
-      (snapshot) => {
-        setPosition(
-          snapshot.position,
-        )
-
-        setVelocity({
-          x: 0,
-          y: 0,
-        })
-
-        setDirection(
-          snapshot.direction,
-        )
-
-        setVisualState(
-          'idle',
-        )
-
-        setAnimation(
-          'idle',
-          'autonomous',
-        )
-      },
-    )
-
-    movementRef.current =
-      engine
-
+    engineRef.current = engine
+    setSnapshot(engine.getSnapshot())
     setPosition(initial)
 
     return () => {
       engine.destroy()
-
-      movementRef.current =
-        null
+      engineRef.current = null
     }
-  }, [])
-
-  useEffect(() => {
-    movementRef.current
-      ?.setAllowFlight(
-        preferences.allowFlight,
-      )
   }, [
-    preferences.allowFlight,
+    setAnimation,
+    setDirection,
+    setPosition,
+    setVelocity,
   ])
 
   useEffect(() => {
-    const handlePointerMove =
-      (
-        event:
-          PointerEvent,
-      ) => {
-        const next = {
-          x: event.clientX,
-          y: event.clientY,
-        }
+    const onResize = () => {
+      engineRef.current?.setPosition(
+        edgePosition(
+          sideRef.current,
+          levelRef.current,
+          peekRef.current,
+        ),
+      )
+    }
 
-        pointerRef.current =
-          next
+    window.addEventListener('resize', onResize)
+    return () => window.removeEventListener('resize', onResize)
+  }, [])
 
-        behaviorRef.current
-          .registerPointer(
-            next.x,
-            next.y,
-          )
+  useEffect(() => {
+    // Cada pantalla comienza con Titan apartado en el borde inferior.
+    sideRef.current = 'right'
+    levelRef.current = 'bottom'
+    peekRef.current = false
 
-        setPointer(next)
-      }
-
-    const handleInteraction =
-      () => {
-        behaviorRef.current
-          .registerUserInteraction()
-      }
-
-    window.addEventListener(
-      'pointermove',
-      handlePointerMove,
-      {
-        passive: true,
-      },
+    engineRef.current?.stop()
+    engineRef.current?.setPosition(
+      edgePosition('right', 'bottom'),
     )
+  }, [page.pathname])
 
-    window.addEventListener(
-      'pointerdown',
-      handleInteraction,
-      {
-        passive: true,
-      },
-    )
+  useEffect(() => {
+    const onPointerMove = (event: PointerEvent) => {
+      setPointer({ x: event.clientX, y: event.clientY })
+    }
 
-    window.addEventListener(
-      'keydown',
-      handleInteraction,
-    )
+    window.addEventListener('pointermove', onPointerMove, {
+      passive: true,
+    })
 
     return () => {
-      window.removeEventListener(
-        'pointermove',
-        handlePointerMove,
-      )
-
-      window.removeEventListener(
-        'pointerdown',
-        handleInteraction,
-      )
-
-      window.removeEventListener(
-        'keydown',
-        handleInteraction,
-      )
+      window.removeEventListener('pointermove', onPointerMove)
     }
   }, [])
 
-  const moveToAnchor =
-    useCallback(
-      (
-        anchorName:
-          string,
-      ) => {
-        const target =
-          TitanAnchorRegistry
-            .getSafePointNear(
-              anchorName,
-            )
+  useEffect(() => {
+    if (
+      !preferences.autonomousBehavior ||
+      preferences.reducedMotion ||
+      preferences.doNotDisturb ||
+      chatOpen ||
+      preferencesOpen
+    ) {
+      return
+    }
 
-        if (!target) {
-          return false
-        }
+    const interval = window.setInterval(() => {
+      if (hasBlockingOverlay()) return
 
-        movementRef.current
-          ?.moveTo(
-            target,
-            {
-              allowFlight:
-                preferences
-                  .allowFlight &&
-                !preferences
-                  .reducedMotion,
-            },
-          )
+      const nextLevel =
+        levelRef.current === 'bottom' ? 'middle' : 'bottom'
 
-        return true
-      },
-      [
-        preferences.allowFlight,
-        preferences.reducedMotion,
-      ],
-    )
+      const target = edgePosition(
+        sideRef.current,
+        nextLevel,
+        false,
+      )
+
+      // Si ese tramo lateral contiene controles, se queda
+      // donde está y puede asomarse sin invadir el formulario.
+      if (isSpaceOccupied(target)) {
+        moveWithinEdge(levelRef.current, true)
+        return
+      }
+
+      moveWithinEdge(nextLevel, false)
+    }, 18000)
+
+    return () => window.clearInterval(interval)
+  }, [
+    chatOpen,
+    preferencesOpen,
+    preferences.autonomousBehavior,
+    preferences.reducedMotion,
+    preferences.doNotDisturb,
+    moveWithinEdge,
+  ])
+
+  useEffect(() => {
+    const checkSpace = () => {
+      if (chatOpen || preferencesOpen) {
+        setBlocked(false)
+        return
+      }
+
+      const current = engineRef.current?.getSnapshot().position
+
+      if (!current) return
+
+      if (hasBlockingOverlay()) {
+        engineRef.current?.stop()
+        setBlocked(true)
+        return
+      }
+
+      if (!isSpaceOccupied(current)) {
+        setBlocked(false)
+        return
+      }
+
+      const alternative = edgePosition(
+        sideRef.current,
+        levelRef.current,
+        true,
+      )
+
+      if (!isSpaceOccupied(alternative)) {
+        engineRef.current?.setPosition(alternative)
+        peekRef.current = true
+        setBlocked(false)
+      } else {
+        setBlocked(true)
+      }
+    }
+
+    checkSpace()
+    const interval = window.setInterval(checkSpace, 1500)
+    return () => window.clearInterval(interval)
+  }, [page.pathname, chatOpen, preferencesOpen])
 
   useEffect(() => {
     if (
       !user ||
-      !preferences.visible
+      !preferences.proactiveComments ||
+      preferences.doNotDisturb ||
+      blocked ||
+      chatOpen
     ) {
       return
     }
 
-    if (
-      preferences
-        .doNotDisturb
-    ) {
-      return
-    }
-
-    if (
-      !preferences
-        .autonomousBehavior
-    ) {
-      return
-    }
-
-    if (
-      !behaviorRef.current
-        .canReactContextually({
-          autonomous:
-            preferences
-              .autonomousBehavior,
-
-          followPointer:
-            preferences
-              .followPointer,
-
-          doNotDisturb:
-            preferences
-              .doNotDisturb,
-
-          reducedMotion:
-            preferences
-              .reducedMotion,
-        })
-    ) {
-      return
-    }
-
-    behaviorRef.current
-      .beginContextReaction()
-
-    if (
-      contextualTimerRef.current
-    ) {
-      window.clearTimeout(
-        contextualTimerRef.current,
-      )
-    }
-
-    contextualTimerRef.current =
-      window.setTimeout(
-        () => {
-          const anchor =
-            anchorForModule(
-              page.module,
-            )
-
-          if (
-            anchor &&
-            TitanAnchorRegistry
-              .exists(anchor)
-          ) {
-            moveToAnchor(
-              anchor,
-            )
-          }
-
-          if (
-            preferences
-              .proactiveComments
-          ) {
-            window.setTimeout(
-              () => {
-                const message =
-                  getTitanContextualGreeting({
-                    user,
-                    page,
-                  })
-
-                say(
-                  message,
-                  'contextual',
-                )
-
-                setVisualState(
-                  'talking',
-                )
-              },
-              anchor
-                ? 800
-                : 250,
-            )
-          }
-        },
-        650,
-      )
-
-    return () => {
+    const timer = window.setTimeout(() => {
       if (
-        contextualTimerRef.current
-      ) {
-        window.clearTimeout(
-          contextualTimerRef.current,
+        document.activeElement?.matches(
+          'input, textarea, select',
         )
+      ) {
+        return
       }
-    }
+
+      say(
+        `Hola, ${user.firstName}. Estoy disponible si necesitas ayuda.`,
+        'contextual',
+      )
+    }, 3500)
+
+    return () => window.clearTimeout(timer)
   }, [
-    user,
+    user?.id,
     page.pathname,
-
-    preferences.visible,
-    preferences.doNotDisturb,
-    preferences.autonomousBehavior,
+    blocked,
+    chatOpen,
     preferences.proactiveComments,
-
-    moveToAnchor,
+    preferences.doNotDisturb,
     say,
   ])
 
-  useEffect(() => {
-    if (
-      !preferences.visible ||
-      !preferences
-        .autonomousBehavior ||
-      !preferences
-        .followPointer ||
-      preferences
-        .doNotDisturb ||
-      preferences
-        .reducedMotion
-    ) {
-      return
-    }
+  if (!user || !preferences.visible) return null
 
-    const interval =
-      window.setInterval(
-        () => {
-          const behavior =
-            behaviorRef.current
-
-          if (
-            !behavior
-              .canReactToPointer({
-                autonomous:
-                  preferences
-                    .autonomousBehavior,
-
-                followPointer:
-                  preferences
-                    .followPointer,
-
-                doNotDisturb:
-                  preferences
-                    .doNotDisturb,
-
-                reducedMotion:
-                  preferences
-                    .reducedMotion,
-              })
-          ) {
-            return
-          }
-
-          const current =
-            movementRef.current
-              ?.getSnapshot()
-
-          if (
-            !current ||
-            current.moving
-          ) {
-            return
-          }
-
-          const cursor =
-            pointerRef.current
-
-          if (
-            cursor.x <= 0 ||
-            cursor.y <= 0
-          ) {
-            return
-          }
-
-          behavior
-            .beginPointerReaction()
-
-          setVisualState(
-            'looking',
-          )
-
-          pointerReactionTimerRef.current =
-            window.setTimeout(
-              () => {
-                const target =
-                  clampPosition(
-                    cursor.x -
-                      TITAN_WIDTH /
-                        2,
-
-                    cursor.y +
-                      45,
-                  )
-
-                if (
-                  TitanAnchorRegistry
-                    .isSafePoint(
-                      target,
-                    )
-                ) {
-                  movementRef.current
-                    ?.moveTo(
-                      target,
-                      {
-                        allowFlight:
-                          false,
-                      },
-                    )
-                }
-              },
-              900,
-            )
-        },
-        5000,
-      )
-
-    return () => {
-      window.clearInterval(
-        interval,
-      )
-
-      if (
-        pointerReactionTimerRef.current
-      ) {
-        window.clearTimeout(
-          pointerReactionTimerRef.current,
-        )
-      }
-    }
-  }, [
-    preferences.visible,
-    preferences.autonomousBehavior,
-    preferences.followPointer,
-    preferences.doNotDisturb,
-    preferences.reducedMotion,
-  ])
-
-  useEffect(() => {
-    const handleResize =
-      () => {
-        const snapshot =
-          movementRef.current
-            ?.getSnapshot()
-
-        if (!snapshot) {
-          return
-        }
-
-        const corrected =
-          clampPosition(
-            snapshot.position.x,
-            snapshot.position.y,
-          )
-
-        movementRef.current
-          ?.setPosition(
-            corrected,
-          )
-
-        setPosition(
-          corrected,
-        )
-      }
-
-    window.addEventListener(
-      'resize',
-      handleResize,
-    )
-
-    return () => {
-      window.removeEventListener(
-        'resize',
-        handleResize,
-      )
-    }
-  }, [setPosition])
-
-  useEffect(() => {
-    if (
-      movement.state !==
-      'idle'
-    ) {
-      setVelocity(
-        movement.velocity,
-      )
-
-      setDirection(
-        movement.direction,
-      )
-    }
-  }, [
-    movement.velocity.x,
-    movement.velocity.y,
-    movement.direction,
-    movement.state,
-    setVelocity,
-    setDirection,
-  ])
-
-  useEffect(() => {
-    if (
-      runtime.message &&
-      movement.state ===
-        'idle'
-    ) {
-      setVisualState(
-        runtime.animation ===
-          'talking'
-          ? 'talking'
-          : runtime.animation,
-      )
-    }
-
-    if (
-      !runtime.message &&
-      movement.state ===
-        'idle'
-    ) {
-      setVisualState(
-        'idle',
-      )
-    }
-  }, [
-    runtime.message,
-    runtime.animation,
-    movement.state,
-  ])
-
-  if (
-    !user ||
-    !preferences.visible
-  ) {
-    return null
-  }
+  const position = snapshot?.position ?? edgePosition('right')
 
   return (
     <div
       ref={rootRef}
-      className="titan-assistant"
+      className={[
+        'titan-assistant',
+        'titan-assistant--refined',
+        blocked && !chatOpen && !preferencesOpen
+          ? 'titan-assistant--blocked'
+          : '',
+      ].filter(Boolean).join(' ')}
       style={{
         transform:
-          `translate3d(${movement.position.x}px, ${movement.position.y}px, 0)`,
+          `translate3d(${position.x}px, ${position.y}px, 0)`,
       }}
     >
-      {runtime.message && (
+      {runtime.message && !blocked && (
         <TitanSpeechBubble
-          message={
-            runtime.message
-          }
-          onClose={() => {
-            clearMessage()
-
-            setVisualState(
-              'idle',
-            )
-          }}
+          message={runtime.message}
+          onClose={clearMessage}
         />
       )}
 
       {preferencesOpen && (
         <TitanPreferencesPanel
-          onClose={() =>
-            setPreferencesOpen(
-              false,
-            )
-          }
+          onClose={() => setPreferencesOpen(false)}
         />
       )}
 
       {chatOpen && (
-        <div
-          className="titan-chat-preview"
-          data-titan-blocking="true"
-        >
-          <div className="titan-chat-preview__header">
-            <div>
-              <strong>
-                Titan Assistant
-              </strong>
-
-              <span>
-                {user.fullName}
-                {' · '}
-                {page.module}
-              </span>
-            </div>
-
-            <button
-              type="button"
-              onClick={() =>
-                setChatOpen(
-                  false,
-                )
-              }
-            >
-              ×
-            </button>
-          </div>
-
-          <div className="titan-chat-preview__body">
-            <strong>
-              Hola,{' '}
-              {user.firstName}.
-            </strong>
-
-            <p>
-              Estoy usando el contexto
-              de tu sesión, módulo,
-              roles y permisos.
-            </p>
-
-            <span>
-              La conversación con el
-              modelo local se conectará
-              sobre esta misma capa.
-            </span>
-          </div>
-        </div>
+        <TitanAgentChatPanel
+          firstName={user.firstName}
+          module={page.module}
+          onClose={() => setChatOpen(false)}
+        />
       )}
 
       <div className="titan-assistant__toolbar">
         <button
           type="button"
-          aria-label="Abrir conversación"
-          onClick={() =>
-            setChatOpen(
-              (current) =>
-                !current,
+          aria-label="Abrir conversación con Titan"
+          onClick={() => {
+            peekRef.current = false
+            engineRef.current?.setPosition(
+              edgePosition(sideRef.current, levelRef.current),
             )
-          }
+            setChatOpen((value) => !value)
+            setPreferencesOpen(false)
+          }}
         >
-          <MessageCircle
-            size={15}
-          />
+          <MessageCircle size={16} />
         </button>
 
         <button
           type="button"
           aria-label="Preferencias de Titan"
-          onClick={() =>
-            setPreferencesOpen(
-              (current) =>
-                !current,
+          onClick={() => {
+            peekRef.current = false
+            engineRef.current?.setPosition(
+              edgePosition(sideRef.current, levelRef.current),
             )
-          }
+            setPreferencesOpen((value) => !value)
+            setChatOpen(false)
+          }}
         >
-          <Settings2
-            size={15}
-          />
+          <Settings2 size={16} />
         </button>
       </div>
 
       <TitanAvatarCanvas
-        animation={
-          visualState
-        }
-        velocity={
-          movement.velocity
-        }
-        direction={
-          movement.direction
-        }
-        pointerX={
-          pointer.x
-        }
-        pointerY={
-          pointer.y
-        }
-        reducedMotion={
-          preferences
-            .reducedMotion
-        }
+        animation={animation}
+        velocity={snapshot?.velocity ?? { x: 0, y: 0 }}
+        direction={snapshot?.direction ?? runtime.direction}
+        pointerX={pointer.x}
+        pointerY={pointer.y}
+        reducedMotion={preferences.reducedMotion}
         onClick={() => {
-          behaviorRef.current
-            .registerUserInteraction()
-
-          setChatOpen(
-            (current) =>
-              !current,
+          peekRef.current = false
+          engineRef.current?.setPosition(
+            edgePosition(sideRef.current, levelRef.current),
           )
+          setChatOpen((value) => !value)
+          setPreferencesOpen(false)
         }}
       />
     </div>

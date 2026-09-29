@@ -1,52 +1,49 @@
-import {
-  useState,
-} from 'react'
-
-import {
-  Outlet,
-} from 'react-router-dom'
-
-import {
-  TitanAssistantProvider,
-} from '../../assistant/context/TitanAssistantContext'
-
-import {
-  TitanAssistant,
-} from '../../assistant/components/TitanAssistant'
-
-import {
-  WorkspaceProvider,
-} from '../../workspace/WorkspaceContext'
-
-import {
-  Header,
-} from './Header'
-
-import {
-  Sidebar,
-} from './Sidebar'
+import { useEffect, useState } from 'react'
+import { Outlet } from 'react-router-dom'
+import apiClient from '../../api/apiClient'
+import { TitanAssistantProvider } from '../../assistant/context/TitanAssistantContext'
+import { TitanAssistant } from '../../assistant/components/TitanAssistant'
+import { WorkspaceProvider } from '../../workspace/WorkspaceContext'
+import { Header } from './Header'
+import { Sidebar } from './Sidebar'
 
 export function AppLayout() {
-  const [
-    sidebarCollapsed,
-    setSidebarCollapsed,
-  ] =
-    useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [assistantAllowed, setAssistantAllowed] = useState(false)
+
+  useEffect(() => {
+    let active = true
+
+    async function checkAssistantAccess() {
+      try {
+        const response = await apiClient.get<{ enabled: boolean }>(
+          '/helpdesk/operations/assistant/me',
+        )
+
+        if (active) {
+          setAssistantAllowed(response.data.enabled === true)
+        }
+      } catch {
+        if (active) {
+          setAssistantAllowed(false)
+        }
+      }
+    }
+
+    void checkAssistantAccess()
+
+    return () => {
+      active = false
+    }
+  }, [])
 
   return (
     <WorkspaceProvider>
       <TitanAssistantProvider>
         <div className="app-layout">
           <Sidebar
-            collapsed={
-              sidebarCollapsed
-            }
-            onToggle={() =>
-              setSidebarCollapsed(
-                value =>
-                  !value,
-              )
-            }
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((value) => !value)}
           />
 
           <div className="app-layout__main">
@@ -57,7 +54,7 @@ export function AppLayout() {
             </main>
           </div>
 
-          <TitanAssistant />
+          {assistantAllowed && <TitanAssistant />}
         </div>
       </TitanAssistantProvider>
     </WorkspaceProvider>

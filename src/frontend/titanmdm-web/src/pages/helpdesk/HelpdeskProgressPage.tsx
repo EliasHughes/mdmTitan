@@ -17,212 +17,331 @@ type Phase = {
 }
 
 const stateLabel: Record<State, string> = {
-  repository: 'En el repositorio',
-  integration: 'Código entregado; falta integrar y verificar',
-  pending: 'Pendiente',
-  blocked: 'Bloqueado para pruebas',
+  repository: 'Código listo; espera pruebas',
+  integration: 'En desarrollo o integración',
+  pending: 'Pendiente de desarrollar',
+  blocked: 'Espera configuración o acceso externo',
 }
+
+const order: State[] = [
+  'repository',
+  'integration',
+  'pending',
+  'blocked',
+]
 
 const phases: Phase[] = [
   {
-    code: 'W9',
-    name: 'Base de soporte remoto',
-    objective: 'Preparar la infraestructura y los flujos iniciales de soporte remoto.',
+    code: '0',
+    name: 'Base estable',
+    objective: 'Mantener backend, frontend, migraciones y configuración coherentes.',
     items: [
       {
-        name: 'Base del módulo de soporte remoto',
-        detail: 'Existe código del módulo en el proyecto. Falta la revisión funcional completa con dos equipos.',
+        name: 'Migración de importación de correo',
+        detail:
+          'AddHelpdeskEmailImport fue aplicada y el backend compiló. Falta comprobar la importación con mensajes reales.',
         state: 'repository',
       },
       {
-        name: 'Rediseño de la interfaz',
-        detail: 'Quedó registrada la observación: la experiencia actual debe revisarse.',
-        state: 'pending',
-      },
-    ],
-  },
-  {
-    code: 'W10',
-    name: 'Transporte y sesión remota',
-    objective: 'Conectar los componentes necesarios para iniciar y mantener una sesión.',
-    items: [
-      {
-        name: 'Cliente de transporte remoto',
-        detail: 'Se trabajó el código en la fase anterior; su funcionamiento extremo a extremo sigue sin verificarse.',
+        name: 'Build y consolidación integral',
+        detail:
+          'El backend compiló. Quedan el build completo del frontend, agentes y revisión de cambios duplicados.',
         state: 'integration',
-      },
-      {
-        name: 'Sesión real entre equipo A y equipo B',
-        detail: 'Debe ejecutarse junto con W11 cuando el agente esté instalado en el equipo B.',
-        state: 'blocked',
-      },
-    ],
-  },
-  {
-    code: 'W11',
-    name: 'Agente Windows',
-    objective: 'Instalar y ejecutar el agente en el equipo B para completar las pruebas remotas.',
-    items: [
-      {
-        name: 'Código del agente',
-        detail: 'Hay proyectos del agente Windows en el repositorio.',
-        state: 'repository',
-      },
-      {
-        name: 'Instalación en el equipo B',
-        detail: 'Pendiente de la autorización del ingeniero de ciberseguridad para el archivo bloqueado.',
-        state: 'blocked',
-      },
-      {
-        name: 'Pruebas de instalación, conexión y sesión',
-        detail: 'Se realizarán después de instalar el agente en el equipo B.',
-        state: 'blocked',
       },
     ],
   },
   {
     code: 'HD-1',
-    name: 'Fundamentos de Mesa de Ayuda',
-    objective: 'Crear tickets, consultarlos y mantener su historial.',
+    name: 'Operación de tickets',
+    objective: 'Crear, consultar, conversar y gestionar el ciclo de vida de cada caso.',
     items: [
       {
-        name: 'Modelo y API inicial de tickets',
-        detail: 'El repositorio contiene tickets, comentarios, eventos, servicio y controlador.',
+        name: 'Creación, conversación y cierre',
+        detail:
+          'Se usaron en la aplicación. Conservaremos la verificación conjunta por rol para el ciclo final de pruebas.',
         state: 'repository',
       },
       {
-        name: 'Bandeja TIC y detalle del ticket',
-        detail: 'Ambas páginas existen en el frontend.',
+        name: 'Estados, reapertura y separación de permisos',
+        detail:
+          'Hay código para estados y reapertura. Falta validar todas las transiciones y el aislamiento del usuario común.',
         state: 'repository',
       },
       {
-        name: 'Migración de zonas, equipos y acceso al asistente',
-        detail: 'Las entidades y su configuración existen; falta confirmar una migración que cree todas las tablas operativas.',
-        state: 'integration',
+        name: 'Adjuntos y experiencia final del ticket',
+        detail:
+          'Pendiente completar el flujo de adjuntos y modernizar la interfaz.',
+        state: 'pending',
       },
     ],
   },
   {
     code: 'HD-2',
-    name: 'Operación por zonas y equipos',
-    objective: 'Asignar tickets según la ubicación del solicitante, cobertura y capacidad del agente TIC.',
+    name: 'Asignación autónoma',
+    objective:
+      'Dirigir cada caso al grupo y agente correctos por ubicación, especialidad y capacidad.',
     items: [
       {
-        name: 'Jerarquía de ubicación',
-        detail: 'Definir localidad, planta, nave, edificio o área según la estructura real de la organización.',
-        state: 'integration',
+        name: 'Zonas, grupos, miembros y cobertura',
+        detail:
+          'Existen entidades, API y pantalla de administración. Esperan pruebas con la estructura real de la empresa.',
+        state: 'repository',
       },
       {
-        name: 'Equipos, cobertura y disponibilidad',
-        detail: 'Se entregaron bloques de administración, pero no aparecen aún en la versión revisada del repositorio.',
-        state: 'integration',
+        name: 'Especialidades y categorías por grupo',
+        detail:
+          'El repositorio incluye configuración de categorías y selección por especialidad.',
+        state: 'repository',
       },
       {
-        name: 'Asignación automática verificable',
-        detail: 'Falta integrar y comprobar las reglas de zona, grupo, disponibilidad y límite de tickets.',
+        name: 'Reintento de tickets sin asignar',
+        detail:
+          'Existe un trabajador periódico. Falta comprobar concurrencia, capacidad y cambios de disponibilidad.',
+        state: 'repository',
+      },
+      {
+        name: 'Reglas y explicación de la asignación',
+        detail:
+          'Estamos ajustando la prioridad entre especialidad y cobertura; cada decisión debe quedar trazada.',
         state: 'integration',
       },
     ],
   },
   {
     code: 'HD-3',
-    name: 'Experiencias por tipo de usuario',
-    objective: 'Separar el trabajo global del personal TIC de los tickets propios del usuario común.',
+    name: 'Correo, seguimiento y reportes',
+    objective:
+      'Recibir casos por correo y medir atención, vencimientos y carga del equipo.',
     items: [
       {
-        name: 'Portal personal del solicitante',
-        detail: 'Se entregó código para consultar y crear tickets propios; falta integrarlo y validar el aislamiento de datos.',
-        state: 'integration',
+        name: 'Importación del buzón',
+        detail:
+          'El importador y el trabajador existen. La recepción real espera Mail.Read y acceso al buzón.',
+        state: 'blocked',
       },
       {
-        name: 'Panel TIC con gráficos y KPI globales',
-        detail: 'Se entregaron bloques posteriores a la bandeja inicial; falta comprobar datos, permisos y compilación.',
-        state: 'integration',
-      },
-      {
-        name: 'Rediseño final de Mesa de Ayuda',
-        detail: 'Aún queda revisar la experiencia visual completa que señalaste como anticuada.',
-        state: 'pending',
-      },
-    ],
-  },
-  {
-    code: 'HD-4',
-    name: 'Seguimiento y automatización',
-    objective: 'Detectar tickets sin atención, vencimientos y trabajo acumulado.',
-    items: [
-      {
-        name: 'Alertas y recordatorios automáticos',
-        detail: 'Se entregó un servicio de monitoreo; faltan integración, persistencia comprobada y pruebas.',
-        state: 'integration',
-      },
-      {
-        name: 'SLA, escalamiento y notificaciones',
-        detail: 'Debemos cerrar reglas, destinatarios y comportamiento ante vencimientos.',
-        state: 'pending',
-      },
-      {
-        name: 'Reportes operativos',
-        detail: 'Pendientes las métricas históricas, filtros y exportación de Mesa de Ayuda.',
-        state: 'pending',
-      },
-    ],
-  },
-  {
-    code: 'HD-5',
-    name: 'Entra y asistente virtual',
-    objective: 'Sincronizar solicitantes e integrar Ollama solo para usuarios autorizados.',
-    items: [
-      {
-        name: 'Configuración inicial de Entra',
-        detail: 'Hay código y pantalla de configuración en el repositorio; requiere revisión de seguridad y prueba real.',
+        name: 'Recordatorios y alertas de SLA',
+        detail:
+          'Hay monitoreo y eventos; faltan pruebas funcionales con plazos y agentes reales.',
         state: 'repository',
       },
       {
-        name: 'Permisos individuales del asistente',
-        detail: 'Existe la entidad de acceso. La administración de concesiones se entregó después y falta verificarla.',
-        state: 'integration',
+        name: 'KPI y reportes de Helpdesk',
+        detail:
+          'Hay panel y API de reportes. Deben comprobarse filtros, datos, exportación y permisos.',
+        state: 'repository',
+      },
+    ],
+  },
+  {
+    code: 'AI-1',
+    name: 'Núcleo transversal del agente virtual',
+    objective:
+      'Conocer el usuario en sesión, su organización, roles, permisos y módulos disponibles.',
+    items: [
+      {
+        name: 'Acceso individual al asistente',
+        detail:
+          'Existe administración inicial de concesiones. Ningún usuario debe recibir acceso por defecto.',
+        state: 'repository',
       },
       {
-        name: 'Conexión real de Ollama a la aplicación',
-        detail: 'Ollama está descargado, pero TitanMDM todavía no lo consume. No se deben presentar sugerencias como funcionales.',
-        state: 'pending',
-      },
-      {
-        name: 'Sugerencias durante la creación del ticket',
-        detail: 'Pendientes el servicio, la interfaz, los controles de acceso y la validación de resultados.',
+        name: 'Identidad, catálogo de herramientas y auditoría',
+        detail:
+          'Pendiente construir el núcleo común que valide cada consulta y acción antes de ejecutarla.',
         state: 'pending',
       },
     ],
   },
   {
-    code: 'GENERAL',
-    name: 'Otros módulos y cierre',
-    objective: 'Resolver observaciones transversales después de estabilizar Mesa de Ayuda.',
+    code: 'AI-2',
+    name: 'Ollama y automatización',
+    objective:
+      'Agilizar tareas autorizadas en Helpdesk y después en toda TitanMDM.',
     items: [
       {
-        name: 'Reporte general',
-        detail: 'Señalaste que el módulo sigue vacío.',
+        name: 'Sugerencias al crear tickets',
+        detail:
+          'Existe un primer endpoint y su interfaz; Ollama sigue deshabilitado y sin modelo configurado.',
+        state: 'integration',
+      },
+      {
+        name: 'Automatizaciones por módulo',
+        detail:
+          'Pendientes resúmenes, recomendaciones, consultas y acciones controladas en los demás módulos.',
         state: 'pending',
       },
       {
-        name: 'Kiosk',
-        detail: 'Falta definir su función concreta y reparar su interfaz.',
+        name: 'Pruebas de permisos y resistencia a instrucciones maliciosas',
+        detail:
+          'Se realizarán en el ciclo conjunto de testing, con distintos roles y usuarios.',
+        state: 'pending',
+      },
+    ],
+  },
+  {
+    code: 'ID',
+    name: 'Entra ID y acceso corporativo',
+    objective:
+      'Sincronizar cuentas, asignar roles e iniciar sesión con identidad empresarial.',
+    items: [
+      {
+        name: 'Sincronización y asignación de roles',
+        detail:
+          'La sincronización funcionó y la asignación de rol muestra confirmación. Falta prueba integral de acceso.',
+        state: 'repository',
+      },
+      {
+        name: 'Inicio de sesión con Microsoft',
+        detail:
+          'El código existe; la URL de retorno definitiva y la prueba quedan para el despliegue.',
+        state: 'blocked',
+      },
+    ],
+  },
+  {
+    code: 'W',
+    name: 'Agente Windows y soporte remoto',
+    objective:
+      'Completar instalación, señales, inventario y sesiones remotas entre equipos.',
+    items: [
+      {
+        name: 'Instalador individual .exe',
+        detail:
+          'Probado por el responsable del proyecto; falta registrar el resultado detallado en la validación final.',
+        state: 'repository',
+      },
+      {
+        name: 'Instalación por GPO',
+        detail:
+          'Pendiente instalar y comprobar en un equipo del dominio.',
+        state: 'blocked',
+      },
+      {
+        name: 'Sesión remota A–B y rediseño',
+        detail:
+          'Faltan prueba real, fluidez, monitores, UAC, auditoría y modernización de la interfaz.',
+        state: 'integration',
+      },
+    ],
+  },
+  {
+    code: 'AND',
+    name: 'Android Enterprise',
+    objective:
+      'Enrolar y administrar dispositivos Android con políticas, comandos y aplicaciones.',
+    items: [
+      {
+        name: 'Agente, API y pantallas',
+        detail:
+          'Hay proyectos e implementación inicial; falta completar los flujos y validar dispositivos reales.',
+        state: 'integration',
+      },
+      {
+        name: 'Configuración Google y enrolamiento empresarial',
+        detail:
+          'La configuración externa y las pruebas se completarán en la fase Android.',
+        state: 'blocked',
+      },
+    ],
+  },
+  {
+    code: 'APP',
+    name: 'Aplicaciones, reportes y Kiosk',
+    objective:
+      'Cerrar los módulos que todavía muestran errores o interfaces incompletas.',
+    items: [
+      {
+        name: 'Aplicaciones y paquetes',
+        detail:
+          'Se reportaron fallos de carga y distribución; requieren corrección y verificación.',
+        state: 'integration',
+      },
+      {
+        name: 'Reportes generales',
+        detail:
+          'El módulo todavía no cumple el alcance solicitado.',
+        state: 'integration',
+      },
+      {
+        name: 'Kiosk por plataforma',
+        detail:
+          'Falta cerrar su comportamiento y reparar la interfaz.',
+        state: 'pending',
+      },
+    ],
+  },
+  {
+    code: 'UX',
+    name: 'Diseño integral',
+    objective:
+      'Unificar la experiencia visual y completar los recorridos por tipo de usuario.',
+    items: [
+      {
+        name: 'Sistema visual y CSS centralizado',
+        detail:
+          'Pendiente consolidar estilos, estados de carga, errores y diseño adaptable.',
         state: 'pending',
       },
       {
-        name: 'Validación integral',
-        detail: 'Compilación, migraciones, permisos, flujos por rol y pruebas con datos reales.',
+        name: 'Helpdesk y soporte remoto',
+        detail:
+          'Pendiente el rediseño final solicitado para ambas experiencias.',
+        state: 'pending',
+      },
+    ],
+  },
+  {
+    code: 'QA',
+    name: 'Testing conjunto',
+    objective:
+      'Probar funciones, integraciones, seguridad, concurrencia y recuperación.',
+    items: [
+      {
+        name: 'Pruebas funcionales e integración',
+        detail:
+          'Se ejecutarán con roles, correo, Entra, Windows, Android y datos reales al terminar el código.',
+        state: 'pending',
+      },
+      {
+        name: 'Pruebas de carga y resistencia',
+        detail:
+          'Mediremos tickets simultáneos, agentes, sesiones remotas, Ollama, SQL y recuperación ante fallos.',
+        state: 'pending',
+      },
+    ],
+  },
+  {
+    code: 'DEP',
+    name: 'Documentación y despliegue',
+    objective:
+      'Publicar TitanMDM con procedimientos de instalación, respaldo y operación.',
+    items: [
+      {
+        name: 'PRD, guía técnica y operación',
+        detail:
+          'Pendientes documentos finales, requisitos, configuración y procedimiento de reversión.',
+        state: 'pending',
+      },
+      {
+        name: 'IIS, HTTPS y direcciones definitivas',
+        detail:
+          'Pendiente preproducción, configuración de Entra y aceptación empresarial.',
+        state: 'pending',
+      },
+      {
+        name: 'Visualización de ponches',
+        detail:
+          'Módulo futuro, posterior al cierre de TitanMDM; no forma parte de esta entrega.',
         state: 'pending',
       },
     ],
   },
 ]
 
-const order: State[] = ['repository', 'integration', 'pending', 'blocked']
-
 export function HelpdeskProgressPage() {
   const allItems = phases.flatMap((phase) => phase.items)
+
   const totals = Object.fromEntries(
     order.map((state) => [
       state,
@@ -230,26 +349,44 @@ export function HelpdeskProgressPage() {
     ]),
   ) as Record<State, number>
 
+  const readyForTesting = phases.flatMap((phase) =>
+    phase.items
+      .filter((item) => item.state === 'repository')
+      .map((item) => ({
+        phase: phase.code,
+        ...item,
+      })),
+  )
+
   return (
     <main className="helpdesk-progress">
       <header className="helpdesk-progress__hero">
         <div>
-          <p className="helpdesk-progress__eyebrow">TitanMDM · Seguimiento del proyecto</p>
-          <h1>Avance de Mesa de Ayuda</h1>
+          <p className="helpdesk-progress__eyebrow">
+            TitanMDM · Seguimiento del proyecto
+          </p>
+          <h1>Plan y avance de TitanMDM</h1>
           <p>
-            Estado del código y de las verificaciones pendientes. «En el repositorio»
-            significa que existe implementación; no significa que el flujo completo
-            haya sido probado.
+            «Código listo; espera pruebas» indica implementación disponible.
+            La validación funcional, de permisos y de carga se realizará
+            en el ciclo conjunto de testing.
           </p>
         </div>
+
         <Link to="/helpdesk" className="helpdesk-progress__back">
           Volver a la bandeja
         </Link>
       </header>
 
-      <section className="helpdesk-progress__summary" aria-label="Resumen del avance">
+      <section
+        className="helpdesk-progress__summary"
+        aria-label="Resumen del avance"
+      >
         {order.map((state) => (
-          <article key={state} className={`helpdesk-progress__stat is-${state}`}>
+          <article
+            key={state}
+            className={`helpdesk-progress__stat is-${state}`}
+          >
             <strong>{totals[state]}</strong>
             <span>{stateLabel[state]}</span>
           </article>
@@ -257,24 +394,37 @@ export function HelpdeskProgressPage() {
       </section>
 
       <section className="helpdesk-progress__notice">
-        <h2>Próximo objetivo</h2>
+        <h2>Fase activa: HD-2</h2>
         <p>
-          Integrar en el repositorio los bloques de Mesa de Ayuda ya entregados,
-          generar y revisar la migración operativa, compilar backend y frontend,
-          y comprobar primero los permisos del usuario común y del personal TIC.
-          Después conectaremos Ollama y validaremos las automatizaciones.
+          Cerramos la asignación por especialidad, cobertura y capacidad.
+          Después continuamos con el núcleo transversal del agente virtual,
+          Ollama y los módulos restantes. Las configuraciones externas y
+          el testing completo conservan sus fases.
         </p>
-        <p>
-          La prueba entre equipos de W11 sigue pendiente del acceso al instalador
-          en el equipo B.
-        </p>
+      </section>
+
+      <section className="helpdesk-progress__notice">
+        <h2>Fases con código listo que esperan pruebas</h2>
+        <ul>
+          {readyForTesting.map((item) => (
+            <li key={`${item.phase}-${item.name}`}>
+              <strong>{item.phase} · {item.name}:</strong> {item.detail}
+            </li>
+          ))}
+        </ul>
       </section>
 
       <div className="helpdesk-progress__phases">
         {phases.map((phase) => (
-          <section className="helpdesk-progress__phase" key={phase.code}>
+          <section
+            className="helpdesk-progress__phase"
+            key={phase.code}
+          >
             <header>
-              <span className="helpdesk-progress__code">{phase.code}</span>
+              <span className="helpdesk-progress__code">
+                {phase.code}
+              </span>
+
               <div>
                 <h2>{phase.name}</h2>
                 <p>{phase.objective}</p>
@@ -283,12 +433,20 @@ export function HelpdeskProgressPage() {
 
             <div className="helpdesk-progress__items">
               {phase.items.map((item) => (
-                <article className="helpdesk-progress__item" key={item.name}>
+                <article
+                  className="helpdesk-progress__item"
+                  key={item.name}
+                >
                   <div>
                     <h3>{item.name}</h3>
                     <p>{item.detail}</p>
                   </div>
-                  <span className={`helpdesk-progress__badge is-${item.state}`}>
+
+                  <span
+                    className={
+                      `helpdesk-progress__badge is-${item.state}`
+                    }
+                  >
                     {stateLabel[item.state]}
                   </span>
                 </article>
