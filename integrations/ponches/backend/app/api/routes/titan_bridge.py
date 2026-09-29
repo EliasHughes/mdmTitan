@@ -1,11 +1,11 @@
 from __future__ import annotations
 
 import hmac
-import os
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Header, HTTPException, Query
 
+from app.core.config import settings
 from app.services.database import fetch_all, test_connection
 
 router = APIRouter(
@@ -15,10 +15,7 @@ router = APIRouter(
 
 
 def authorize(key: str | None) -> None:
-    expected = os.getenv(
-        "TITAN_PONCHES_INTEGRATION_KEY",
-        "",
-    ).strip()
+    expected = settings.TITAN_PONCHES_INTEGRATION_KEY.strip()
 
     if len(expected) < 32:
         raise HTTPException(
@@ -34,32 +31,44 @@ def authorize(key: str | None) -> None:
 
 
 def require_database() -> None:
-    status = test_connection()
+    result = test_connection()
 
-    if status.get("status") != "online":
+    if result.get("status") != "online":
         raise HTTPException(
             status_code=503,
-            detail="BioTime no está disponible.",
+            detail="BioTimeDB no está disponible.",
         )
 
 
-def read_recent(limit: int) -> list[dict]:
+def recent(limit: int) -> list[dict]:
     return fetch_all(
         """
         SELECT TOP (?)
-            id,
-            codigo,
-            nombre,
-            departamento,
-            fecha,
-            entrada,
-            salida,
-            dispositivo_origen
+            id, codigo, nombre, departamento, fecha,
+            entrada, salida, dispositivo_origen
         FROM dbo.punches
         ORDER BY fecha DESC, entrada DESC, id DESC
         """,
         (limit,),
     )
+
+
+@router.get("/health")
+def integration_health(
+    x_titan_integration_key: str | None = Header(
+        default=None,
+        alias="X-Titan-Integration-Key",
+    ),
+):
+    authorize(x_titan_integration_key)
+    database = test_connection()
+
+    return {
+        "service": "ponches",
+        "database": database.get("status"),
+        "databaseName": settings.DB_NAME,
+        "server": settings.DB_SERVER,
+    }
 
 
 @router.get("/dashboard")
@@ -78,58 +87,78 @@ def dashboard(
             SELECT
                 COUNT(*) AS total_hoy,
                 COUNT(DISTINCT codigo) AS empleados_hoy,
-                COUNT(DISTINCT dispositivo_origen)
-                    AS relojes_hoy,
-                SUM(CASE WHEN entrada IS NOT NULL
-                         THEN 1 ELSE 0 END)
+                COUNT(DISTINCT dispositivo_origen) AS relojes_hoy,
+                SUM(CASE WHEN entrada IS NOT NULL THEN 1 ELSE 0 END)
                     AS con_entrada,
-                SUM(CASE WHEN salida IS NOT NULL
-                         THEN 1 ELSE 0 END)
+                SUM(CASE WHEN salida IS NOT NULL THEN 1 ELSE 0 END)
                     AS con_salida,
-                SUM(CASE WHEN entrada IS NOT NULL
-                           AND salida IS NULL
-                         THEN 1 ELSE 0 END)
-                    AS sin_salida
+                SUM(CASE WHEN entrada IS NOT NULL AND salida IS NULL
+                         THEN 1 ELSE 0 END) AS sin_salida
             FROM dbo.punches
             WHERE fecha >= CAST(GETDATE() AS date)
-              AND fecha < DATEADD(
-                  day, 1, CAST(GETDATE() AS date)
-              )
+              AND fecha < DATEADD(day, 1, CAST(GETDATE() AS date))
             """
         )
 
         row = rows[0] if rows else {}
 
+        by_day = fetch_all(
+            """
+            SELECT
+                CONVERT(varchar(10), CAST(fecha AS date), 23) AS label,
+                COUNT(*) AS total
+            FROM dbo.punches
+            WHERE fecha >= DATEADD(day, -13, CAST(GETDATE() AS date))
+            GROUP BY CAST(fecha AS date)
+            ORDER BY CAST(fecha AS date)
+            """
+        )
+
+        by_department = fetch_all(
+            """
+            SELECT TOP (10)
+                ISNULL(NULLIF(LTRIM(RTRIM(departamento)), ''),
+                       'Sin departamento') AS label,
+                COUNT(*) AS total
+            FROM dbo.punches
+            WHERE fecha >= CAST(GETDATE() AS date)
+              AND fecha < DATEADD(day, 1, CAST(GETDATE() AS date))
+            GROUP BY ISNULL(NULLIF(LTRIM(RTRIM(departamento)), ''),
+                            'Sin departamento')
+            ORDER BY COUNT(*) DESC
+            """
+        )
+
         return {
-            "generatedAtUtc": datetime.now(
-                timezone.utc
-            ).isoformat(),
+            "generatedAtUtc": datetime.now(timezone.utc).isoformat(),
             "summary": {
-                "totalHoy": int(
-                    row.get("total_hoy") or 0
-                ),
-                "empleadosHoy": int(
-                    row.get("empleados_hoy") or 0
-                ),
-                "relojesHoy": int(
-                    row.get("relojes_hoy") or 0
-                ),
-                "conEntrada": int(
-                    row.get("con_entrada") or 0
-                ),
-                "conSalida": int(
-                    row.get("con_salida") or 0
-                ),
-                "sinSalida": int(
-                    row.get("sin_salida") or 0
-                ),
+                "totalHoy": int(row.get("total_hoy") or 0),
+                "empleadosHoy": int(row.get("empleados_hoy") or 0),
+                "relojesHoy": int(row.get("relojes_hoy") or 0),
+                "conEntrada": int(row.get("con_entrada") or 0),
+                "conSalida": int(row.get("con_salida") or 0),
+                "sinSalida": int(row.get("sin_salida") or 0),
             },
-            "recent": read_recent(30),
+            "byDay": [
+                {
+                    "label": str(item.get("label") or ""),
+                    "total": int(item.get("total") or 0),
+                }
+                for item in by_day
+            ],
+            "byDepartment": [
+                {
+                    "label": str(item.get("label") or ""),
+                    "total": int(item.get("total") or 0),
+                }
+                for item in by_department
+            ],
+            "recent": recent(30),
         }
     except Exception as exc:
         raise HTTPException(
             status_code=503,
-            detail="No se pudo consultar el resumen.",
+            detail="No se pudo consultar el dashboard.",
         ) from exc
 
 
@@ -149,33 +178,21 @@ def records(
 
     try:
         if not term:
-            items = read_recent(limit)
+            items = recent(limit)
         else:
             pattern = f"%{term}%"
-
             items = fetch_all(
                 """
                 SELECT TOP (?)
-                    id,
-                    codigo,
-                    nombre,
-                    departamento,
-                    fecha,
-                    entrada,
-                    salida,
-                    dispositivo_origen
+                    id, codigo, nombre, departamento, fecha,
+                    entrada, salida, dispositivo_origen
                 FROM dbo.punches
                 WHERE codigo LIKE ?
                    OR nombre LIKE ?
                    OR departamento LIKE ?
                 ORDER BY fecha DESC, entrada DESC, id DESC
                 """,
-                (
-                    limit,
-                    pattern,
-                    pattern,
-                    pattern,
-                ),
+                (limit, pattern, pattern, pattern),
             )
 
         return {
@@ -189,3 +206,109 @@ def records(
             status_code=503,
             detail="No se pudieron consultar los registros.",
         ) from exc
+
+
+@router.get("/collaborators")
+def collaborators(
+    limit: int = Query(default=100, ge=1, le=200),
+    search: str = Query(default="", max_length=80),
+    x_titan_integration_key: str | None = Header(
+        default=None,
+        alias="X-Titan-Integration-Key",
+    ),
+):
+    authorize(x_titan_integration_key)
+    require_database()
+
+    term = search.strip()
+    where = ""
+    params: list[object] = [limit]
+
+    if term:
+        where = "WHERE codigo LIKE ? OR nombre LIKE ?"
+        pattern = f"%{term}%"
+        params.extend((pattern, pattern))
+
+    try:
+        items = fetch_all(
+            f"""
+            SELECT TOP (?)
+                codigo,
+                MAX(nombre) AS nombre,
+                MAX(departamento) AS departamento,
+                COUNT(*) AS registros,
+                MAX(fecha) AS ultima_fecha
+            FROM dbo.punches
+            {where}
+            GROUP BY codigo
+            ORDER BY MAX(fecha) DESC
+            """,
+            tuple(params),
+        )
+
+        return {"items": items, "count": len(items)}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudieron consultar los colaboradores.",
+        ) from exc
+
+
+@router.get("/devices")
+def devices(
+    x_titan_integration_key: str | None = Header(
+        default=None,
+        alias="X-Titan-Integration-Key",
+    ),
+):
+    authorize(x_titan_integration_key)
+    require_database()
+
+    try:
+        items = fetch_all(
+            """
+            SELECT TOP (100)
+                dispositivo_origen AS nombre,
+                COUNT(*) AS registros,
+                COUNT(DISTINCT codigo) AS colaboradores,
+                MAX(fecha) AS ultima_fecha
+            FROM dbo.punches
+            WHERE dispositivo_origen IS NOT NULL
+              AND LTRIM(RTRIM(dispositivo_origen)) <> ''
+            GROUP BY dispositivo_origen
+            ORDER BY MAX(fecha) DESC
+            """
+        )
+
+        return {"items": items, "count": len(items)}
+    except Exception as exc:
+        raise HTTPException(
+            status_code=503,
+            detail="No se pudo consultar la actividad de los relojes.",
+        ) from exc
+
+@router.get("/dashboard-original")
+def dashboard_original(
+    x_titan_integration_key: str | None = Header(
+        default=None, alias="X-Titan-Integration-Key"
+    ),
+):
+    authorize(x_titan_integration_key)
+    require_database()
+    from app.api.routes.records_query import get_dashboard_combined
+    return get_dashboard_combined(
+        _user={"username": "titan-internal"}
+    )
+
+
+@router.get("/device-health")
+def device_health_original(
+    x_titan_integration_key: str | None = Header(
+        default=None, alias="X-Titan-Integration-Key"
+    ),
+):
+    authorize(x_titan_integration_key)
+    from app.api.routes.records_clocks import device_health
+    return device_health(
+        _user={"username": "titan-internal"}
+    )

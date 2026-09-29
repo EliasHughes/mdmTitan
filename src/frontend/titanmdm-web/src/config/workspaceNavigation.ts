@@ -486,23 +486,16 @@ const helpDeskNavigation: WorkspaceNavigationItem[] = [
  * REGISTRY
  * ================================================================
  */
-
 const navigationByWorkspace:
-  Record<
-    TitanModuleId,
-    WorkspaceNavigationItem[]
-  > = {
-    windows:
-      windowsNavigation,
+  Record<TitanModuleId, WorkspaceNavigationItem[]> = {
+    windows: windowsNavigation,
+    android: androidNavigation,
+    administration: administrationNavigation,
+    helpdesk: helpDeskNavigation,
 
-    android:
-      androidNavigation,
-
-    administration:
-      administrationNavigation,
-
-    helpdesk:
-      helpDeskNavigation,
+    // Ponches usa sus opciones dentro de PonchesPage.
+    // Se registra aquí para completar el contrato de TitanModuleId.
+    ponches: [],
   }
 
 /*

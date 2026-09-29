@@ -146,24 +146,14 @@ function applyWorkspaceTheme(module: TitanModuleDefinition | null): void {
 
 export function WorkspaceProvider({ children }: { children: ReactNode }) {
   const location = useLocation()
-  const [activeWorkspaceId, setActiveWorkspaceId] =
+  const [selectedWorkspaceId, setSelectedWorkspaceId] =
     useState<TitanModuleId | null>(readStoredWorkspace)
 
-  useEffect(() => {
-    if (location.pathname === '/') {
-      setActiveWorkspaceId(null)
-      return
-    }
-
-    const resolved = resolveWorkspace(location.pathname, location.search)
-    if (resolved) {
-      setActiveWorkspaceId(resolved)
-      storeWorkspace(resolved)
-      return
-    }
-
-    setActiveWorkspaceId(readStoredWorkspace())
-  }, [location.pathname, location.search])
+  const activeWorkspaceId =
+    location.pathname === '/'
+      ? null
+      : resolveWorkspace(location.pathname, location.search) ??
+        selectedWorkspaceId
 
   const activeModule = useMemo(
     () => (activeWorkspaceId ? getTitanModule(activeWorkspaceId) ?? null : null),
@@ -175,12 +165,12 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   }, [activeModule])
 
   const selectWorkspace = useCallback((workspaceId: TitanModuleId) => {
-    setActiveWorkspaceId(workspaceId)
+    setSelectedWorkspaceId(workspaceId)
     storeWorkspace(workspaceId)
   }, [])
 
   const clearWorkspace = useCallback(() => {
-    setActiveWorkspaceId(null)
+    setSelectedWorkspaceId(null)
     removeStoredWorkspace()
     applyWorkspaceTheme(null)
   }, [])
@@ -208,6 +198,7 @@ export function WorkspaceProvider({ children }: { children: ReactNode }) {
   )
 }
 
+// eslint-disable-next-line react-refresh/only-export-components
 export function useWorkspace(): WorkspaceContextValue {
   const context = useContext(WorkspaceContext)
   if (!context) {

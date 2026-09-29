@@ -263,6 +263,7 @@ _optional("collab_sync")
 _optional("remote")
 _optional("collaborators")
 _optional("devices")
+_optional("titan_bridge")
 
 
 # ================================================================

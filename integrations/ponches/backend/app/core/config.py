@@ -51,6 +51,7 @@ class Settings(BaseSettings):
     DB_USER: str = ""
     DB_PASSWORD: str = ""
     DB_DRIVER: str = "ODBC Driver 17 for SQL Server"
+    TITAN_PONCHES_INTEGRATION_KEY: str = ""
 
     # Diagnóstico de esquema: tablas permitidas (vacío = solo punches)
     SCHEMA_ALLOWED_TABLES: str = "punches"

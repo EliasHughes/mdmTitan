@@ -26,13 +26,16 @@ public sealed class PonchesController : ControllerBase
     }
 
     [HttpGet("dashboard")]
-    public Task<IActionResult> Dashboard(
-        CancellationToken cancellationToken)
-    {
-        return ForwardAsync(
-            "/api/internal/titan/dashboard",
-            cancellationToken);
-    }
+    public Task<IActionResult> Dashboard(CancellationToken cancellationToken) =>
+        ForwardAsync("/api/internal/titan/dashboard", cancellationToken);
+
+    [HttpGet("dashboard-original")]
+    public Task<IActionResult> OriginalDashboard(CancellationToken cancellationToken) =>
+        ForwardAsync("/api/internal/titan/dashboard-original", cancellationToken);
+
+    [HttpGet("device-health")]
+    public Task<IActionResult> DeviceHealth(CancellationToken cancellationToken) =>
+        ForwardAsync("/api/internal/titan/device-health", cancellationToken);
 
     [HttpGet("records")]
     public Task<IActionResult> Records(
@@ -40,127 +43,191 @@ public sealed class PonchesController : ControllerBase
         [FromQuery] string search = "",
         CancellationToken cancellationToken = default)
     {
-        if (limit is < 1 or > 200 ||
-            search.Length > 80)
-        {
+        if (limit is < 1 or > 200 || search.Length > 80)
             return Task.FromResult<IActionResult>(
-                BadRequest(new
-                {
-                    message = "Filtro de registros inválido."
-                }));
+                BadRequest(new { message = "Filtro de registros inválido." }));
+
+        var path = "/api/internal/titan/records" +
+                   $"?limit={limit}&search={Uri.EscapeDataString(search)}";
+
+        return ForwardAsync(path, cancellationToken);
+    }
+
+    [AcceptVerbs("GET", "POST", "PUT", "PATCH", "DELETE")]
+    [Route("legacy/{**path}")]
+    public async Task<IActionResult> Legacy(
+        string path,
+        CancellationToken cancellationToken)
+    {
+        var allowedRoots = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
+        {
+            "records", "devices", "collaborators", "payroll",
+            "exports", "schema", "settings", "users"
+        };
+
+        var segments = (path ?? "")
+            .Split('/', StringSplitOptions.RemoveEmptyEntries);
+
+        if (segments.Length == 0 ||
+            !allowedRoots.Contains(segments[0]) ||
+            segments.Any(s => s is "." or ".." || s.Contains('\\')))
+            return NotFound();
+
+        var manage = HasPermission("settings.manage");
+        var view = manage || HasPermission("settings.view");
+
+        if (!view) return Forbid();
+        if (!HttpMethods.IsGet(Request.Method) && !manage) return Forbid();
+
+        if (!manage &&
+            (segments[0].Equals("users", StringComparison.OrdinalIgnoreCase) ||
+             segments[0].Equals("settings", StringComparison.OrdinalIgnoreCase) ||
+             segments[0].Equals("payroll", StringComparison.OrdinalIgnoreCase) ||
+             segments[0].Equals("schema", StringComparison.OrdinalIgnoreCase)))
+            return Forbid();
+
+        if (!TryGetService(out var baseUri, out var key))
+            return StatusCode(503, new { message = "Ponches no configurado." });
+
+        var actor = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (string.IsNullOrWhiteSpace(actor) ||
+            !Guid.TryParse(GetOrganization(), out _))
+            return Unauthorized();
+
+        try
+        {
+            var route = "/api/" +
+                string.Join("/", segments.Select(Uri.EscapeDataString)) +
+                Request.QueryString.Value;
+
+            using var outgoing = new HttpRequestMessage(
+                new HttpMethod(Request.Method),
+                new Uri(baseUri, route));
+
+            outgoing.Headers.TryAddWithoutValidation(
+                "X-Titan-Integration-Key", key);
+            outgoing.Headers.TryAddWithoutValidation(
+                "X-Titan-Actor", actor);
+            outgoing.Headers.TryAddWithoutValidation(
+                "X-Titan-Access", manage ? "manage" : "read");
+
+            if (!HttpMethods.IsGet(Request.Method))
+            {
+                if (Request.ContentLength is > 1_048_576)
+                    return StatusCode(413);
+
+                outgoing.Content = new StreamContent(Request.Body);
+
+                if (!string.IsNullOrWhiteSpace(Request.ContentType))
+                    outgoing.Content.Headers.TryAddWithoutValidation(
+                        "Content-Type", Request.ContentType);
+            }
+
+            using var incoming = await Client.SendAsync(
+                outgoing, cancellationToken);
+
+            var bytes = await incoming.Content.ReadAsByteArrayAsync(
+                cancellationToken);
+
+            Response.StatusCode = (int)incoming.StatusCode;
+
+            return File(
+                bytes,
+                incoming.Content.Headers.ContentType?.ToString()
+                    ?? "application/octet-stream");
         }
-
-        var path =
-            "/api/internal/titan/records" +
-            $"?limit={limit}" +
-            $"&search={Uri.EscapeDataString(search)}";
-
-        return ForwardAsync(
-            path,
-            cancellationToken);
+        catch (Exception ex)
+            when (ex is HttpRequestException or TaskCanceledException)
+        {
+            _logger.LogWarning(ex, "Ponches no disponible.");
+            return StatusCode(503, new { message = "Ponches no disponible." });
+        }
     }
 
     private async Task<IActionResult> ForwardAsync(
         string path,
         CancellationToken cancellationToken)
     {
-        var allowed = User.Claims.Any(claim =>
-            claim.Type == "permission" &&
-            (string.Equals(
-                 claim.Value,
-                 "settings.view",
-                 StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(
-                 claim.Value,
-                 "settings.manage",
-                 StringComparison.OrdinalIgnoreCase)));
-
-        if (!allowed)
+        if (!HasPermission("settings.view") &&
+            !HasPermission("settings.manage"))
             return Forbid();
 
-        var organization =
-            User.FindFirstValue("organization_id") ??
-            User.FindFirstValue("organizationId");
-
-        if (!Guid.TryParse(organization, out _))
+        if (!Guid.TryParse(GetOrganization(), out _))
             return Unauthorized();
 
-        var url = _configuration["Ponches:BaseUrl"];
-        var key = _configuration["Ponches:IntegrationKey"];
-
-        if (string.IsNullOrWhiteSpace(url) ||
-            string.IsNullOrWhiteSpace(key) ||
-            key.Length < 32 ||
-            !Uri.TryCreate(
-                url,
-                UriKind.Absolute,
-                out var baseUri) ||
-            baseUri.Scheme != Uri.UriSchemeHttp ||
-            baseUri.Host is not ("localhost" or "127.0.0.1"))
-        {
+        if (!TryGetService(out var baseUri, out var key))
             return StatusCode(
                 503,
-                new
-                {
-                    message =
-                        "El servicio local de Ponches no está configurado."
-                });
-        }
+                new { message = "El servicio local de Ponches no está configurado." });
 
         try
         {
-            using var request =
-                new HttpRequestMessage(
-                    HttpMethod.Get,
-                    new Uri(baseUri, path));
+            using var outgoing = new HttpRequestMessage(
+                HttpMethod.Get,
+                new Uri(baseUri, path));
 
-            request.Headers.TryAddWithoutValidation(
-                "X-Titan-Integration-Key",
-                key);
+            outgoing.Headers.TryAddWithoutValidation(
+                "X-Titan-Integration-Key", key);
 
-            using var response =
-                await Client.SendAsync(
-                    request,
-                    HttpCompletionOption.ResponseHeadersRead,
-                    cancellationToken);
+            using var incoming = await Client.SendAsync(
+                outgoing,
+                HttpCompletionOption.ResponseHeadersRead,
+                cancellationToken);
 
-            if (!response.IsSuccessStatusCode)
+            if (!incoming.IsSuccessStatusCode)
             {
                 _logger.LogWarning(
                     "Ponches respondió HTTP {Code}.",
-                    (int)response.StatusCode);
+                    (int)incoming.StatusCode);
 
                 return StatusCode(
                     503,
-                    new
-                    {
-                        message =
-                            "El servicio de Ponches no está disponible."
-                    });
+                    new { message = "El servicio de Ponches no está disponible." });
             }
 
-            var json = await response.Content
-                .ReadAsStringAsync(cancellationToken);
+            var json = await incoming.Content.ReadAsStringAsync(
+                cancellationToken);
 
-            return Content(
-                json,
-                "application/json");
+            return Content(json, "application/json");
         }
         catch (Exception ex)
-            when (ex is HttpRequestException
-                     or TaskCanceledException)
+            when (ex is HttpRequestException or TaskCanceledException)
         {
-            _logger.LogWarning(
-                ex,
-                "No se pudo consultar Ponches.");
+            _logger.LogWarning(ex, "No se pudo consultar Ponches.");
 
             return StatusCode(
                 503,
-                new
-                {
-                    message =
-                        "No se pudo conectar con Ponches."
-                });
+                new { message = "No se pudo conectar con Ponches." });
         }
+    }
+
+    private bool HasPermission(string permission) =>
+        User.Claims.Any(claim =>
+            claim.Type == "permission" &&
+            string.Equals(
+                claim.Value,
+                permission,
+                StringComparison.OrdinalIgnoreCase));
+
+    private string? GetOrganization() =>
+        User.FindFirstValue("organization_id") ??
+        User.FindFirstValue("organizationId");
+
+    private bool TryGetService(out Uri baseUri, out string key)
+    {
+        key = _configuration["Ponches:IntegrationKey"] ?? "";
+
+        var valid =
+            key.Length >= 32 &&
+            Uri.TryCreate(
+                _configuration["Ponches:BaseUrl"],
+                UriKind.Absolute,
+                out var candidate) &&
+            candidate.Scheme == Uri.UriSchemeHttp &&
+            (candidate.Host == "localhost" ||
+             candidate.Host == "127.0.0.1");
+
+        baseUri = valid ? candidate! : null!;
+        return valid;
     }
 }
