@@ -1,10 +1,5 @@
-import {
-  useEffect,
-  useState,
-} from 'react'
-import {
-  Outlet,
-} from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Outlet, useLocation } from 'react-router-dom'
 import apiClient from '../../api/apiClient'
 import {
   TitanAssistantProvider,
@@ -18,59 +13,37 @@ import {
 import {
   WorkspaceProvider,
 } from '../../workspace/WorkspaceContext'
-import {
-  Header,
-} from './Header'
-import {
-  ModuleNavigation,
-} from './ModuleNavigation'
-import {
-  Sidebar,
-} from './Sidebar'
+import { Header } from './Header'
+import { ModuleNavigation } from './ModuleNavigation'
+import { Sidebar } from './Sidebar'
 
 export function AppLayout() {
-  const [
-    sidebarCollapsed,
-    setSidebarCollapsed,
-  ] =
-    useState(false)
+  const location = useLocation()
+  const isPonches =
+    location.pathname === '/ponches' ||
+    location.pathname.startsWith('/ponches/')
 
-  const [
-    assistantAllowed,
-    setAssistantAllowed,
-  ] =
-    useState(false)
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [assistantAllowed, setAssistantAllowed] = useState(false)
 
   useEffect(() => {
     let active = true
 
     async function checkAssistantAccess() {
       try {
-        const response =
-          await apiClient.get<{
-            enabled: boolean
-          }>(
-            '/helpdesk/operations/assistant/me',
-          )
+        const response = await apiClient.get<{ enabled: boolean }>(
+          '/helpdesk/operations/assistant/me',
+        )
 
         if (active) {
-          setAssistantAllowed(
-            response.data
-              .enabled ===
-              true,
-          )
+          setAssistantAllowed(response.data.enabled === true)
         }
       } catch {
-        if (active) {
-          setAssistantAllowed(
-            false,
-          )
-        }
+        if (active) setAssistantAllowed(false)
       }
     }
 
     void checkAssistantAccess()
-
     return () => {
       active = false
     }
@@ -81,20 +54,15 @@ export function AppLayout() {
       <TitanAssistantProvider>
         <div className="app-layout">
           <Sidebar
-            collapsed={
-              sidebarCollapsed
-            }
-            onToggle={() =>
-              setSidebarCollapsed(
-                (value) =>
-                  !value,
-              )
-            }
+            collapsed={sidebarCollapsed}
+            onToggle={() => setSidebarCollapsed((value) => !value)}
           />
 
           <div className="app-layout__main">
             <Header />
-            <ModuleNavigation />
+
+            {/* Ponches utiliza navegación dentro de su propio módulo. */}
+            {!isPonches && <ModuleNavigation />}
 
             <main className="app-layout__content">
               <Outlet />
@@ -102,9 +70,8 @@ export function AppLayout() {
             </main>
           </div>
 
-          {assistantAllowed && (
-            <TitanAssistant />
-          )}
+          {/* Fiorella ocupará esta pantalla al integrar su chat original. */}
+          {assistantAllowed && !isPonches && <TitanAssistant />}
         </div>
       </TitanAssistantProvider>
     </WorkspaceProvider>

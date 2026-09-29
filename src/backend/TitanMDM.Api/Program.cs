@@ -127,10 +127,6 @@ builder.Services.AddHostedService<HelpdeskMonitoringService>();
 builder.Services.AddHostedService<HelpdeskRoutingWorker>();
 builder.Services.AddHostedService<HelpdeskMailWorker>();
 
-builder.Services.AddHostedService<HelpdeskMonitoringService>();
-builder.Services.AddHostedService<HelpdeskRoutingWorker>();
-builder.Services.AddHostedService<HelpdeskMailWorker>();
-
 
 /*
  * ================================================================

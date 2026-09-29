@@ -7,539 +7,211 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-
-import {
-  useLocation,
-} from 'react-router-dom'
-
+import { useLocation } from 'react-router-dom'
 import {
   getTitanModule,
   type TitanModuleDefinition,
   type TitanModuleId,
 } from '../config/moduleRegistry'
 
-/*
- * ================================================================
- * STORAGE
- * ================================================================
- */
-
-const WORKSPACE_STORAGE_KEY =
-  'titanmdm:active-workspace'
-
-/*
- * ================================================================
- * CONTEXT CONTRACT
- * ================================================================
- */
+const STORAGE_KEY = 'titanmdm:active-workspace'
 
 interface WorkspaceContextValue {
-  activeWorkspaceId:
-    TitanModuleId | null
-
-  activeModule:
-    TitanModuleDefinition | null
-
-  selectWorkspace: (
-    workspaceId: TitanModuleId,
-  ) => void
-
+  activeWorkspaceId: TitanModuleId | null
+  activeModule: TitanModuleDefinition | null
+  selectWorkspace: (workspaceId: TitanModuleId) => void
   clearWorkspace: () => void
-
-  isWorkspace: (
-    workspaceId: TitanModuleId,
-  ) => boolean
+  isWorkspace: (workspaceId: TitanModuleId) => boolean
 }
 
-const WorkspaceContext =
-  createContext<
-    WorkspaceContextValue | undefined
-  >(undefined)
+const WorkspaceContext = createContext<WorkspaceContextValue | undefined>(
+  undefined,
+)
 
-/*
- * ================================================================
- * HELPERS
- * ================================================================
- */
+function isValidWorkspace(value: string | null): value is TitanModuleId {
+  return (
+    value === 'windows' ||
+    value === 'android' ||
+    value === 'helpdesk' ||
+    value === 'administration' ||
+    value === 'ponches'
+  )
+}
 
-function readStoredWorkspace():
-  TitanModuleId | null {
+function readStoredWorkspace(): TitanModuleId | null {
   try {
-    const value =
-      window.localStorage.getItem(
-        WORKSPACE_STORAGE_KEY,
-      )
-
-    if (
-      value === 'windows' ||
-      value === 'android' ||
-      value === 'helpdesk' ||
-      value === 'administration'
-    ) {
-      return value
-    }
+    const value = window.localStorage.getItem(STORAGE_KEY)
+    return isValidWorkspace(value) ? value : null
   } catch {
-    /*
-     * El navegador podría bloquear localStorage.
-     * TitanMDM seguirá funcionando sin persistencia.
-     */
-  }
-
-  return null
-}
-
-function storeWorkspace(
-  workspaceId: TitanModuleId,
-): void {
-  try {
-    window.localStorage.setItem(
-      WORKSPACE_STORAGE_KEY,
-      workspaceId,
-    )
-  } catch {
-    // Persistencia opcional.
-  }
-}
-
-function removeStoredWorkspace():
-  void {
-  try {
-    window.localStorage.removeItem(
-      WORKSPACE_STORAGE_KEY,
-    )
-  } catch {
-    // Persistencia opcional.
-  }
-}
-
-/*
- * ================================================================
- * URL RESOLUTION
- * ================================================================
- */
-
-function getWorkspaceFromUrl(
-  pathname: string,
-  search: string,
-):
-  TitanModuleId | null {
-  /*
-   * El Launchpad no pertenece a ningún módulo.
-   */
-  if (
-    pathname === '/'
-  ) {
     return null
   }
+}
 
-  const params =
-    new URLSearchParams(
-      search,
-    )
+function storeWorkspace(value: TitanModuleId): void {
+  try {
+    window.localStorage.setItem(STORAGE_KEY, value)
+  } catch {
+    // El almacenamiento del navegador es opcional.
+  }
+}
 
-  const workspace =
-    params.get(
-      'workspace',
-    )
+function removeStoredWorkspace(): void {
+  try {
+    window.localStorage.removeItem(STORAGE_KEY)
+  } catch {
+    // El almacenamiento del navegador es opcional.
+  }
+}
 
-  if (
-    workspace === 'windows' ||
-    workspace === 'android' ||
-    workspace === 'helpdesk' ||
-    workspace === 'administration'
-  ) {
-    return workspace
+function resolveWorkspace(
+  pathname: string,
+  search: string,
+): TitanModuleId | null {
+  if (pathname === '/') return null
+
+  // La ruta del módulo prevalece sobre cualquier selección anterior.
+  if (pathname === '/ponches' || pathname.startsWith('/ponches/')) {
+    return 'ponches'
   }
 
-  /*
-   * Rutas administrativas poseen una identidad
-   * suficientemente clara para resolverlas sin query.
-   */
   if (
-    pathname.startsWith(
-      '/users',
-    )
-    ||
-    pathname.startsWith(
-      '/roles',
-    )
-    ||
-    pathname.startsWith(
-      '/settings',
-    )
-    ||
-    pathname.startsWith(
-      '/audit',
-    )
+    pathname === '/helpdesk/entra' ||
+    pathname.startsWith('/helpdesk/entra/')
   ) {
     return 'administration'
   }
 
-  /*
-   * Remote Support actual pertenece únicamente
-   * al workspace Windows.
-   */
   if (
-    pathname.startsWith(
-      '/remote',
-    )
+    pathname === '/helpdesk' ||
+    pathname.startsWith('/helpdesk/') ||
+    pathname === '/my-support' ||
+    pathname.startsWith('/my-support/')
   ) {
-    return 'windows'
+    return 'helpdesk'
   }
 
-  /*
-   * Kiosk y Geofencing actualmente son principalmente
-   * funcionalidades Android.
-   */
+  const params = new URLSearchParams(search)
+  const selected = params.get('workspace')
+  if (isValidWorkspace(selected)) return selected
+
   if (
-    pathname.startsWith(
-      '/kiosk',
-    )
-    ||
-    pathname.startsWith(
-      '/geofencing',
-    )
+    pathname.startsWith('/users') ||
+    pathname.startsWith('/roles') ||
+    pathname.startsWith('/settings') ||
+    pathname.startsWith('/audit')
+  ) {
+    return 'administration'
+  }
+
+  if (pathname.startsWith('/remote')) return 'windows'
+
+  if (
+    pathname.startsWith('/kiosk') ||
+    pathname.startsWith('/geofencing')
   ) {
     return 'android'
   }
 
-  /*
-   * Detectar plataforma en Devices.
-   */
-  if (
-    pathname.startsWith(
-      '/devices',
-    )
-  ) {
-    const platform =
-      params
-        .get('platform')
-        ?.toLowerCase()
-
-    if (
-      platform ===
-      'windows'
-    ) {
-      return 'windows'
-    }
-
-    if (
-      platform ===
-      'android'
-    ) {
-      return 'android'
+  if (pathname.startsWith('/devices')) {
+    const platform = params.get('platform')?.toLowerCase()
+    if (platform === 'windows' || platform === 'android') {
+      return platform
     }
   }
 
   return null
 }
 
-/*
- * ================================================================
- * CSS THEME
- * ================================================================
- */
-
-function applyWorkspaceTheme(
-  module:
-    TitanModuleDefinition | null,
-): void {
-  const root =
-    document.documentElement
-
-  if (
-    !module
-  ) {
-    root.style.setProperty(
-      '--workspace-primary',
-      '#4169e1',
-    )
-
-    root.style.setProperty(
-      '--workspace-primary-dark',
-      '#315edb',
-    )
-
-    root.style.setProperty(
-      '--workspace-soft',
-      '#edf2ff',
-    )
-
-    root.style.setProperty(
-      '--workspace-border',
-      '#dbe4ff',
-    )
-
-    root.dataset.workspace =
-      'home'
-
-    return
-  }
+function applyWorkspaceTheme(module: TitanModuleDefinition | null): void {
+  const root = document.documentElement
 
   root.style.setProperty(
     '--workspace-primary',
-    module.theme.primary,
+    module?.theme.primary ?? '#4169e1',
   )
-
   root.style.setProperty(
     '--workspace-primary-dark',
-    module.theme.primaryDark,
+    module?.theme.primaryDark ?? '#315edb',
   )
-
   root.style.setProperty(
     '--workspace-soft',
-    module.theme.soft,
+    module?.theme.soft ?? '#edf2ff',
   )
-
   root.style.setProperty(
     '--workspace-border',
-    module.theme.border,
+    module?.theme.border ?? '#dbe4ff',
   )
-
-  root.dataset.workspace =
-    module.id
+  root.dataset.workspace = module?.id ?? 'home'
 }
 
-/*
- * ================================================================
- * PROVIDER
- * ================================================================
- */
+export function WorkspaceProvider({ children }: { children: ReactNode }) {
+  const location = useLocation()
+  const [activeWorkspaceId, setActiveWorkspaceId] =
+    useState<TitanModuleId | null>(readStoredWorkspace)
 
-interface WorkspaceProviderProps {
-  children: ReactNode
-}
+  useEffect(() => {
+    if (location.pathname === '/') {
+      setActiveWorkspaceId(null)
+      return
+    }
 
-export function WorkspaceProvider({
-  children,
-}: WorkspaceProviderProps) {
-  const location =
-    useLocation()
+    const resolved = resolveWorkspace(location.pathname, location.search)
+    if (resolved) {
+      setActiveWorkspaceId(resolved)
+      storeWorkspace(resolved)
+      return
+    }
 
-  const [
-    activeWorkspaceId,
-    setActiveWorkspaceId,
-  ] =
-    useState<
-      TitanModuleId | null
-    >(
-      () =>
-        readStoredWorkspace(),
-    )
+    setActiveWorkspaceId(readStoredWorkspace())
+  }, [location.pathname, location.search])
 
-  /*
-   * ============================================================
-   * ROUTE SYNCHRONIZATION
-   * ============================================================
-   */
-
-  useEffect(
-    () => {
-      if (
-        location.pathname ===
-        '/'
-      ) {
-        setActiveWorkspaceId(
-          null,
-        )
-
-        applyWorkspaceTheme(
-          null,
-        )
-
-        return
-      }
-
-      const resolved =
-        getWorkspaceFromUrl(
-          location.pathname,
-          location.search,
-        )
-
-      if (
-        resolved
-      ) {
-        setActiveWorkspaceId(
-          resolved,
-        )
-
-        storeWorkspace(
-          resolved,
-        )
-
-        return
-      }
-
-      /*
-       * Si una pantalla compartida como /policies
-       * no declara workspace, conservamos el último
-       * seleccionado.
-       */
-      const stored =
-        readStoredWorkspace()
-
-      if (
-        stored
-      ) {
-        setActiveWorkspaceId(
-          stored,
-        )
-      }
-    },
-    [
-      location.pathname,
-      location.search,
-    ],
+  const activeModule = useMemo(
+    () => (activeWorkspaceId ? getTitanModule(activeWorkspaceId) ?? null : null),
+    [activeWorkspaceId],
   )
 
-  /*
-   * ============================================================
-   * MODULE RESOLUTION
-   * ============================================================
-   */
+  useEffect(() => {
+    applyWorkspaceTheme(activeModule)
+  }, [activeModule])
 
-  const activeModule =
-    useMemo(
-      () => {
-        if (
-          !activeWorkspaceId
-        ) {
-          return null
-        }
+  const selectWorkspace = useCallback((workspaceId: TitanModuleId) => {
+    setActiveWorkspaceId(workspaceId)
+    storeWorkspace(workspaceId)
+  }, [])
 
-        return (
-          getTitanModule(
-            activeWorkspaceId,
-          )
-          ??
-          null
-        )
-      },
-      [
-        activeWorkspaceId,
-      ],
-    )
+  const clearWorkspace = useCallback(() => {
+    setActiveWorkspaceId(null)
+    removeStoredWorkspace()
+    applyWorkspaceTheme(null)
+  }, [])
 
-  /*
-   * ============================================================
-   * THEME APPLICATION
-   * ============================================================
-   */
+  const isWorkspace = useCallback(
+    (workspaceId: TitanModuleId) => activeWorkspaceId === workspaceId,
+    [activeWorkspaceId],
+  )
 
-  useEffect(
-    () => {
-      applyWorkspaceTheme(
-        activeModule,
-      )
-    },
-    [
+  const value = useMemo(
+    () => ({
+      activeWorkspaceId,
       activeModule,
-    ],
+      selectWorkspace,
+      clearWorkspace,
+      isWorkspace,
+    }),
+    [activeWorkspaceId, activeModule, selectWorkspace, clearWorkspace, isWorkspace],
   )
-
-  /*
-   * ============================================================
-   * ACTIONS
-   * ============================================================
-   */
-
-  const selectWorkspace =
-    useCallback(
-      (
-        workspaceId:
-          TitanModuleId,
-      ) => {
-        setActiveWorkspaceId(
-          workspaceId,
-        )
-
-        storeWorkspace(
-          workspaceId,
-        )
-      },
-      [],
-    )
-
-  const clearWorkspace =
-    useCallback(
-      () => {
-        setActiveWorkspaceId(
-          null,
-        )
-
-        removeStoredWorkspace()
-
-        applyWorkspaceTheme(
-          null,
-        )
-      },
-      [],
-    )
-
-  const isWorkspace =
-    useCallback(
-      (
-        workspaceId:
-          TitanModuleId,
-      ) =>
-        activeWorkspaceId ===
-        workspaceId,
-      [
-        activeWorkspaceId,
-      ],
-    )
-
-  const value =
-    useMemo<
-      WorkspaceContextValue
-    >(
-      () => ({
-        activeWorkspaceId,
-        activeModule,
-        selectWorkspace,
-        clearWorkspace,
-        isWorkspace,
-      }),
-      [
-        activeWorkspaceId,
-        activeModule,
-        selectWorkspace,
-        clearWorkspace,
-        isWorkspace,
-      ],
-    )
 
   return (
-    <WorkspaceContext.Provider
-      value={
-        value
-      }
-    >
+    <WorkspaceContext.Provider value={value}>
       {children}
     </WorkspaceContext.Provider>
   )
 }
 
-/*
- * ================================================================
- * HOOK
- * ================================================================
- */
-
-export function useWorkspace():
-  WorkspaceContextValue {
-  const context =
-    useContext(
-      WorkspaceContext,
-    )
-
-  if (
-    !context
-  ) {
-    throw new Error(
-      'useWorkspace debe utilizarse dentro de WorkspaceProvider.',
-    )
+export function useWorkspace(): WorkspaceContextValue {
+  const context = useContext(WorkspaceContext)
+  if (!context) {
+    throw new Error('useWorkspace debe utilizarse dentro de WorkspaceProvider.')
   }
-
   return context
 }

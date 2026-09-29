@@ -123,6 +123,7 @@ import { HelpdeskSpecialtiesPage } from './pages/helpdesk/HelpdeskSpecialtiesPag
 import { HelpdeskReportsPage } from './pages/helpdesk/HelpdeskReportsPage'
 import { EntraLoginCallbackPage } from './pages/EntraLoginCallbackPage'
 import { HelpdeskCoveragePage } from './pages/helpdesk/HelpdeskCoveragePage'
+import { PonchesPage } from './pages/ponches/PonchesPage'
 
 
 
@@ -214,6 +215,14 @@ function App() {
   element={
     <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
       <HelpdeskCoveragePage />
+    </PermissionRoute>
+  }
+/>
+<Route
+  path="ponches"
+  element={
+    <PermissionRoute anyOf={['settings.view']}>
+      <PonchesPage />
     </PermissionRoute>
   }
 />

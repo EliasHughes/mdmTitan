@@ -190,28 +190,20 @@ export function Sidebar({
           )
         })}
 
-        {canAdmin && (
-          <div
-            className="sidebar__link sidebar__link--future"
-            aria-label="Ponches: próximo módulo"
-            title={
-              collapsed
-                ? 'Ponches · Próximamente'
-                : undefined
-            }
-          >
-            <Clock3 size={19} />
-
-            {!collapsed && (
-              <span>
-                Ponches
-                <small>
-                  Próximamente
-                </small>
-              </span>
-            )}
-          </div>
-        )}
+       {canAdmin && (
+  <NavLink
+    to="/ponches"
+    className={({ isActive }) =>
+      isActive
+        ? 'sidebar__link sidebar__link--active'
+        : 'sidebar__link'
+    }
+    title={collapsed ? 'Ponches' : undefined}
+  >
+    <Clock3 size={19} />
+    {!collapsed && <span>Ponches</span>}
+  </NavLink>
+)}
       </nav>
 
       <div className="sidebar__footer">
