@@ -1,6 +1,7 @@
 # .NET
 **/bin/
 **/obj/
+**/TestResults/
 *.user
 *.suo
 *.userosscache
@@ -15,11 +16,23 @@
 **/node_modules/
 **/dist/
 **/.vite/
+**/coverage/
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# Environment / secrets
+# Python
+**/.venv/
+**/venv/
+**/__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# Entorno y credenciales
 .env
 .env.*
 !.env.example
@@ -28,8 +41,6 @@ appsettings.Local.json
 **/secrets.json
 **/*credentials*.json
 **/*service-account*.json
-
-# Google / Android credentials
 application_default_credentials.json
 *.keystore
 *.jks
@@ -39,15 +50,27 @@ application_default_credentials.json
 **/build/
 local.properties
 
-# Logs
+# Datos locales, registros y paquetes generados
+**/backend/data/
+*.sqlite3
+*.db
 *.log
-logs/
+**/logs/
+/artifacts/
+*.bak
+*.bak.*
+*.zip
+*.7z
+*.rar
+*.dll
+*.exe
+*.pdb
+*.xlsx
+*.xls
+*.csv
 
-# OS
+# Temporales del sistema
 .DS_Store
 Thumbs.db
-
-# IDE / temporary
 *.tmp
 *.temp
-*.bak

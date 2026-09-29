@@ -214,20 +214,22 @@ public sealed class PonchesController : ControllerBase
         User.FindFirstValue("organizationId");
 
     private bool TryGetService(out Uri baseUri, out string key)
+{
+    baseUri = null!;
+    key = _configuration["Ponches:IntegrationKey"] ?? "";
+
+    if (key.Length < 32 ||
+        !Uri.TryCreate(
+            _configuration["Ponches:BaseUrl"],
+            UriKind.Absolute,
+            out var candidate) ||
+        candidate.Scheme != Uri.UriSchemeHttp ||
+        candidate.Host is not ("localhost" or "127.0.0.1"))
     {
-        key = _configuration["Ponches:IntegrationKey"] ?? "";
-
-        var valid =
-            key.Length >= 32 &&
-            Uri.TryCreate(
-                _configuration["Ponches:BaseUrl"],
-                UriKind.Absolute,
-                out var candidate) &&
-            candidate.Scheme == Uri.UriSchemeHttp &&
-            (candidate.Host == "localhost" ||
-             candidate.Host == "127.0.0.1");
-
-        baseUri = valid ? candidate! : null!;
-        return valid;
+        return false;
     }
+
+    baseUri = candidate;
+    return true;
+}
 }
