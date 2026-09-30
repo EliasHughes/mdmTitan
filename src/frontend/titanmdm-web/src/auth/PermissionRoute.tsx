@@ -1,29 +1,10 @@
-import type {
-  ReactNode,
-} from 'react'
-
-import {
-  Navigate,
-  useLocation,
-} from 'react-router-dom'
-
-import {
-  useAuth,
-} from './AuthContext'
+import type { ReactNode } from 'react'
+import { Navigate, useLocation } from 'react-router-dom'
+import { useAuth } from './AuthContext'
 
 interface PermissionRouteProps {
   children: ReactNode
-
-  /*
-   * El usuario necesita como mínimo
-   * uno de los permisos indicados.
-   */
   anyOf?: string[]
-
-  /*
-   * El usuario debe poseer todos
-   * los permisos indicados.
-   */
   allOf?: string[]
 }
 
@@ -37,118 +18,61 @@ export function PermissionRoute({
     isAuthenticated,
     isLoading,
     hasPermission,
-  } =
-    useAuth()
+  } = useAuth()
 
-  const location =
-    useLocation()
+  const location = useLocation()
 
-  /*
-   * ============================================================
-   * SESSION RESTORE
-   * ============================================================
-   */
-
-  if (
-    isLoading
-  ) {
+  if (isLoading) {
     return (
       <div className="app-loading">
-        <div className="app-loading__logo">
-          T
-        </div>
-
+        <div className="app-loading__logo">T</div>
         <div className="app-loading__spinner" />
-
-        <p>
-          Verificando autorización...
-        </p>
+        <p>Verificando autorización…</p>
       </div>
     )
   }
 
-  /*
-   * ============================================================
-   * AUTHENTICATION
-   * ============================================================
-   */
-
-  if (
-    !isAuthenticated ||
-    !user
-  ) {
+  if (!isAuthenticated || !user) {
     return (
       <Navigate
         to="/login"
         replace
         state={{
-          from:
-            location.pathname
-            +
-            location.search,
+          from: location.pathname + location.search,
         }}
       />
     )
   }
 
-  /*
-   * ============================================================
-   * ANY-OF
-   * ============================================================
-   */
+  const ponches =
+    location.pathname === '/ponches' ||
+    location.pathname.startsWith('/ponches/')
 
-  const hasAnyPermission =
-    anyOf.length ===
-      0
-      ||
-      anyOf.some(
-        permission =>
-          hasPermission(
-            permission,
-          ),
-      )
+  // Sustituye el acceso provisional de Ponches por su
+  // permiso propio, aunque App.tsx conserve settings.view.
+  const any = ponches
+    ? ['workspace.ponches.view', 'ponches.manage']
+    : anyOf
 
-  /*
-   * ============================================================
-   * ALL-OF
-   * ============================================================
-   */
+  const all = allOf
 
-  const hasAllPermissions =
-    allOf.every(
-      permission =>
-        hasPermission(
-          permission,
-        ),
-    )
+  const hasAny =
+    any.length === 0 ||
+    any.some(hasPermission)
 
-  /*
-   * ============================================================
-   * AUTHORIZATION
-   * ============================================================
-   */
+  const hasAll = all.every(hasPermission)
 
-  if (
-    !hasAnyPermission ||
-    !hasAllPermissions
-  ) {
+  if (!hasAny || !hasAll) {
     return (
       <Navigate
         to="/forbidden"
         replace
         state={{
-          from:
-            location.pathname
-            +
-            location.search,
+          from: location.pathname + location.search,
         }}
       />
     )
   }
 
-  return (
-    <>
-      {children}
-    </>
-  )
+  return <>{children}</>
 }

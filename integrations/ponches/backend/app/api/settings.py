@@ -2,16 +2,21 @@ import json
 from pathlib import Path
 
 from fastapi import APIRouter, Depends
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
-from app.core.deps import get_current_user, require_admin
+from app.core.deps import get_current_user, require_permission
 
 router = APIRouter(
     prefix="/settings",
     tags=["settings"],
     dependencies=[Depends(get_current_user)],
 )
-FILE = Path(__file__).resolve().parents[3] / "data" / "app_settings.json"
+
+FILE = (
+    Path(__file__).resolve().parents[3]
+    / "data"
+    / "app_settings.json"
+)
 
 DEFAULTS = {
     "company_name": "César Iglesias",
@@ -32,19 +37,31 @@ DEFAULTS = {
 def _read() -> dict:
     if not FILE.exists():
         return dict(DEFAULTS)
+
     try:
         data = json.loads(FILE.read_text(encoding="utf-8"))
+
         if isinstance(data, dict):
             return {**DEFAULTS, **data}
     except Exception:
         pass
+
     return dict(DEFAULTS)
 
 
 def _write(data: dict) -> dict:
     FILE.parent.mkdir(parents=True, exist_ok=True)
     merged = {**_read(), **data}
-    FILE.write_text(json.dumps(merged, ensure_ascii=False, indent=2), encoding="utf-8")
+
+    FILE.write_text(
+        json.dumps(
+            merged,
+            ensure_ascii=False,
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+
     return merged
 
 
@@ -66,21 +83,38 @@ class SettingsIn(BaseModel):
 
 
 @router.get("")
-def get_settings():
+def get_settings(
+    _user: dict = Depends(
+        require_permission("settings.read")
+    ),
+):
     return _read()
 
 
 @router.get("/")
-def get_settings_slash():
+def get_settings_slash(
+    _user: dict = Depends(
+        require_permission("settings.read")
+    ),
+):
     return _read()
-
 
 
 @router.api_route("", methods=["POST", "PUT"])
 @router.api_route("/", methods=["POST", "PUT"])
-def save_settings(body: SettingsIn, _user: dict = Depends(require_admin)):
-    payload = {k: v for k, v in body.model_dump().items() if v is not None}
-    return {"ok": True, "settings": _write(payload)}
+def save_settings(
+    body: SettingsIn,
+    _user: dict = Depends(
+        require_permission("settings.write")
+    ),
+):
+    payload = {
+        key: value
+        for key, value in body.model_dump().items()
+        if value is not None
+    }
 
-
-
+    return {
+        "ok": True,
+        "settings": _write(payload),
+    }

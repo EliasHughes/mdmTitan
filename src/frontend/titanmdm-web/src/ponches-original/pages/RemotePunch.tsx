@@ -1,118 +1,577 @@
 import { useEffect, useState } from "react";
-import { Shield } from "lucide-react";
+import {
+  ArrowDownToLine,
+  ArrowUpFromLine,
+  CheckCircle2,
+  Clock3,
+  Database,
+  RefreshCw,
+  ShieldCheck,
+  Watch,
+} from "lucide-react";
+
 import { authFetch } from "../lib/api";
 import { Btn, PageHeader, Panel } from "../ui/kit";
 
+type Payload = {
+  codigo: string;
+  tipo: "entrada" | "salida";
+  dispositivo: string;
+  target: "sql";
+};
+
+type PreviewData = {
+  codigo: string;
+  nombre?: string;
+  tipo: string;
+  dispositivo: string;
+  origen?: string;
+  actor?: string;
+  action?: string;
+  version?: string;
+};
+
+type Result = {
+  id?: number;
+  codigo?: string;
+  fecha?: string;
+  hora?: string;
+  message?: string;
+  sql_confirmed?: boolean;
+};
+
+async function readResponse<T>(
+  response: Response
+): Promise<T> {
+  const data = await response.json().catch(() => ({}));
+
+  if (!response.ok) {
+    throw new Error(
+      typeof data.detail === "string"
+        ? data.detail
+        : `La solicitud falló: HTTP ${response.status}`
+    );
+  }
+
+  return data as T;
+}
+
 export default function RemotePunch() {
   const [codigo, setCodigo] = useState("");
-  const [tipo, setTipo] = useState<"entrada" | "salida">("entrada");
-  const [comentario, setComentario] = useState("");
-  const [dispositivo, setDispositivo] = useState("Ponche Remoto");
-  const [devices, setDevices] = useState<string[]>(["Ponche Remoto"]);
-  const [loading, setLoading] = useState(false);
+  const [tipo, setTipo] = useState<"entrada" | "salida">(
+    "entrada"
+  );
+  const [dispositivo, setDispositivo] = useState(
+    "Ponche Remoto"
+  );
+  const [devices, setDevices] = useState<string[]>([
+    "Ponche Remoto",
+  ]);
+
+  const [loadingDevices, setLoadingDevices] = useState(true);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [ok, setOk] = useState("");
-  const [preview, setPreview] = useState<string>("");
+
+  const [preview, setPreview] = useState<{
+    payload: Payload;
+    data: PreviewData;
+  } | null>(null);
+
+  const [result, setResult] = useState<Result | null>(null);
 
   useEffect(() => {
-    authFetch("/api/records/remote-devices")
-      .then((r) => r.json())
-      .then((d) => {
-        const items = d.items || d.devices || [];
-        const names = items.map((x: string | { name?: string }) => (typeof x === "string" ? x : x.name || "")).filter(Boolean);
-        if (names.length) setDevices(names);
-      })
-      .catch(() => undefined);
+    const controller = new AbortController();
+
+    async function load() {
+      try {
+        const response = await authFetch(
+          "/api/records/remote-devices",
+          { signal: controller.signal }
+        );
+
+        const data = await readResponse<{
+          items?: string[];
+        }>(response);
+
+        if (!controller.signal.aborted) {
+          setDevices(
+            data.items?.length
+              ? data.items
+              : ["Ponche Remoto"]
+          );
+        }
+      } catch (cause) {
+        if (!controller.signal.aborted) {
+          setError(
+            cause instanceof Error
+              ? cause.message
+              : "No se pudo cargar el inventario"
+          );
+        }
+      } finally {
+        if (!controller.signal.aborted) {
+          setLoadingDevices(false);
+        }
+      }
+    }
+
+    void load();
+
+    return () => controller.abort();
   }, []);
 
-  const payload = () => ({ codigo, tipo, comentario, dispositivo });
-
-  const onPreview = async (ev: React.FormEvent) => {
-    ev.preventDefault();
-    setLoading(true);
+  function clearState() {
+    setPreview(null);
+    setResult(null);
     setError("");
-    setOk("");
-    try {
-      const res = await authFetch("/api/records/remote-punch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload(), dry_run: true, confirm: false }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Error ${res.status}`);
-      setPreview(JSON.stringify(data, null, 2));
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudo previsualizar");
-    } finally {
-      setLoading(false);
-    }
-  };
+  }
 
-  const onLive = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const res = await authFetch("/api/records/remote-punch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ ...payload(), dry_run: false, confirm: true }),
-      });
-      const data = await res.json();
-      if (!res.ok) throw new Error(typeof data.detail === "string" ? data.detail : `Error ${res.status}`);
-      setOk(`Ponche ${tipo} registrado para ${codigo}`);
-      setPreview("");
-      setComentario("");
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se registró el ponche");
-    } finally {
-      setLoading(false);
+  async function onPreview(
+    event: React.FormEvent
+  ) {
+    event.preventDefault();
+
+    if (busy) return;
+
+    const code = codigo.trim();
+
+    if (!/^[0-9]+$/.test(code)) {
+      setError("El código debe contener solo números.");
+      return;
     }
-  };
+
+    const payload: Payload = {
+      codigo: code,
+      tipo,
+      dispositivo,
+      target: "sql",
+    };
+
+    setBusy(true);
+    setError("");
+    setResult(null);
+    setPreview(null);
+
+    try {
+      const response = await authFetch(
+        "/api/records/remote-punch",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...payload,
+            dry_run: true,
+            confirm: false,
+          }),
+        }
+      );
+
+      const data = await readResponse<PreviewData>(
+        response
+      );
+
+      if (data.version !== "daily-row-v2") {
+        throw new Error(
+          "El backend Python sigue usando una versión anterior. " +
+          "Reinícialo después de guardar records_remote.py."
+        );
+      }
+
+      setPreview({ payload, data });
+
+    } catch (cause) {
+      setError(
+        cause instanceof Error
+          ? cause.message
+          : "No se pudo previsualizar"
+      );
+
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function onConfirm() {
+    if (!preview || busy) return;
+
+    const payload = preview.payload;
+
+    setBusy(true);
+    setError("");
+
+    try {
+      const response = await authFetch(
+        "/api/records/remote-punch",
+        {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            ...payload,
+            dry_run: false,
+            confirm: true,
+          }),
+        }
+      );
+
+      const data = await readResponse<Result>(
+        response
+      );
+
+      if (data.sql_confirmed !== true) {
+        throw new Error(
+          "El backend no confirmó el registro en SQL."
+        );
+      }
+
+      setResult(data);
+      setPreview(null);
+
+    } catch (cause) {
+      setPreview(null);
+
+      setError(
+        (cause instanceof Error
+          ? cause.message
+          : "No se pudo confirmar el registro") +
+        " Comprueba el historial antes de repetirlo."
+      );
+
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const inputClass =
+    "w-full rounded-xl border border-zinc-200 " +
+    "bg-white/90 px-3 py-3 text-sm outline-none " +
+    "transition focus:border-[#c8102e] " +
+    "focus:ring-2 focus:ring-[#c8102e]/20 " +
+    "disabled:opacity-60";
 
   return (
-    <div className="space-y-5 page-enter">
-      <PageHeader kicker="Operación" title="Ponche remoto" subtitle="Primero preview · luego confirmación live" />
+    <div className="page-enter space-y-5">
+      <PageHeader
+        kicker="Operación"
+        title="Ponche remoto"
+        subtitle="Registro manual de entrada o salida con verificación previa."
+      />
 
-      <div className="grid sm:grid-cols-2 gap-3">
-        <div className={`kpi-tile ${tipo === "entrada" ? "kpi-emerald" : "kpi-sky"}`}>
+      <div className="grid gap-4 sm:grid-cols-3">
+        <div
+          className={
+            `kpi-tile ${
+              tipo === "entrada"
+                ? "kpi-emerald"
+                : "kpi-sky"
+            }`
+          }
+        >
           <span className="shine" />
-          <p className="text-xs text-white/80">Tipo</p>
-          <p className="text-3xl font-black capitalize">{tipo}</p>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-white/80">
+              Tipo de registro
+            </p>
+            <Clock3 size={22} />
+          </div>
+
+          <p className="mt-3 text-3xl font-black capitalize">
+            {tipo}
+          </p>
         </div>
+
         <div className="kpi-tile kpi-slate">
           <span className="shine" />
-          <p className="text-xs text-white/80">Origen</p>
-          <p className="text-lg font-black truncate">{dispositivo}</p>
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-white/80">
+              Referencia
+            </p>
+            <Watch size={22} />
+          </div>
+
+          <p className="mt-3 truncate text-lg font-black">
+            {dispositivo}
+          </p>
+        </div>
+
+        <div className="kpi-tile kpi-sky">
+          <span className="shine" />
+
+          <div className="flex items-center justify-between">
+            <p className="text-xs text-white/80">
+              Destino del registro
+            </p>
+            <Database size={22} />
+          </div>
+
+          <p className="mt-3 text-2xl font-black">
+            SQL Server
+          </p>
+
+          <p className="mt-1 text-xs text-white/80">
+            Confirmación después de guardar
+          </p>
         </div>
       </div>
 
-      <Panel className="max-w-xl">
-        <form onSubmit={onPreview} className="space-y-3">
-          <input required value={codigo} onChange={(e) => setCodigo(e.target.value)} placeholder="Código" className="w-full text-sm border rounded-xl px-3 py-2.5" />
-          <select value={dispositivo} onChange={(e) => setDispositivo(e.target.value)} className="w-full text-sm border rounded-xl px-3 py-2.5 bg-white">
-            {devices.map((d) => <option key={d} value={d}>{d}</option>)}
-          </select>
-          <div className="grid grid-cols-2 gap-2">
-            <button type="button" onClick={() => setTipo("entrada")} className={`btn-modern rounded-xl py-2 text-sm font-semibold ${tipo === "entrada" ? "bg-emerald-600 text-white" : "bg-zinc-100"}`}>Entrada</button>
-            <button type="button" onClick={() => setTipo("salida")} className={`btn-modern rounded-xl py-2 text-sm font-semibold ${tipo === "salida" ? "bg-sky-600 text-white" : "bg-zinc-100"}`}>Salida</button>
-          </div>
-          <input value={comentario} onChange={(e) => setComentario(e.target.value)} placeholder="Comentario" className="w-full text-sm border rounded-xl px-3 py-2.5" />
-          {error ? <p className="text-sm text-rose-700 bg-rose-50 rounded-xl px-3 py-2">{error}</p> : null}
-          {ok ? <p className="text-sm text-emerald-700 bg-emerald-50 rounded-xl px-3 py-2">{ok}</p> : null}
-          <Btn type="submit" tone="primary" disabled={loading}>{loading ? "…" : "Previsualizar"}</Btn>
-        </form>
+      <div className="grid items-start gap-5 lg:grid-cols-2">
+        <Panel className="space-y-4 !p-6">
+          <div className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-xl bg-[#c8102e]/10 text-[#c8102e]">
+              <Clock3 size={23} />
+            </span>
 
-        {preview ? (
-          <div className="mt-4 rounded-xl bg-zinc-50 p-3">
-            <p className="text-xs font-semibold flex items-center gap-2 mb-2"><Shield size={14} /> Dry-run</p>
-            <pre className="text-[11px] overflow-auto max-h-40">{preview}</pre>
-            <div className="flex gap-2 mt-3">
-              <Btn tone="ghost" onClick={() => setPreview("")}>Cancelar</Btn>
-              <Btn tone="primary" onClick={onLive} disabled={loading}>Confirmar live</Btn>
+            <div>
+              <h3 className="text-lg font-bold">
+                Registrar asistencia
+              </h3>
+              <p className="text-sm text-zinc-500">
+                Selecciona el colaborador y la operación.
+              </p>
             </div>
           </div>
-        ) : null}
-      </Panel>
+
+          <form
+            onSubmit={onPreview}
+            className="space-y-4"
+          >
+            <label className="block text-sm font-semibold">
+              Código del colaborador
+
+              <input
+                required
+                maxLength={24}
+                inputMode="numeric"
+                value={codigo}
+                disabled={busy}
+                onChange={(event) => {
+                  clearState();
+                  setCodigo(event.target.value);
+                }}
+                placeholder="Ejemplo: 62627"
+                className={`${inputClass} mt-2`}
+              />
+            </label>
+
+            <label className="block text-sm font-semibold">
+              Referencia del reloj
+
+              <select
+                value={dispositivo}
+                disabled={busy || loadingDevices}
+                onChange={(event) => {
+                  clearState();
+                  setDispositivo(event.target.value);
+                }}
+                className={`${inputClass} mt-2`}
+              >
+                {devices.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <fieldset disabled={busy}>
+              <legend className="mb-2 text-sm font-semibold">
+                Tipo de registro
+              </legend>
+
+              <div className="grid grid-cols-2 gap-3">
+                {([
+                  {
+                    value: "entrada",
+                    label: "Entrada",
+                    Icon: ArrowDownToLine,
+                    activeClass:
+                      "border-emerald-600 bg-emerald-600 text-white",
+                  },
+                  {
+                    value: "salida",
+                    label: "Salida",
+                    Icon: ArrowUpFromLine,
+                    activeClass:
+                      "border-sky-600 bg-sky-600 text-white",
+                  },
+                ] as const).map((item) => (
+                  <button
+                    key={item.value}
+                    type="button"
+                    aria-pressed={tipo === item.value}
+                    onClick={() => {
+                      clearState();
+                      setTipo(item.value);
+                    }}
+                    className={
+                      "btn-modern flex items-center justify-center " +
+                      "gap-2 rounded-xl border px-4 py-3 " +
+                      "text-sm font-semibold transition " +
+                      (tipo === item.value
+                        ? item.activeClass
+                        : "border-zinc-200 bg-white text-zinc-600")
+                    }
+                  >
+                    <item.Icon size={18} />
+                    {item.label}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+
+            {error && (
+              <p
+                role="alert"
+                className="rounded-xl border border-rose-200 bg-rose-50 p-3 text-sm text-rose-800"
+              >
+                {error}
+              </p>
+            )}
+
+            <div className="flex flex-wrap gap-3 pt-2">
+              <Btn
+                type="submit"
+                tone="primary"
+                disabled={
+                  busy ||
+                  loadingDevices ||
+                  !codigo.trim()
+                }
+              >
+                <ShieldCheck size={17} />
+                {busy ? "Procesando…" : "Previsualizar"}
+              </Btn>
+
+              <Btn
+                tone="ghost"
+                disabled={busy}
+                onClick={() => {
+                  clearState();
+                  setCodigo("");
+                }}
+              >
+                <RefreshCw size={16} />
+                Limpiar
+              </Btn>
+            </div>
+          </form>
+        </Panel>
+
+        <div className="space-y-4">
+          <Panel className="!p-6">
+            <div className="flex items-center gap-2 font-semibold">
+              <ShieldCheck
+                size={19}
+                className="text-[#c8102e]"
+              />
+              Alcance del registro
+            </div>
+
+            <p className="mt-3 text-sm leading-6 text-zinc-600">
+              La operación completa la entrada o salida
+              vacía de la fila diaria. Si ese campo ya
+              tiene un valor, se conserva y la solicitud
+              se rechaza.
+            </p>
+
+            <p className="mt-3 text-sm leading-6 text-zinc-600">
+              El registro se guarda en SQL. La escritura
+              de asistencia en la memoria del reloj sigue
+              pendiente de compatibilidad del SDK oficial.
+            </p>
+          </Panel>
+
+          {preview && (
+            <Panel className="!border-[#c8102e]/30 !p-6">
+              <h3 className="text-lg font-bold">
+                Confirmar registro
+              </h3>
+
+              <dl className="mt-4 grid grid-cols-2 gap-3 text-sm">
+                <dt className="text-zinc-500">Código</dt>
+                <dd className="font-semibold">
+                  {preview.data.codigo}
+                </dd>
+
+                <dt className="text-zinc-500">Colaborador</dt>
+                <dd>{preview.data.nombre || "Sin nombre"}</dd>
+
+                <dt className="text-zinc-500">Tipo</dt>
+                <dd className="capitalize">
+                  {preview.data.tipo}
+                </dd>
+
+                <dt className="text-zinc-500">Referencia</dt>
+                <dd>{preview.data.dispositivo}</dd>
+
+                <dt className="text-zinc-500">Operador</dt>
+                <dd>{preview.data.actor || "Sesión actual"}</dd>
+
+                <dt className="text-zinc-500">Acción</dt>
+                <dd>
+                  {preview.data.action === "update"
+                    ? "Completar fila existente"
+                    : "Crear fila del día"}
+                </dd>
+              </dl>
+
+              <p className="mt-4 text-xs text-zinc-500">
+                La fecha y hora se tomarán del servidor
+                cuando confirmes.
+              </p>
+
+              <div className="mt-5 flex flex-wrap gap-3">
+                <Btn
+                  tone="primary"
+                  disabled={busy}
+                  onClick={() => void onConfirm()}
+                >
+                  <Database size={17} />
+                  Confirmar en SQL
+                </Btn>
+
+                <Btn
+                  tone="ghost"
+                  disabled={busy}
+                  onClick={() => setPreview(null)}
+                >
+                  Cancelar
+                </Btn>
+              </div>
+            </Panel>
+          )}
+
+          {result && (
+            <div
+              role="status"
+              className="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-sm text-emerald-900"
+            >
+              <div className="flex items-center gap-2 font-bold">
+                <CheckCircle2 size={21} />
+                Registro confirmado en SQL
+              </div>
+
+              <p className="mt-3">
+                Código: {result.codigo} · Registro:{" "}
+                {result.id}
+              </p>
+
+              <p className="mt-1">
+                {result.fecha} {result.hora}
+              </p>
+
+              <p className="mt-3">
+                {result.message}
+              </p>
+            </div>
+          )}
+        </div>
+      </div>
     </div>
   );
 }

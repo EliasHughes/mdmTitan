@@ -1,0 +1,14 @@
+{
+  "company_name": "César Iglesias",
+  "prod_host": "172.21.20.14",
+  "night_start": "06:00",
+  "jornada_hours": 8.0,
+  "extra_factor": 0.45,
+  "night_factor": 0.15,
+  "sunday_factor": 1.0,
+  "saturday_premium_factor": 1.0,
+  "holiday_factor": 1.65,
+  "saturday_base_hours": 4.0,
+  "log_sync_on_filter": true,
+  "remote_punch_enabled": true
+}

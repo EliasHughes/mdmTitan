@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import hmac
+from uuid import UUID
 
-from fastapi import Depends, Header, HTTPException, status
+from fastapi import Depends, Header, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.core.config import settings
@@ -20,21 +21,23 @@ _bearer = HTTPBearer(auto_error=False)
 
 def get_current_user(
     creds: HTTPAuthorizationCredentials | None = Depends(_bearer),
-    x_actor: str | None = Header(default=None, alias="X-Actor"),
+    x_actor: str | None = Header(None, alias="X-Actor"),
     x_titan_integration_key: str | None = Header(
-        default=None,
-        alias="X-Titan-Integration-Key",
+        None, alias="X-Titan-Integration-Key"
     ),
     x_titan_actor: str | None = Header(
-        default=None,
-        alias="X-Titan-Actor",
+        None, alias="X-Titan-Actor"
+    ),
+    x_titan_organization: str | None = Header(
+        None, alias="X-Titan-Organization"
     ),
     x_titan_access: str | None = Header(
-        default=None,
-        alias="X-Titan-Access",
+        None, alias="X-Titan-Access"
+    ),
+    x_titan_operations: str | None = Header(
+        None, alias="X-Titan-Operations"
     ),
 ) -> dict:
-    # Solo la API .NET conoce esta clave. El navegador nunca la recibe.
     if x_titan_integration_key is not None:
         expected = settings.TITAN_PONCHES_INTEGRATION_KEY.strip()
 
@@ -43,68 +46,75 @@ def get_current_user(
             x_titan_integration_key,
         ):
             raise HTTPException(
-                status_code=401,
-                detail="Integración no autorizada",
+                401,
+                "Integración no autorizada",
             )
 
-        if not x_titan_actor or len(x_titan_actor) > 200:
+        try:
+            actor = str(UUID(x_titan_actor or ""))
+            organization = str(UUID(x_titan_organization or ""))
+        except (ValueError, TypeError):
             raise HTTPException(
-                status_code=401,
-                detail="Actor de TitanMDM requerido",
+                401,
+                "Identidad de TitanMDM inválida",
             )
 
-        manage = x_titan_access == "manage"
+        if x_titan_access not in {"manage", "delegate"}:
+            raise HTTPException(
+                403,
+                "Delegación de permisos requerida",
+            )
 
-        readonly = [
-            operation
-            for operation in ALL_OPERATIONS
-            if operation.endswith(".read")
-            or operation in {
-                "attendance.read",
-                "zk.read",
-                "exports.read",
-            }
-        ]
+        operations = {
+            value.strip()
+            for value in (x_titan_operations or "").split(",")
+            if value.strip()
+        }
 
-        operations = (
-            list(ALL_OPERATIONS)
-            if manage
-            else readonly
-        )
+        if not operations.issubset(set(ALL_OPERATIONS)):
+            raise HTTPException(
+                403,
+                "Operación de integración desconocida",
+            )
 
+        # Las identidades de Titan reciben exclusivamente
+        # las operaciones autorizadas por el backend .NET.
         return {
-            "username": x_titan_actor,
-            "name": x_titan_actor,
-            "role": "admin" if manage else "titan_viewer",
-            "permissions": {"operations": operations},
-            "operations": operations,
+            "username": actor,
+            "name": actor,
+            "organization_id": organization,
+            "source": "titan",
+            "role": (
+                "admin"
+                if x_titan_access == "manage"
+                else "delegate"
+            ),
+            "operations": sorted(operations),
+            "permissions": {
+                "operations": sorted(operations),
+            },
             "active": True,
         }
 
-    # Conserva el inicio de sesión original para instalaciones
-    # independientes del visualizador.
     token = creds.credentials if creds else None
 
     if not token:
-        raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token requerido",
-        )
+        raise HTTPException(401, "Token requerido")
 
     payload = decode_access_token(token)
 
     if not payload or not payload.get("sub"):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Token inválido o expirado",
+            401,
+            "Token inválido o expirado",
         )
 
     user = find_user(str(payload["sub"]))
 
     if not user or not user.get("active", True):
         raise HTTPException(
-            status_code=status.HTTP_401_UNAUTHORIZED,
-            detail="Usuario inactivo",
+            401,
+            "Usuario inactivo",
         )
 
     result = public_user(user)
@@ -118,42 +128,53 @@ def get_current_user(
 def require_role(*roles: str):
     allowed = {role.lower() for role in roles}
 
-    def _inner(user: dict = Depends(get_current_user)) -> dict:
+    def check(
+        user: dict = Depends(get_current_user),
+    ) -> dict:
         role = normalize_role(user.get("role"))
 
         if role in ADMIN_ROLES or role in allowed:
             return user
 
+        raise HTTPException(403, "Sin permiso")
+
+    return check
+
+
+def require_admin(
+    user: dict = Depends(get_current_user),
+) -> dict:
+    if normalize_role(user.get("role")) not in ADMIN_ROLES:
         raise HTTPException(
-            status_code=403,
-            detail="Sin permiso",
-        )
-
-    return _inner
-
-
-def require_admin(user: dict = Depends(get_current_user)) -> dict:
-    role = normalize_role(user.get("role"))
-
-    if role not in ADMIN_ROLES:
-        raise HTTPException(
-            status_code=403,
-            detail="Requiere rol administrativo",
+            403,
+            "Requiere rol administrativo",
         )
 
     return user
 
 
 def require_permission(*operations: str):
-    needed = tuple(operation for operation in operations if operation)
+    needed = set(operations)
 
-    def _inner(user: dict = Depends(get_current_user)) -> dict:
-        if has_permission(user, *needed):
+    def check(
+        user: dict = Depends(get_current_user),
+    ) -> dict:
+        if user.get("source") == "titan":
+            permitted = (
+                bool(needed)
+                and needed.issubset(
+                    set(user.get("operations", []))
+                )
+            )
+        else:
+            permitted = has_permission(user, *operations)
+
+        if permitted:
             return user
 
         raise HTTPException(
-            status_code=403,
-            detail="Sin permiso para: " + ", ".join(needed),
+            403,
+            "Sin permiso para: " + ", ".join(sorted(needed)),
         )
 
-    return _inner
+    return check

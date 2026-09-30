@@ -50,13 +50,12 @@ application_default_credentials.json
 **/build/
 local.properties
 
-# Datos locales, registros y paquetes generados
+# Datos locales y paquetes generados
 **/backend/data/
+/artifacts/
+/.titan-local/
 *.sqlite3
 *.db
-*.log
-**/logs/
-/artifacts/
 *.bak
 *.bak.*
 *.zip
@@ -69,7 +68,11 @@ local.properties
 *.xls
 *.csv
 
-# Temporales del sistema
+# Registros
+*.log
+**/logs/
+
+# Temporales
 .DS_Store
 Thumbs.db
 *.tmp

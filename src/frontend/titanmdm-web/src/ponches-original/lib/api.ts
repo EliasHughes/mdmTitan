@@ -1,54 +1,150 @@
+import axios, { type AxiosResponse } from 'axios'
 import apiClient from '../../api/apiClient'
+
+function asResponse(
+  result: AxiosResponse<ArrayBuffer>,
+): Response {
+  const headers = new Headers()
+
+  for (const name of [
+    'content-type',
+    'content-disposition',
+    'retry-after',
+  ]) {
+    const value = result.headers[name]
+
+    if (value != null) {
+      headers.set(name, String(value))
+    }
+  }
+
+  const empty = [204, 205, 304].includes(result.status)
+
+  return new Response(
+    empty ? null : result.data,
+    {
+      status: result.status,
+      statusText: result.statusText,
+      headers,
+    },
+  )
+}
 
 export async function authFetch(
   path: string,
   init: RequestInit = {},
 ): Promise<Response> {
-  if (!path.startsWith('/api/')) {
+  if (
+    !path.startsWith('/api/') ||
+    path.startsWith('/api//')
+  ) {
     throw new Error('Ruta inválida de Ponches')
   }
 
-  const target = '/ponches/legacy/' + path.slice('/api/'.length)
+  const relative = path.slice('/api/'.length)
+
+  const parsed = new URL(
+    relative,
+    'https://titan.invalid/',
+  )
+
+  const invalidSegments = relative
+    .split('?')[0]
+    .split('/')
+    .some(part => part === '..' || part === '.')
+
+  if (
+    parsed.origin !== 'https://titan.invalid' ||
+    invalidSegments
+  ) {
+    throw new Error('Ruta inválida de Ponches')
+  }
+
+  const headers = new Headers(init.headers)
+
+  // La identidad proviene de la sesión de TitanMDM.
+  headers.delete('Authorization')
+
+  const form =
+    typeof FormData !== 'undefined' &&
+    init.body instanceof FormData
+
+  const raw =
+    typeof Blob !== 'undefined' &&
+    init.body instanceof Blob
+
+  const contentType =
+    headers.get('Content-Type') ??
+    (form || raw ? null : 'application/json')
 
   try {
-    const result = await apiClient.request<ArrayBuffer>({
-      url: target,
-      method: init.method ?? 'GET',
-      data: init.body,
-      headers: init.headers
-        ? Object.fromEntries(new Headers(init.headers))
-        : undefined,
-      responseType: 'arraybuffer',
-      validateStatus: () => true,
-    })
+    const result =
+      await apiClient.request<ArrayBuffer>({
+        url: '/ponches/legacy/' + relative,
+        method: init.method ?? 'GET',
+        data: init.body,
 
-    const headers = new Headers()
+        headers: {
+          ...Object.fromEntries(headers),
+          'Content-Type': contentType,
+        },
 
-    if (result.headers['content-type']) {
-      headers.set(
-        'content-type',
-        String(result.headers['content-type']),
-      )
-    }
+        responseType: 'arraybuffer',
+        timeout: 200_000,
+        signal: init.signal ?? undefined,
 
-    if (result.headers['content-disposition']) {
-      headers.set(
-        'content-disposition',
-        String(result.headers['content-disposition']),
-      )
-    }
+        // Axios mantiene su manejo normal de errores.
+        // Así el interceptor puede renovar la sesión ante 401.
+      })
 
-    return new Response(
-      result.status === 204 ? null : result.data,
-      {
-        status: result.status,
-        headers,
-      },
-    )
+    return asResponse(result)
   } catch (error) {
+    if (
+      axios.isAxiosError<ArrayBuffer>(error) &&
+      error.response
+    ) {
+      const response = asResponse(error.response)
+
+      try {
+        const text = await response.clone().text()
+
+        const data = JSON.parse(text) as {
+          detail?: unknown
+          message?: string
+        }
+
+        // Las pantallas originales utilizan "detail".
+        if (!data.detail && data.message) {
+          return new Response(
+            JSON.stringify({
+              ...data,
+              detail: data.message,
+            }),
+            {
+              status: response.status,
+              headers: {
+                'Content-Type': 'application/json',
+              },
+            },
+          )
+        }
+      } catch {
+        // Exportaciones y algunos errores pueden no ser JSON.
+      }
+
+      return response
+    }
+
+    if (axios.isCancel(error)) {
+      throw error
+    }
+
     throw new Error(
-      'No se pudo conectar con el servicio de Ponches',
-      { cause: error },
+      'No se pudo conectar con Ponches. ' +
+      'Revisa que TitanMDM esté activo.',
+      {
+        cause: error,
+      },
     )
   }
 }

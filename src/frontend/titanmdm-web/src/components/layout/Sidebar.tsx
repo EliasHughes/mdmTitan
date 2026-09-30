@@ -9,10 +9,12 @@ import {
   ShieldCheck,
   Smartphone,
 } from 'lucide-react'
+
 import {
   NavLink,
   useLocation,
 } from 'react-router-dom'
+
 import { useAuth } from '../../auth/AuthContext'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
 
@@ -26,8 +28,7 @@ export function Sidebar({
   onToggle,
 }: Props) {
   const { hasPermission } = useAuth()
-  const { activeWorkspaceId } =
-    useWorkspace()
+  const { activeWorkspaceId } = useWorkspace()
   const location = useLocation()
 
   const canHelpdesk =
@@ -41,70 +42,51 @@ export function Sidebar({
     hasPermission('users.view') ||
     hasPermission('roles.view')
 
+  const canPonches =
+    hasPermission('workspace.ponches.view') ||
+    hasPermission('ponches.manage')
+
   const modules = [
     {
       label: 'Inicio',
       path: '/',
       icon: Home,
       enabled: true,
-      active:
-        location.pathname === '/',
+      active: location.pathname === '/',
     },
     {
       label: 'Windows',
-      path:
-        '/dashboard?workspace=windows',
+      path: '/dashboard?workspace=windows',
       icon: MonitorCog,
-      enabled:
-        hasPermission(
-          'workspace.windows.view',
-        ),
-      active:
-        activeWorkspaceId ===
-        'windows',
+      enabled: hasPermission('workspace.windows.view'),
+      active: activeWorkspaceId === 'windows',
     },
     {
       label: 'Android',
-      path:
-        '/dashboard?workspace=android',
+      path: '/dashboard?workspace=android',
       icon: Smartphone,
-      enabled:
-        hasPermission(
-          'workspace.android.view',
-        ),
-      active:
-        activeWorkspaceId ===
-        'android',
+      enabled: hasPermission('workspace.android.view'),
+      active: activeWorkspaceId === 'android',
     },
     {
       label: 'Mesa de ayuda',
       path:
-        hasPermission(
-          'tickets.view',
-        ) ||
-        hasPermission(
-          'helpdesk.view',
-        )
+        hasPermission('tickets.view') ||
+        hasPermission('helpdesk.view')
           ? '/helpdesk?workspace=helpdesk'
           : '/my-support?workspace=helpdesk',
       icon: Headphones,
       enabled: canHelpdesk,
       active:
-        activeWorkspaceId ===
-          'helpdesk' ||
-        location.pathname.startsWith(
-          '/my-support',
-        ),
+        activeWorkspaceId === 'helpdesk' ||
+        location.pathname.startsWith('/my-support'),
     },
     {
       label: 'Configuración',
-      path:
-        '/settings?workspace=administration',
+      path: '/settings?workspace=administration',
       icon: Settings,
       enabled: canAdmin,
-      active:
-        activeWorkspaceId ===
-        'administration',
+      active: activeWorkspaceId === 'administration',
     },
   ].filter((item) => item.enabled)
 
@@ -117,9 +99,7 @@ export function Sidebar({
       }
     >
       <div className="sidebar__brand">
-        <div className="sidebar__brand-mark">
-          T
-        </div>
+        <div className="sidebar__brand-mark">T</div>
 
         {!collapsed && (
           <div className="sidebar__brand-text">
@@ -166,9 +146,7 @@ export function Sidebar({
             <NavLink
               key={item.label}
               to={item.path}
-              end={
-                item.path === '/'
-              }
+              end={item.path === '/'}
               title={
                 collapsed
                   ? item.label
@@ -181,29 +159,32 @@ export function Sidebar({
               }
             >
               <Icon size={19} />
+
               {!collapsed && (
-                <span>
-                  {item.label}
-                </span>
+                <span>{item.label}</span>
               )}
             </NavLink>
           )
         })}
 
-       {canAdmin && (
-  <NavLink
-    to="/ponches"
-    className={({ isActive }) =>
-      isActive
-        ? 'sidebar__link sidebar__link--active'
-        : 'sidebar__link'
-    }
-    title={collapsed ? 'Ponches' : undefined}
-  >
-    <Clock3 size={19} />
-    {!collapsed && <span>Ponches</span>}
-  </NavLink>
-)}
+        {canPonches && (
+          <NavLink
+            to="/ponches"
+            className={({ isActive }) =>
+              isActive
+                ? 'sidebar__link sidebar__link--active'
+                : 'sidebar__link'
+            }
+            title={
+              collapsed
+                ? 'Ponches'
+                : undefined
+            }
+          >
+            <Clock3 size={19} />
+            {!collapsed && <span>Ponches</span>}
+          </NavLink>
+        )}
       </nav>
 
       <div className="sidebar__footer">
@@ -212,12 +193,8 @@ export function Sidebar({
 
           {!collapsed && (
             <div>
-              <strong>
-                Sistema protegido
-              </strong>
-              <span>
-                TitanMDM Security
-              </span>
+              <strong>Sistema protegido</strong>
+              <span>TitanMDM Security</span>
             </div>
           )}
         </div>

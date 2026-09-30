@@ -109,14 +109,10 @@ const ponchesModule: TitanModuleDefinition = {
     'Asistencia, colaboradores, relojes biométricos, sincronización, reportes y Fiorella.',
   path: '/ponches',
   icon: Clock3,
-
-  // Acceso administrativo provisional. El bloque de RBAC
-  // incorporará permisos separados para RR. HH. y supervisores.
   permissions: [
-    'settings.view',
-    'settings.manage',
+    'workspace.ponches.view',
+    'ponches.manage',
   ],
-
   enabled: true,
   badge: 'BioTime',
   theme: {
