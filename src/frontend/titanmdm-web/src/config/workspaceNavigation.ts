@@ -21,507 +21,106 @@ import {
   type LucideIcon,
 } from 'lucide-react'
 
-import type {
-  TitanModuleId,
-} from './moduleRegistry'
-
-/*
- * ================================================================
- * CONTRACT
- * ================================================================
- */
+import type { TitanModuleId } from './moduleRegistry'
 
 export interface WorkspaceNavigationItem {
   label: string
-
   path: string
-
   permission?: string
-
   icon: LucideIcon
 }
 
-/*
- * ================================================================
- * GLOBAL
- * ================================================================
- */
-
-export const globalNavigation:
-  WorkspaceNavigationItem[] = [
-    {
-      label:
-        'Titan Workspace',
-
-      path:
-        '/',
-
-      icon:
-        Home,
-    },
-    {
-      label: 'Mis solicitudes',
-      path: '/my-support',
-      icon: Inbox,
-    },
-  ]
-
-/*
- * ================================================================
- * WINDOWS
- * ================================================================
- */
-
-const windowsNavigation:
-  WorkspaceNavigationItem[] = [
-    {
-      label:
-        'Dashboard',
-
-      path:
-        '/dashboard?workspace=windows',
-
-      permission:
-        'dashboard.view',
-
-      icon:
-        Gauge,
-    },
-
-    {
-      label:
-        'Dispositivos',
-
-      path:
-        '/devices?platform=Windows&workspace=windows',
-
-      permission:
-        'devices.view',
-
-      icon:
-        MonitorSmartphone,
-    },
-
-    {
-      label:
-        'Grupos y Flota',
-
-      path:
-        '/groups?workspace=windows',
-
-      permission:
-        'devices.view',
-
-      icon:
-        Network,
-    },
-
-    {
-      label:
-        'Inscripción',
-
-      path:
-        '/enrollment?workspace=windows',
-
-      permission:
-        'enrollment.view',
-
-      icon:
-        Smartphone,
-    },
-
-    {
-      label:
-        'Políticas',
-
-      path:
-        '/policies?workspace=windows',
-
-      permission:
-        'policies.view',
-
-      icon:
-        ClipboardCheck,
-    },
-
-    {
-      label:
-        'Seguridad',
-
-      path:
-        '/security?workspace=windows',
-
-      permission:
-        'security.view',
-
-      icon:
-        ShieldCheck,
-    },
-
-    {
-      label:
-        'Cumplimiento',
-
-      path:
-        '/compliance?workspace=windows',
-
-      permission:
-        'compliance.view',
-
-      icon:
-        ShieldCheck,
-    },
-
-    {
-      label:
-        'Automatización',
-
-      path:
-        '/automation?workspace=windows',
-
-      permission:
-        'devices.commands',
-
-      icon:
-        Workflow,
-    },
-
-    {
-      label:
-        'Soporte remoto',
-
-      path:
-        '/remote?workspace=windows',
-
-      permission:
-        'remote.view',
-
-      icon:
-        RadioTower,
-    },
-
-    {
-      label:
-        'Reportes',
-
-      path:
-        '/reports?workspace=windows',
-
-      permission:
-        'reports.view',
-
-      icon:
-        FileBarChart,
-    },
-  ]
-
-/*
- * ================================================================
- * ANDROID
- * ================================================================
- */
-
-const androidNavigation:
-  WorkspaceNavigationItem[] = [
-    {
-      label:
-        'Dashboard',
-
-      path:
-        '/dashboard?workspace=android',
-
-      permission:
-        'dashboard.view',
-
-      icon:
-        Gauge,
-    },
-
-    {
-      label:
-        'Dispositivos',
-
-      path:
-        '/devices?platform=Android&workspace=android',
-
-      permission:
-        'devices.view',
-
-      icon:
-        Smartphone,
-    },
-
-    {
-      label:
-        'Inscripción',
-
-      path:
-        '/enrollment?workspace=android',
-
-      permission:
-        'enrollment.view',
-
-      icon:
-        Smartphone,
-    },
-
-    {
-      label:
-        'Políticas',
-
-      path:
-        '/policies?workspace=android',
-
-      permission:
-        'policies.view',
-
-      icon:
-        ClipboardCheck,
-    },
-
-    {
-      label:
-        'Aplicaciones',
-
-      path:
-        '/apps?workspace=android',
-
-      permission:
-        'apps.view',
-
-      icon:
-        AppWindow,
-    },
-
-    {
-      label:
-        'Seguridad',
-
-      path:
-        '/security?workspace=android',
-
-      permission:
-        'security.view',
-
-      icon:
-        ShieldCheck,
-    },
-
-    {
-      label:
-        'Cumplimiento',
-
-      path:
-        '/compliance?workspace=android',
-
-      permission:
-        'compliance.view',
-
-      icon:
-        ShieldCheck,
-    },
-
-    {
-      label:
-        'Kiosk',
-
-      path:
-        '/kiosk?workspace=android',
-
-      permission:
-        'kiosk.view',
-
-      icon:
-        PackageOpen,
-    },
-
-    {
-      label:
-        'Geofencing',
-
-      path:
-        '/geofencing?workspace=android',
-
-      permission:
-        'geofencing.view',
-
-      icon:
-        MapPinned,
-    },
-
-    {
-      label:
-        'Reportes',
-
-      path:
-        '/reports?workspace=android',
-
-      permission:
-        'reports.view',
-
-      icon:
-        FileBarChart,
-    },
-  ]
-
-/*
- * ================================================================
- * ADMINISTRATION
- * ================================================================
- */
-
-const administrationNavigation:
-  WorkspaceNavigationItem[] = [
-    {
-      label:
-        'Dashboard general',
-
-      path:
-        '/dashboard?workspace=global',
-
-      permission:
-        'dashboard.global.view',
-
-      icon:
-        Gauge,
-    },
-
-    {
-      label:
-        'Usuarios',
-
-      path:
-        '/users?workspace=administration',
-
-      permission:
-        'users.view',
-
-      icon:
-        Users,
-    },
-
-    {
-      label:
-        'Roles y permisos',
-
-      path:
-        '/roles?workspace=administration',
-
-      permission:
-        'roles.view',
-
-      icon:
-        UserCog,
-    },
-
-    {
-      label:
-        'Auditoría',
-
-      path:
-        '/audit?workspace=administration',
-
-      permission:
-        'audit.view',
-
-      icon:
-        ScrollText,
-    },
-
-    {
-      label:
-        'Configuración',
-
-      path:
-        '/settings?workspace=administration',
-
-      permission:
-        'settings.view',
-
-      icon:
-        Settings,
-    },
-  ]
-
-/*
- * ================================================================
- * HELP DESK
- * ================================================================
- */
-
-const helpDeskNavigation: WorkspaceNavigationItem[] = [
-  {
-    label: 'Operación de la mesa',
-    path: '/helpdesk/operations?workspace=helpdesk',
-    permission: 'helpdesk.manage',
-    icon: Users,
-  },
-  {
-    label: 'Avance del proyecto',
-    path: '/helpdesk/avance?workspace=helpdesk',
-    permission: 'tickets.view',
-    icon: ClipboardCheck,
-  },
-  {
-    label: 'Inbox',
-    path: '/helpdesk?workspace=helpdesk',
-    permission: 'tickets.view',
-    icon: Inbox,
-  },
-  {
-    label: 'Entra ID',
-    path: '/helpdesk/entra?workspace=helpdesk',
-    permission: 'helpdesk.manage',
-    icon: CloudCog,
-  },{
-  label: 'Especialidades',
-  path: '/helpdesk/especialidades?workspace=helpdesk',
-  permission: 'helpdesk.manage',
-  icon: Users,
-},
+const item = (
+  label: string,
+  path: string,
+  icon: LucideIcon,
+  permission?: string,
+): WorkspaceNavigationItem => ({
+  label,
+  path,
+  icon,
+  permission,
+})
+
+export const globalNavigation: WorkspaceNavigationItem[] = [
+  item('Titan Workspace', '/', Home),
+  item('Mis solicitudes', '/my-support', Inbox),
 ]
 
-/*
- * ================================================================
- * REGISTRY
- * ================================================================
- */
+const windowsNavigation: WorkspaceNavigationItem[] = [
+  item('Dashboard', '/dashboard?workspace=windows', Gauge, 'dashboard.view'),
+  item('Dispositivos', '/devices?platform=Windows&workspace=windows', MonitorSmartphone, 'devices.view'),
+  item('Grupos y Flota', '/groups?workspace=windows', Network, 'devices.view'),
+  item('Inscripción', '/enrollment?workspace=windows', Smartphone, 'enrollment.view'),
+  item('Políticas', '/policies?workspace=windows', ClipboardCheck, 'policies.view'),
+  item('Seguridad', '/security?workspace=windows', ShieldCheck, 'security.view'),
+  item('Cumplimiento', '/compliance?workspace=windows', ShieldCheck, 'compliance.view'),
+  item('Automatización', '/automation?workspace=windows', Workflow, 'devices.commands'),
+  item('Soporte remoto', '/remote?workspace=windows', RadioTower, 'remote.view'),
+  item('Reportes', '/reports?workspace=windows', FileBarChart, 'reports.view'),
+]
+
+const androidNavigation: WorkspaceNavigationItem[] = [
+  item('Dashboard', '/dashboard?workspace=android', Gauge, 'dashboard.view'),
+  item('Dispositivos', '/devices?platform=Android&workspace=android', Smartphone, 'devices.view'),
+  item('Inscripción', '/enrollment?workspace=android', Smartphone, 'enrollment.view'),
+  item('Políticas', '/policies?workspace=android', ClipboardCheck, 'policies.view'),
+  item('Aplicaciones', '/apps?workspace=android', AppWindow, 'apps.view'),
+  item('Seguridad', '/security?workspace=android', ShieldCheck, 'security.view'),
+  item('Cumplimiento', '/compliance?workspace=android', ShieldCheck, 'compliance.view'),
+  item('Kiosk', '/kiosk?workspace=android', PackageOpen, 'kiosk.view'),
+  item('Geofencing', '/geofencing?workspace=android', MapPinned, 'geofencing.view'),
+  item('Reportes', '/reports?workspace=android', FileBarChart, 'reports.view'),
+]
+
+const administrationNavigation: WorkspaceNavigationItem[] = [
+  item('Dashboard general', '/dashboard?workspace=global', Gauge, 'dashboard.global.view'),
+  item('Usuarios', '/users?workspace=administration', Users, 'users.view'),
+  item('Roles y permisos', '/roles?workspace=administration', UserCog, 'roles.view'),
+  item('Auditoría', '/audit?workspace=administration', ScrollText, 'audit.view'),
+  item('Configuración', '/settings?workspace=administration', Settings, 'settings.view'),
+]
+
+const helpDeskNavigation: WorkspaceNavigationItem[] = [
+  item(
+    'Operación de la mesa',
+    '/helpdesk/operations?workspace=helpdesk',
+    Users,
+    'helpdesk.manage',
+  ),
+  item(
+    'Inbox',
+    '/helpdesk?workspace=helpdesk',
+    Inbox,
+    'tickets.view',
+  ),
+  item(
+    'Entra ID',
+    '/helpdesk/entra?workspace=helpdesk',
+    CloudCog,
+    'helpdesk.manage',
+  ),
+  item(
+    'Especialidades',
+    '/helpdesk/especialidades?workspace=helpdesk',
+    Users,
+    'helpdesk.manage',
+  ),
+]
+
 const navigationByWorkspace:
   Record<TitanModuleId, WorkspaceNavigationItem[]> = {
     windows: windowsNavigation,
     android: androidNavigation,
     administration: administrationNavigation,
     helpdesk: helpDeskNavigation,
-
-    // Ponches usa sus opciones dentro de PonchesPage.
-    // Se registra aquí para completar el contrato de TitanModuleId.
     ponches: [],
   }
 
-/*
- * ================================================================
- * RESOLVER
- * ================================================================
- */
-
 export function getWorkspaceNavigation(
-  workspaceId:
-    TitanModuleId | null,
-):
-  WorkspaceNavigationItem[] {
-  if (
-    !workspaceId
-  ) {
-    return [
-      ...globalNavigation,
-    ]
-  }
-
-  return [
-    ...globalNavigation,
-
-    ...navigationByWorkspace[
-      workspaceId
-    ],
-  ]
+  workspaceId: TitanModuleId | null,
+): WorkspaceNavigationItem[] {
+  return workspaceId
+    ? [...globalNavigation, ...navigationByWorkspace[workspaceId]]
+    : [...globalNavigation]
 }

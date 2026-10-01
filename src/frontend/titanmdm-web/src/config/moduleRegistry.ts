@@ -88,6 +88,7 @@ const helpDeskModule: TitanModuleDefinition = {
   permissions: [
     'helpdesk.view',
     'tickets.view',
+    'tickets.create',
   ],
   enabled: true,
   badge: 'Entra ID',
@@ -158,12 +159,12 @@ export function getTitanModule(
   moduleId: TitanModuleId,
 ): TitanModuleDefinition | undefined {
   return titanModules.find(
-    (module) => module.id === moduleId,
+    module => module.id === moduleId,
   )
 }
 
 export function getEnabledModules(): TitanModuleDefinition[] {
   return titanModules.filter(
-    (module) => module.enabled,
+    module => module.enabled,
   )
 }

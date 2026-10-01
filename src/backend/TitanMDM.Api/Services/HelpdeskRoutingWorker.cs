@@ -5,9 +5,11 @@ using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Services;
 
-public sealed class HelpdeskRoutingWorker : BackgroundService
+public sealed class HelpdeskRoutingWorker
+    : BackgroundService
 {
     private readonly IServiceScopeFactory _scopes;
+
     private readonly ILogger<HelpdeskRoutingWorker> _logger;
 
     public HelpdeskRoutingWorker(
@@ -23,107 +25,163 @@ public sealed class HelpdeskRoutingWorker : BackgroundService
     {
         try
         {
-            // Da tiempo al arranque de la API y las migraciones.
+            // Permite completar el arranque del backend.
             await Task.Delay(
                 TimeSpan.FromSeconds(20),
                 stoppingToken);
 
             using var timer = new PeriodicTimer(
-                TimeSpan.FromMinutes(5));
+                TimeSpan.FromMinutes(1));
 
             do
             {
                 try
                 {
-                    await ProcessAsync(stoppingToken);
+                    await ProcessAsync(
+                        stoppingToken);
                 }
                 catch (OperationCanceledException)
                     when (stoppingToken.IsCancellationRequested)
                 {
                     break;
                 }
-                catch (Exception ex)
+                catch (Exception exception)
                 {
                     _logger.LogError(
-                        ex,
-                        "Falló el reintento de asignación Helpdesk.");
+                        exception,
+                        "Falló el ciclo de asignación y " +
+                        "relevos automáticos de Helpdesk.");
                 }
             }
-            while (await timer.WaitForNextTickAsync(
-                stoppingToken));
+            while (
+                await timer.WaitForNextTickAsync(
+                    stoppingToken));
         }
         catch (OperationCanceledException)
             when (stoppingToken.IsCancellationRequested)
         {
-            // Apagado normal de la API.
+            // Detención normal del servicio.
         }
     }
 
-    private async Task ProcessAsync(CancellationToken ct)
+    private async Task ProcessAsync(
+        CancellationToken cancellationToken)
     {
-        using var scope = _scopes.CreateScope();
+        List<PendingTicket> pending;
 
-        var db = scope.ServiceProvider
-            .GetRequiredService<TitanMdmDbContext>();
-
-        // IHelpdeskService está registrado con HelpdeskService
-        // en InfrastructureServiceExtensions.
-        var routing = (HelpdeskService)scope.ServiceProvider
-            .GetRequiredService<IHelpdeskService>();
-
-        var cutoff = DateTime.UtcNow.AddMinutes(-1);
-
-        var candidates = await db.HelpdeskTickets
-            .AsNoTracking()
-            .Where(x =>
-                x.AssigneeUserId == null &&
-                x.Status != "resolved" &&
-                x.Status != "closed" &&
-                x.CreatedAtUtc <= cutoff)
-            .OrderBy(x => x.CreatedAtUtc)
-            .Select(x => new
-            {
-                x.OrganizationId,
-                x.Id
-            })
-            .Take(100)
-            .ToListAsync(ct);
-
-        var assigned = 0;
-
-        foreach (var ticket in candidates)
+        using (var scope = _scopes.CreateScope())
         {
+            var db = scope.ServiceProvider
+                .GetRequiredService<TitanMdmDbContext>();
+
+            var cutoff =
+                DateTime.UtcNow.AddMinutes(-1);
+
+            // Instantánea de identificadores. Las modificaciones
+            // posteriores se vuelven a comprobar en el servicio.
+            pending = await db.HelpdeskTickets
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.CreatedAtUtc <= cutoff &&
+                        x.Status != "resolved" &&
+                        x.Status != "closed" &&
+                        (
+                            x.AssigneeUserId == null ||
+                            (
+                                x.FirstRespondedAtUtc == null &&
+                                (
+                                    x.Status == "new" ||
+                                    x.Status == "open"
+                                )
+                            )
+                        ))
+                .OrderBy(x => x.CreatedAtUtc)
+                .Select(
+                    x => new PendingTicket(
+                        x.OrganizationId,
+                        x.Id,
+                        x.AssigneeUserId == null))
+                .ToListAsync(
+                    cancellationToken);
+        }
+
+        var assignments = 0;
+        var handovers = 0;
+
+        foreach (var ticket in pending)
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            // Un contexto independiente por ticket evita
+            // que un fallo contamine el procesamiento siguiente.
+            using var scope = _scopes.CreateScope();
+
             try
             {
-                if (await routing.RetryAutomaticAssignmentAsync(
-                    ticket.OrganizationId,
-                    ticket.Id,
-                    ct))
+                var service = scope.ServiceProvider
+                    .GetRequiredService<IHelpdeskService>();
+
+                if (service is not HelpdeskService routing)
                 {
-                    assigned++;
+                    throw new InvalidOperationException(
+                        "IHelpdeskService debe utilizar " +
+                        "la implementación HelpdeskService.");
+                }
+
+                if (ticket.Unassigned)
+                {
+                    var assigned =
+                        await routing
+                            .RetryAutomaticAssignmentAsync(
+                                ticket.OrganizationId,
+                                ticket.Id,
+                                cancellationToken);
+
+                    if (assigned)
+                        assignments++;
+                }
+                else
+                {
+                    var transferred =
+                        await routing
+                            .TryAutomaticHandoverAsync(
+                                ticket.OrganizationId,
+                                ticket.Id,
+                                cancellationToken);
+
+                    if (transferred)
+                        handovers++;
                 }
             }
             catch (OperationCanceledException)
-                when (ct.IsCancellationRequested)
+                when (cancellationToken.IsCancellationRequested)
             {
                 throw;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 _logger.LogError(
-                    ex,
-                    "No se pudo reintentar la asignación " +
-                    "del ticket {TicketId}.",
+                    exception,
+                    "No se pudo procesar automáticamente " +
+                    "el ticket {TicketId}.",
                     ticket.Id);
             }
         }
 
-        if (assigned > 0)
+        if (assignments > 0 || handovers > 0)
         {
             _logger.LogInformation(
-                "Helpdesk asignó automáticamente {Count} " +
-                "tickets pendientes.",
-                assigned);
+                "Helpdesk: {Assignments} asignaciones y " +
+                "{Handovers} relevos automáticos.",
+                assignments,
+                handovers);
         }
     }
+
+    private sealed record PendingTicket(
+        Guid OrganizationId,
+        Guid Id,
+        bool Unassigned);
 }

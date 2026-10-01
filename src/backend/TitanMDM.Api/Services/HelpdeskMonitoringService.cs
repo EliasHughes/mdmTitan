@@ -4,95 +4,298 @@ using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Services;
 
-public sealed class HelpdeskMonitoringService : BackgroundService
+public sealed class HelpdeskMonitoringService
+    : BackgroundService
 {
-    private static readonly TimeSpan ScanInterval = TimeSpan.FromMinutes(5);
-    private readonly IServiceScopeFactory _scopeFactory;
+    private readonly IServiceScopeFactory _scopes;
     private readonly ILogger<HelpdeskMonitoringService> _logger;
 
+    private readonly int _scanMinutes;
+    private readonly int _unassignedMinutes;
+    private readonly int _attentionMinutes;
+    private readonly int _idleMinutes;
+    private readonly int _repeatMinutes;
+    private readonly int _overdueRepeatMinutes;
+
     public HelpdeskMonitoringService(
-        IServiceScopeFactory scopeFactory,
-        ILogger<HelpdeskMonitoringService> logger)
+        IServiceScopeFactory scopes,
+        ILogger<HelpdeskMonitoringService> logger,
+        IConfiguration configuration)
     {
-        _scopeFactory = scopeFactory;
+        _scopes = scopes;
         _logger = logger;
+
+        int Read(
+            string key,
+            int fallback,
+            int minimum,
+            int maximum)
+        {
+            return Math.Clamp(
+                configuration.GetValue<int?>(
+                    "Helpdesk:Monitoring:" + key)
+                    ?? fallback,
+                minimum,
+                maximum);
+        }
+
+        _scanMinutes =
+            Read("ScanMinutes", 1, 1, 60);
+
+        _unassignedMinutes =
+            Read("UnassignedMinutes", 15, 1, 1440);
+
+        _attentionMinutes =
+            Read("AttentionMinutes", 15, 1, 1440);
+
+        _idleMinutes =
+            Read("IdleMinutes", 120, 15, 10080);
+
+        _repeatMinutes =
+            Read("RepeatMinutes", 60, 15, 1440);
+
+        _overdueRepeatMinutes =
+            Read("OverdueRepeatMinutes", 120, 15, 1440);
     }
 
-    protected override async Task ExecuteAsync(CancellationToken stoppingToken)
+    protected override async Task ExecuteAsync(
+        CancellationToken stoppingToken)
     {
-        // Permite que el arranque de la API y el seeder terminen primero.
-        await Task.Delay(TimeSpan.FromSeconds(15), stoppingToken);
-
-        using var timer = new PeriodicTimer(ScanInterval);
-
-        do
+        try
         {
+            await Task.Delay(
+                TimeSpan.FromSeconds(15),
+                stoppingToken);
+
+            using var timer = new PeriodicTimer(
+                TimeSpan.FromMinutes(_scanMinutes));
+
+            do
+            {
+                try
+                {
+                    await ScanAsync(stoppingToken);
+                }
+                catch (OperationCanceledException)
+                    when (stoppingToken.IsCancellationRequested)
+                {
+                    break;
+                }
+                catch (Exception exception)
+                {
+                    _logger.LogError(
+                        exception,
+                        "Falló el monitor automático de Helpdesk.");
+                }
+            }
+            while (
+                await timer.WaitForNextTickAsync(
+                    stoppingToken));
+        }
+        catch (OperationCanceledException)
+            when (stoppingToken.IsCancellationRequested)
+        {
+            // Detención normal del backend.
+        }
+    }
+
+    private async Task ScanAsync(
+        CancellationToken cancellationToken)
+    {
+        List<TicketKey> keys;
+
+        using (var scope = _scopes.CreateScope())
+        {
+            var db = scope.ServiceProvider
+                .GetRequiredService<TitanMdmDbContext>();
+
+            keys = await db.HelpdeskTickets
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.Status != "resolved" &&
+                        x.Status != "closed")
+                .OrderBy(x => x.CreatedAtUtc)
+                .Select(
+                    x => new TicketKey(
+                        x.OrganizationId,
+                        x.Id))
+                .ToListAsync(cancellationToken);
+        }
+
+        var count = 0;
+
+        foreach (var key in keys)
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            using var scope = _scopes.CreateScope();
+
+            var db = scope.ServiceProvider
+                .GetRequiredService<TitanMdmDbContext>();
+
             try
             {
-                await ScanAsync(stoppingToken);
+                count += await RecordAsync(
+                    db,
+                    key,
+                    cancellationToken);
             }
-            catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
+            catch (OperationCanceledException)
+                when (cancellationToken.IsCancellationRequested)
             {
-                break;
+                throw;
             }
-            catch (Exception ex)
+            catch (Exception exception)
             {
                 _logger.LogError(
-                    ex,
-                    "Falló la revisión automática de tickets de Helpdesk.");
+                    exception,
+                    "Falló el seguimiento del ticket {TicketId}.",
+                    key.Id);
             }
         }
-        while (await timer.WaitForNextTickAsync(stoppingToken));
+
+        if (count > 0)
+        {
+            _logger.LogInformation(
+                "Helpdesk registró {Count} avisos internos.",
+                count);
+        }
     }
 
-    private async Task ScanAsync(CancellationToken cancellationToken)
+    private async Task<int> RecordAsync(
+        TitanMdmDbContext db,
+        TicketKey key,
+        CancellationToken cancellationToken)
     {
-        using var scope = _scopeFactory.CreateScope();
-        var db = scope.ServiceProvider.GetRequiredService<TitanMdmDbContext>();
-        var now = DateTime.UtcNow;
+        var strategy =
+            db.Database.CreateExecutionStrategy();
 
-        var tickets = await db.HelpdeskTickets.AsNoTracking()
-            .Where(x => x.Status != "resolved" && x.Status != "closed")
-            .Select(x => new TicketState(
-                x.Id,
-                x.OrganizationId,
-                x.Number,
-                x.AssigneeUserId,
-                x.CreatedAtUtc,
-                x.FirstResponseDueAtUtc,
-                x.FirstRespondedAtUtc,
-                x.ResolveDueAtUtc,
-                x.ResolvedAtUtc))
-            .ToListAsync(cancellationToken);
-
-        if (tickets.Count == 0) return;
-
-        var ticketIds = tickets.Select(x => x.Id).ToArray();
-        var recentEvents = await db.HelpdeskTicketEvents.AsNoTracking()
-            .Where(x => ticketIds.Contains(x.TicketId) &&
-                        x.CreatedAtUtc >= now.AddHours(-24))
-            .Select(x => new
-            {
-                x.TicketId,
-                x.EventType,
-                x.CreatedAtUtc
-            })
-            .ToListAsync(cancellationToken);
-
-        var pending = new List<HelpdeskTicketEvent>();
-
-        foreach (var ticket in tickets)
+        return await strategy.ExecuteAsync(async () =>
         {
-            // Sin responsable: primer aviso tras 15 minutos,
-            // repetición no más de una vez por hora.
-            if (ticket.AssigneeUserId is null &&
-                ticket.CreatedAtUtc <= now.AddMinutes(-15))
+            // La comprobación de avisos y su escritura
+            // se realizan dentro de la misma transacción.
+            await using var transaction =
+                await db.Database.BeginTransactionAsync(
+                    System.Data.IsolationLevel.Serializable,
+                    cancellationToken);
+
+            var ticket = await db.HelpdeskTickets
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.Id == key.Id &&
+                        x.OrganizationId ==
+                            key.OrganizationId &&
+                        x.Status != "resolved" &&
+                        x.Status != "closed",
+                    cancellationToken);
+
+            if (ticket is null)
+                return 0;
+
+            var now = DateTime.UtcNow;
+
+            var since = now.AddMinutes(
+                -Math.Max(
+                    _repeatMinutes,
+                    _overdueRepeatMinutes));
+
+            var recent = await db.HelpdeskTicketEvents
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            key.OrganizationId &&
+                        x.TicketId == key.Id &&
+                        x.CreatedAtUtc >= since)
+                .Select(
+                    x => new
+                    {
+                        x.EventType,
+                        x.CreatedAtUtc
+                    })
+                .ToListAsync(cancellationToken);
+
+            var pending =
+                new List<HelpdeskTicketEvent>();
+
+            void Add(
+                string type,
+                string text,
+                int repeatMinutes)
             {
-                AddIfDue(
-                    ticket,
+                var alreadyRecorded = recent.Any(
+                    x =>
+                        x.EventType == type &&
+                        x.CreatedAtUtc >
+                            now.AddMinutes(-repeatMinutes));
+
+                if (alreadyRecorded)
+                    return;
+
+                if (pending.Any(
+                        x => x.EventType == type))
+                {
+                    return;
+                }
+
+                var summary =
+                    $"Ticket {ticket.Number}: {text}";
+
+                if (summary.Length > 500)
+                    summary = summary[..500];
+
+                pending.Add(
+                    new HelpdeskTicketEvent(
+                        key.OrganizationId,
+                        key.Id,
+                        null,
+                        type,
+                        summary));
+            }
+
+            if (ticket.AssigneeUserId is null &&
+                ticket.CreatedAtUtc <=
+                    now.AddMinutes(-_unassignedMinutes))
+            {
+                Add(
                     "unassigned_reminder",
-                    $"El ticket {ticket.Number} sigue sin técnico asignado.",
-                    TimeSpan.FromHours(1));
+                    "continúa sin técnico asignado; revisa " +
+                    "la cobertura, especialidad y disponibilidad.",
+                    _repeatMinutes);
+            }
+
+            if (ticket.AssigneeUserId.HasValue &&
+                ticket.FirstRespondedAtUtc is null &&
+                (
+                    ticket.Status == "new" ||
+                    ticket.Status == "open"
+                ) &&
+                ticket.UpdatedAtUtc <=
+                    now.AddMinutes(-_attentionMinutes))
+            {
+                Add(
+                    "assigned_attention_reminder",
+                    "está asignado y todavía no tiene " +
+                    "primera respuesta del técnico.",
+                    _repeatMinutes);
+            }
+
+            // En espera del usuario no genera recordatorios
+            // de inactividad del técnico.
+            if (ticket.AssigneeUserId.HasValue &&
+                ticket.FirstRespondedAtUtc.HasValue &&
+                ticket.Status != "pendinguser" &&
+                ticket.UpdatedAtUtc <=
+                    now.AddMinutes(-_idleMinutes))
+            {
+                Add(
+                    "inactivity_reminder",
+                    "no registra una actualización reciente; " +
+                    "revisa la atención y documenta el avance.",
+                    _repeatMinutes);
             }
 
             if (ticket.FirstRespondedAtUtc is null &&
@@ -100,19 +303,20 @@ public sealed class HelpdeskMonitoringService : BackgroundService
             {
                 if (ticket.FirstResponseDueAtUtc.Value <= now)
                 {
-                    AddIfDue(
-                        ticket,
+                    Add(
                         "first_response_overdue",
-                        $"El ticket {ticket.Number} superó el plazo de primera respuesta.",
-                        TimeSpan.FromHours(2));
+                        "superó el plazo de primera respuesta.",
+                        _overdueRepeatMinutes);
                 }
-                else if (ticket.FirstResponseDueAtUtc.Value <= now.AddMinutes(30))
+                else if (
+                    ticket.FirstResponseDueAtUtc.Value <=
+                        now.AddMinutes(30))
                 {
-                    AddIfDue(
-                        ticket,
+                    Add(
                         "first_response_warning",
-                        $"El plazo de primera respuesta del ticket {ticket.Number} vence pronto.",
-                        TimeSpan.FromHours(1));
+                        "el plazo de primera respuesta vence " +
+                        "en los próximos 30 minutos.",
+                        _repeatMinutes);
                 }
             }
 
@@ -121,69 +325,50 @@ public sealed class HelpdeskMonitoringService : BackgroundService
             {
                 if (ticket.ResolveDueAtUtc.Value <= now)
                 {
-                    AddIfDue(
-                        ticket,
+                    Add(
                         "resolution_overdue",
-                        $"El ticket {ticket.Number} superó el plazo de resolución.",
-                        TimeSpan.FromHours(2));
+                        "superó el plazo de resolución.",
+                        _overdueRepeatMinutes);
                 }
-                else if (ticket.ResolveDueAtUtc.Value <= now.AddHours(1))
+                else if (
+                    ticket.ResolveDueAtUtc.Value <=
+                        now.AddHours(1))
                 {
-                    AddIfDue(
-                        ticket,
+                    Add(
                         "resolution_warning",
-                        $"El plazo de resolución del ticket {ticket.Number} vence pronto.",
-                        TimeSpan.FromHours(1));
+                        "el plazo de resolución vence " +
+                        "en los próximos 60 minutos.",
+                        _repeatMinutes);
                 }
             }
-        }
 
-        if (pending.Count == 0) return;
+            if (pending.Count == 0)
+                return 0;
 
-        db.HelpdeskTicketEvents.AddRange(pending);
-        await db.SaveChangesAsync(cancellationToken);
+            db.HelpdeskTicketEvents.AddRange(pending);
 
-        _logger.LogInformation(
-            "Helpdesk registró {Count} alertas para {TicketCount} tickets activos.",
-            pending.Count,
-            tickets.Count);
+            try
+            {
+                await db.SaveChangesAsync(
+                    cancellationToken);
 
-        void AddIfDue(
-            TicketState ticket,
-            string eventType,
-            string summary,
-            TimeSpan repeatInterval)
-        {
-            var alreadySent = recentEvents.Any(x =>
-                x.TicketId == ticket.Id &&
-                x.EventType == eventType &&
-                x.CreatedAtUtc > now.Subtract(repeatInterval));
+                await transaction.CommitAsync(
+                    cancellationToken);
 
-            if (alreadySent) return;
-
-            // Evita duplicados dentro del mismo ciclo.
-            if (pending.Any(x =>
-                    x.TicketId == ticket.Id &&
-                    x.EventType == eventType))
-                return;
-
-            pending.Add(new HelpdeskTicketEvent(
-                ticket.OrganizationId,
-                ticket.Id,
-                actorUserId: null,
-                eventType,
-                summary));
-        }
+                return pending.Count;
+            }
+            finally
+            {
+                foreach (var activity in pending)
+                {
+                    db.Entry(activity).State =
+                        EntityState.Detached;
+                }
+            }
+        });
     }
 
-    private sealed record TicketState(
-        Guid Id,
+    private sealed record TicketKey(
         Guid OrganizationId,
-        string Number,
-        Guid? AssigneeUserId,
-        DateTime CreatedAtUtc,
-        DateTime? FirstResponseDueAtUtc,
-        DateTime? FirstRespondedAtUtc,
-        DateTime? ResolveDueAtUtc,
-        DateTime? ResolvedAtUtc);
+        Guid Id);
 }

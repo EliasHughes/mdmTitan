@@ -1,145 +1,223 @@
-import {
-  Navigate,
-  Route,
-  Routes,
-} from 'react-router-dom'
+import type { ReactNode } from 'react'
+import { Navigate, Route, Routes } from 'react-router-dom'
 
-import {
-  AccessDeniedPage,
-} from './pages/AccessDeniedPage'
-
-import {
-  ProtectedRoute,
-} from './auth/ProtectedRoute'
-
-import {
-  PermissionRoute,
-} from './auth/PermissionRoute'
-
-import {
-  AppLayout,
-} from './components/layout/AppLayout'
-
-import {
-  LoginPage,
-} from './pages/LoginPage'
-
-import {
-  LaunchpadPage,
-} from './pages/launchpad/LaunchpadPage'
-
-import {
-  DashboardPage,
-} from './pages/DashboardPage'
-
-import {
-  DevicesPage,
-} from './pages/devices/DevicesPage'
-
-import {
-  DeviceEntryPage,
-} from './pages/devices/DeviceEntryPage'
-
-import {
-  DeviceDetailPage,
-} from './pages/devices/DeviceDetailPage'
-
-import {
-  WindowsControlCenterPage,
-} from './pages/devices/WindowsControlCenterPage'
-
-import EnrollmentPage
-  from './pages/enrollment/EnrollmentPage'
-
-import {
-  PoliciesPage,
-} from './pages/policies/PoliciesPage'
-
-import {
-  PolicyEditorPage,
-} from './pages/policies/PolicyEditorPage'
-
-import {
-  DeviceGroupsPage,
-} from './pages/groups/DeviceGroupsPage'
-
-import {
-  AppsPage,
-} from './pages/apps/AppsPage'
-
-import {
-  SecurityPage,
-} from './pages/security/SecurityPage'
-
-import {
-  CompliancePage,
-} from './pages/compliance/CompliancePage'
-
-import {
-  KioskPage,
-} from './pages/kiosk/KioskPage'
-
-import {
-  GeofencingPage,
-} from './pages/geofencing/GeofencingPage'
-
-import {
-  AutomationPage,
-} from './pages/automation/AutomationPage'
-
-import {
-  RemotePage,
-} from './pages/remote/RemotePage'
-
-import {
-  ReportsPage,
-} from './pages/reports/ReportsPage'
-
-import {
-  AuditPage,
-} from './pages/audit/AuditPage'
-
-import {
-  UsersPage,
-} from './pages/users/UsersPage'
-
-import {
-  RolesPage,
-} from './pages/roles/RolesPage'
-
-import {
-  SettingsPage,
-} from './pages/settings/SettingsPage'
-
+import { AccessDeniedPage } from './pages/AccessDeniedPage'
+import { ProtectedRoute } from './auth/ProtectedRoute'
+import { PermissionRoute } from './auth/PermissionRoute'
+import { AppLayout } from './components/layout/AppLayout'
+import { LoginPage } from './pages/LoginPage'
+import { LaunchpadPage } from './pages/launchpad/LaunchpadPage'
+import { DashboardPage } from './pages/DashboardPage'
+import { DevicesPage } from './pages/devices/DevicesPage'
+import { DeviceEntryPage } from './pages/devices/DeviceEntryPage'
+import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
+import { WindowsControlCenterPage } from './pages/devices/WindowsControlCenterPage'
+import EnrollmentPage from './pages/enrollment/EnrollmentPage'
+import { PoliciesPage } from './pages/policies/PoliciesPage'
+import { PolicyEditorPage } from './pages/policies/PolicyEditorPage'
+import { DeviceGroupsPage } from './pages/groups/DeviceGroupsPage'
+import { AppsPage } from './pages/apps/AppsPage'
+import { SecurityPage } from './pages/security/SecurityPage'
+import { CompliancePage } from './pages/compliance/CompliancePage'
+import { KioskPage } from './pages/kiosk/KioskPage'
+import { GeofencingPage } from './pages/geofencing/GeofencingPage'
+import { AutomationPage } from './pages/automation/AutomationPage'
+import { RemotePage } from './pages/remote/RemotePage'
+import { ReportsPage } from './pages/reports/ReportsPage'
+import { AuditPage } from './pages/audit/AuditPage'
+import { UsersPage } from './pages/users/UsersPage'
+import { RolesPage } from './pages/roles/RolesPage'
+import { SettingsPage } from './pages/settings/SettingsPage'
 import { MyHelpdeskPage } from './pages/helpdesk/MyHelpdeskPage'
-
 import { HelpdeskInboxPage } from './pages/helpdesk/HelpdeskInboxPage'
 import { HelpdeskTicketPage } from './pages/helpdesk/HelpdeskTicketPage'
 import { HelpdeskEntraSettingsPage } from './pages/helpdesk/HelpdeskEntraSettingsPage'
-
 import { HelpdeskOperationsPage } from './pages/helpdesk/HelpdeskOperationsPage'
-import { HelpdeskProgressPage } from './pages/helpdesk/HelpdeskProgressPage'
 import { HelpdeskSpecialtiesPage } from './pages/helpdesk/HelpdeskSpecialtiesPage'
 import { HelpdeskReportsPage } from './pages/helpdesk/HelpdeskReportsPage'
 import { EntraLoginCallbackPage } from './pages/EntraLoginCallbackPage'
 import { HelpdeskCoveragePage } from './pages/helpdesk/HelpdeskCoveragePage'
+import { HelpdeskFollowupPage } from './pages/helpdesk/HelpdeskFollowupPage'
 import { PonchesPage } from './pages/ponches/PonchesPage'
 
+interface ApplicationRoute {
+  path: string
+  page: ReactNode
+  permissions: string[]
+}
 
+const applicationRoutes: ApplicationRoute[] = [
+  {
+    path: 'dashboard',
+    page: <DashboardPage />,
+    permissions: ['dashboard.view'],
+  },
+  {
+    path: 'helpdesk/operations',
+    page: <HelpdeskOperationsPage />,
+    permissions: ['helpdesk.manage', 'settings.manage'],
+  },
+  {
+    path: 'helpdesk',
+    page: <HelpdeskInboxPage />,
+    permissions: ['helpdesk.view', 'tickets.view'],
+  },
+  {
+    path: 'helpdesk/especialidades',
+    page: <HelpdeskSpecialtiesPage />,
+    permissions: ['helpdesk.manage', 'settings.manage'],
+  },
+  {
+    path: 'helpdesk/cobertura',
+    page: <HelpdeskCoveragePage />,
+    permissions: ['helpdesk.manage', 'settings.manage'],
+  },
+  {
+    path: 'helpdesk/entra',
+    page: <HelpdeskEntraSettingsPage />,
+    permissions: ['helpdesk.manage', 'settings.manage'],
+  },
+  {
+    path: 'helpdesk/tickets/:ticketId',
+    page: <HelpdeskTicketPage />,
+    permissions: ['helpdesk.view', 'tickets.view'],
+  },
+  {
+    path: 'helpdesk/seguimiento',
+    page: <HelpdeskFollowupPage />,
+    permissions: [
+      'tickets.comment',
+      'tickets.assign',
+      'helpdesk.manage',
+      'settings.manage',
+    ],
+  },
+  {
+    path: 'helpdesk/reportes',
+    page: <HelpdeskReportsPage />,
+    permissions: ['helpdesk.view', 'tickets.view'],
+  },
+  {
+    path: 'ponches',
+    page: <PonchesPage />,
+    permissions: ['settings.view'],
+  },
+  {
+    path: 'devices',
+    page: <DevicesPage />,
+    permissions: ['devices.view'],
+  },
+  {
+    path: 'devices/:deviceId',
+    page: <DeviceEntryPage />,
+    permissions: ['devices.view'],
+  },
+  {
+    path: 'devices/:deviceId/android',
+    page: <DeviceDetailPage />,
+    permissions: ['devices.view'],
+  },
+  {
+    path: 'devices/:deviceId/control-center',
+    page: <WindowsControlCenterPage />,
+    permissions: ['devices.commands'],
+  },
+  {
+    path: 'enrollment',
+    page: <EnrollmentPage />,
+    permissions: ['enrollment.view'],
+  },
+  {
+    path: 'policies',
+    page: <PoliciesPage />,
+    permissions: ['policies.view'],
+  },
+  {
+    path: 'policies/new',
+    page: <PolicyEditorPage />,
+    permissions: ['policies.manage'],
+  },
+  {
+    path: 'policies/:policyId',
+    page: <PolicyEditorPage />,
+    permissions: ['policies.view', 'policies.manage'],
+  },
+  {
+    path: 'groups',
+    page: <DeviceGroupsPage />,
+    permissions: ['devices.view'],
+  },
+  {
+    path: 'apps',
+    page: <AppsPage />,
+    permissions: ['apps.view'],
+  },
+  {
+    path: 'security',
+    page: <SecurityPage />,
+    permissions: ['security.view'],
+  },
+  {
+    path: 'compliance',
+    page: <CompliancePage />,
+    permissions: ['compliance.view'],
+  },
+  {
+    path: 'kiosk',
+    page: <KioskPage />,
+    permissions: ['kiosk.view'],
+  },
+  {
+    path: 'geofencing',
+    page: <GeofencingPage />,
+    permissions: ['geofencing.view'],
+  },
+  {
+    path: 'automation',
+    page: <AutomationPage />,
+    permissions: ['devices.commands'],
+  },
+  {
+    path: 'remote',
+    page: <RemotePage />,
+    permissions: ['remote.view'],
+  },
+  {
+    path: 'reports',
+    page: <ReportsPage />,
+    permissions: ['reports.view'],
+  },
+  {
+    path: 'audit',
+    page: <AuditPage />,
+    permissions: ['audit.view'],
+  },
+  {
+    path: 'users',
+    page: <UsersPage />,
+    permissions: ['users.view'],
+  },
+  {
+    path: 'roles',
+    page: <RolesPage />,
+    permissions: ['roles.view'],
+  },
+  {
+    path: 'settings',
+    page: <SettingsPage />,
+    permissions: ['settings.view'],
+  },
+]
 
 function App() {
   return (
     <Routes>
+      <Route path="/login" element={<LoginPage />} />
       <Route
-        path="/login"
-        element={
-          <LoginPage />
-        }
+        path="/login/entra"
+        element={<EntraLoginCallbackPage />}
       />
-<Route
-  path="/login/entra"
-  element={<EntraLoginCallbackPage />}
-/>
+
       <Route
         element={
           <ProtectedRoute>
@@ -147,410 +225,28 @@ function App() {
           </ProtectedRoute>
         }
       >
-        <Route
-          index
-          element={
-            <LaunchpadPage />
-          }
-        />
-
-        <Route
-          path="forbidden"
-          element={
-            <AccessDeniedPage />
-          }
-        />
-
-        <Route
-          path="dashboard"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'dashboard.view',
-              ]}
-            >
-              <DashboardPage />
-            </PermissionRoute>
-          }
-        />
-                <Route
-          path="helpdesk/operations"
-          element={
-            <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
-              <HelpdeskOperationsPage />
-            </PermissionRoute>
-          }
-        />
-
+        <Route index element={<LaunchpadPage />} />
+        <Route path="forbidden" element={<AccessDeniedPage />} />
         <Route path="my-support" element={<MyHelpdeskPage />} />
-        <Route path="my-support/:ticketId" element={<MyHelpdeskPage />} />
-
-                <Route
-          path="helpdesk"
-          element={
-            <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
-              <HelpdeskInboxPage />
-            </PermissionRoute>
-          }
-        />
         <Route
-  path="helpdesk/avance"
-  element={
-    <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
-      <HelpdeskProgressPage />
-    </PermissionRoute>
-  }
-/>
-
-<Route
-  path="helpdesk/especialidades"
-  element={
-    <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
-      <HelpdeskSpecialtiesPage />
-    </PermissionRoute>
-  }
-/>
-<Route
-  path="helpdesk/cobertura"
-  element={
-    <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
-      <HelpdeskCoveragePage />
-    </PermissionRoute>
-  }
-/>
-<Route
-  path="ponches"
-  element={
-    <PermissionRoute anyOf={['settings.view']}>
-      <PonchesPage />
-    </PermissionRoute>
-  }
-/>
-
-        <Route
-          path="helpdesk/entra"
-          element={
-            <PermissionRoute anyOf={['helpdesk.manage', 'settings.manage']}>
-              <HelpdeskEntraSettingsPage />
-            </PermissionRoute>
-          }
+          path="my-support/:ticketId"
+          element={<MyHelpdeskPage />}
         />
 
-        <Route
-          path="helpdesk/tickets/:ticketId"
-          element={
-            <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
-              <HelpdeskTicketPage />
-            </PermissionRoute>
-          }
-        />
-        <Route
-  path="helpdesk/reportes"
-  element={
-    <PermissionRoute anyOf={['helpdesk.view', 'tickets.view']}>
-      <HelpdeskReportsPage />
-    </PermissionRoute>
-  }
-/>
-
-        <Route
-          path="devices"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'devices.view',
-              ]}
-            >
-              <DevicesPage />
-            </PermissionRoute>
-          }
-        />
-
-        {/*
-          Generic device entry.
-
-          Windows:
-            /devices/:id
-              ↓
-            /devices/:id/control-center
-
-          Android:
-            /devices/:id
-              ↓
-            /devices/:id/android
-        */}
-
-        <Route
-          path="devices/:deviceId"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'devices.view',
-              ]}
-            >
-              <DeviceEntryPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="devices/:deviceId/android"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'devices.view',
-              ]}
-            >
-              <DeviceDetailPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="devices/:deviceId/control-center"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'devices.commands',
-              ]}
-            >
-              <WindowsControlCenterPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="enrollment"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'enrollment.view',
-              ]}
-            >
-              <EnrollmentPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="policies"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'policies.view',
-              ]}
-            >
-              <PoliciesPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="policies/new"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'policies.manage',
-              ]}
-            >
-              <PolicyEditorPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="policies/:policyId"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'policies.view',
-                'policies.manage',
-              ]}
-            >
-              <PolicyEditorPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="groups"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'devices.view',
-              ]}
-            >
-              <DeviceGroupsPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="apps"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'apps.view',
-              ]}
-            >
-              <AppsPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="security"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'security.view',
-              ]}
-            >
-              <SecurityPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="compliance"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'compliance.view',
-              ]}
-            >
-              <CompliancePage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="kiosk"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'kiosk.view',
-              ]}
-            >
-              <KioskPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="geofencing"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'geofencing.view',
-              ]}
-            >
-              <GeofencingPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="automation"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'devices.commands',
-              ]}
-            >
-              <AutomationPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="remote"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'remote.view',
-              ]}
-            >
-              <RemotePage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="reports"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'reports.view',
-              ]}
-            >
-              <ReportsPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="audit"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'audit.view',
-              ]}
-            >
-              <AuditPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="users"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'users.view',
-              ]}
-            >
-              <UsersPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="roles"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'roles.view',
-              ]}
-            >
-              <RolesPage />
-            </PermissionRoute>
-          }
-        />
-
-        <Route
-          path="settings"
-          element={
-            <PermissionRoute
-              anyOf={[
-                'settings.view',
-              ]}
-            >
-              <SettingsPage />
-            </PermissionRoute>
-          }
-        />
+        {applicationRoutes.map(route => (
+          <Route
+            key={route.path}
+            path={route.path}
+            element={
+              <PermissionRoute anyOf={route.permissions}>
+                {route.page}
+              </PermissionRoute>
+            }
+          />
+        ))}
       </Route>
 
-      <Route
-        path="*"
-        element={
-          <Navigate
-            to="/"
-            replace
-          />
-        }
-      />
+      <Route path="*" element={<Navigate to="/" replace />} />
     </Routes>
   )
 }

@@ -1,0 +1,149 @@
+.hrt {
+  padding: 18px;
+  border: 1px solid #ddd6fe;
+  border-radius: 18px;
+  background: #faf8ff;
+}
+
+.hrt h3 {
+  margin: 0 0 8px;
+  color: #334155;
+}
+
+.hrt > p,
+.hrt-heading p {
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.hrt-heading {
+  display: flex;
+  gap: 12px;
+  justify-content: space-between;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.hrt-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  margin: 12px 0;
+}
+
+.hrt .hrt-card {
+  display: flex;
+  flex-direction: column;
+  text-align: left;
+  gap: 8px;
+  padding: 16px;
+  border: 1px solid #e2e8f0;
+  border-radius: 14px;
+  background: #fff;
+  color: #334155;
+  cursor: pointer;
+}
+
+.hrt .hrt-card span {
+  font-size: 13px;
+  color: #64748b;
+  line-height: 1.5;
+}
+
+.hrt .hrt-card--selected {
+  border-color: #7656d6;
+  background: #f5f3ff;
+  box-shadow: 0 3px 12px #7656d618;
+}
+
+.hrt-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.hrt-fields label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.hrt-fields input,
+.hrt-fields textarea,
+.hrt-fields select {
+  box-sizing: border-box;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+}
+
+.hrt-fields textarea {
+  resize: vertical;
+}
+
+.hrt-fields > button {
+  align-self: flex-start;
+}
+
+.hrt-fields small {
+  color: #64748b;
+  line-height: 1.6;
+}
+
+.hrt-confirm {
+  border: 1px solid #ddd6fe;
+  background: #fff;
+  padding: 14px;
+  border-radius: 12px;
+}
+
+.hrt-confirm p {
+  line-height: 1.5;
+  color: #475569;
+}
+
+.hrt-confirm button {
+  margin-right: 8px;
+  margin-bottom: 6px;
+}
+
+.hrt button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.hrt button:focus-visible,
+.hrt input:focus-visible,
+.hrt textarea:focus-visible,
+.hrt select:focus-visible {
+  outline: 3px solid #a78bfa;
+  outline-offset: 3px;
+}
+
+.hrt .hrt-checkbox {
+  flex-direction: row;
+  align-items: center;
+}
+
+.hrt .hrt-checkbox input {
+  width: auto;
+}
+
+.hrt-error {
+  color: #b91c1c;
+}
+
+.hrt-fields > div > button {
+  margin: 6px 6px 0 0;
+}
+
+@media (max-width: 540px) {
+  .hrt-grid {
+    grid-template-columns: 1fr;
+  }
+}

@@ -1,6 +1,8 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
+
 import { useAuth } from './AuthContext'
+import { canUseHelpdeskConsole } from './helpdeskAccess'
 
 interface PermissionRouteProps {
   children: ReactNode
@@ -44,23 +46,35 @@ export function PermissionRoute({
     )
   }
 
+  const helpdeskConsole =
+    location.pathname === '/helpdesk' ||
+    location.pathname.startsWith('/helpdesk/')
+
+  if (
+    helpdeskConsole &&
+    !canUseHelpdeskConsole(hasPermission)
+  ) {
+    return (
+      <Navigate
+        to="/my-support?workspace=helpdesk"
+        replace
+      />
+    )
+  }
+
   const ponches =
     location.pathname === '/ponches' ||
     location.pathname.startsWith('/ponches/')
 
-  // Sustituye el acceso provisional de Ponches por su
-  // permiso propio, aunque App.tsx conserve settings.view.
-  const any = ponches
+  const effectiveAnyOf = ponches
     ? ['workspace.ponches.view', 'ponches.manage']
     : anyOf
 
-  const all = allOf
-
   const hasAny =
-    any.length === 0 ||
-    any.some(hasPermission)
+    effectiveAnyOf.length === 0 ||
+    effectiveAnyOf.some(hasPermission)
 
-  const hasAll = all.every(hasPermission)
+  const hasAll = allOf.every(hasPermission)
 
   if (!hasAny || !hasAll) {
     return (

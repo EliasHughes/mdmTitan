@@ -16,12 +16,16 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
+
 import {
   NavLink,
   useLocation,
 } from 'react-router-dom'
+
 import { useAuth } from '../../auth/AuthContext'
+import { canUseHelpdeskConsole } from '../../auth/helpdeskAccess'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
+
 import './ModuleNavigation.css'
 
 interface ModuleLink {
@@ -31,275 +35,227 @@ interface ModuleLink {
   permissions?: string[]
 }
 
+function link(
+  label: string,
+  path: string,
+  icon: LucideIcon,
+  ...permissions: string[]
+): ModuleLink {
+  return {
+    label,
+    path,
+    icon,
+    permissions,
+  }
+}
+
 const windowsLinks: ModuleLink[] = [
-  {
-    label: 'Resumen',
-    path:
-      '/dashboard?workspace=windows',
-    icon: Monitor,
-    permissions: [
-      'dashboard.view',
-    ],
-  },
-  {
-    label: 'Dispositivos',
-    path:
-      '/devices?workspace=windows',
-    icon: Monitor,
-    permissions: [
-      'devices.view',
-    ],
-  },
-  {
-    label: 'Grupos',
-    path:
-      '/groups?workspace=windows',
-    icon: Users,
-    permissions: [
-      'devices.view',
-    ],
-  },
-  {
-    label: 'Inscripción',
-    path:
-      '/enrollment?workspace=windows',
-    icon: Smartphone,
-    permissions: [
-      'enrollment.view',
-    ],
-  },
-  {
-    label: 'Políticas',
-    path:
-      '/policies?workspace=windows',
-    icon: ClipboardList,
-    permissions: [
-      'policies.view',
-    ],
-  },
-  {
-    label: 'Aplicaciones',
-    path:
-      '/apps?workspace=windows',
-    icon: Package,
-    permissions: [
-      'apps.view',
-    ],
-  },
-  {
-    label: 'Seguridad',
-    path:
-      '/security?workspace=windows',
-    icon: Shield,
-    permissions: [
-      'security.view',
-    ],
-  },
-  {
-    label: 'Soporte remoto',
-    path:
-      '/remote?workspace=windows',
-    icon: Headphones,
-    permissions: [
-      'remote.view',
-    ],
-  },
-  {
-    label: 'Reportes',
-    path:
-      '/reports?workspace=windows',
-    icon: FileBarChart,
-    permissions: [
-      'reports.view',
-    ],
-  },
+  link(
+    'Resumen',
+    '/dashboard?workspace=windows',
+    Monitor,
+    'dashboard.view',
+  ),
+  link(
+    'Dispositivos',
+    '/devices?workspace=windows',
+    Monitor,
+    'devices.view',
+  ),
+  link(
+    'Grupos',
+    '/groups?workspace=windows',
+    Users,
+    'devices.view',
+  ),
+  link(
+    'Inscripción',
+    '/enrollment?workspace=windows',
+    Smartphone,
+    'enrollment.view',
+  ),
+  link(
+    'Políticas',
+    '/policies?workspace=windows',
+    ClipboardList,
+    'policies.view',
+  ),
+  link(
+    'Aplicaciones',
+    '/apps?workspace=windows',
+    Package,
+    'apps.view',
+  ),
+  link(
+    'Seguridad',
+    '/security?workspace=windows',
+    Shield,
+    'security.view',
+  ),
+  link(
+    'Soporte remoto',
+    '/remote?workspace=windows',
+    Headphones,
+    'remote.view',
+  ),
+  link(
+    'Reportes',
+    '/reports?workspace=windows',
+    FileBarChart,
+    'reports.view',
+  ),
 ]
 
 const androidLinks: ModuleLink[] = [
-  {
-    label: 'Resumen',
-    path:
-      '/dashboard?workspace=android',
-    icon: BarChart3,
-    permissions: [
-      'dashboard.view',
-    ],
-  },
-  {
-    label: 'Dispositivos',
-    path:
-      '/devices?workspace=android',
-    icon: Smartphone,
-    permissions: [
-      'devices.view',
-    ],
-  },
-  {
-    label: 'Inscripción',
-    path:
-      '/enrollment?workspace=android',
-    icon: Smartphone,
-    permissions: [
-      'enrollment.view',
-    ],
-  },
-  {
-    label: 'Políticas',
-    path:
-      '/policies?workspace=android',
-    icon: ClipboardList,
-    permissions: [
-      'policies.view',
-    ],
-  },
-  {
-    label: 'Aplicaciones',
-    path:
-      '/apps?workspace=android',
-    icon: Package,
-    permissions: [
-      'apps.view',
-    ],
-  },
-  {
-    label: 'Kiosk',
-    path:
-      '/kiosk?workspace=android',
-    icon: Cog,
-    permissions: [
-      'kiosk.view',
-    ],
-  },
+  link(
+    'Resumen',
+    '/dashboard?workspace=android',
+    BarChart3,
+    'dashboard.view',
+  ),
+  link(
+    'Dispositivos',
+    '/devices?workspace=android',
+    Smartphone,
+    'devices.view',
+  ),
+  link(
+    'Inscripción',
+    '/enrollment?workspace=android',
+    Smartphone,
+    'enrollment.view',
+  ),
+  link(
+    'Políticas',
+    '/policies?workspace=android',
+    ClipboardList,
+    'policies.view',
+  ),
+  link(
+    'Aplicaciones',
+    '/apps?workspace=android',
+    Package,
+    'apps.view',
+  ),
+  link(
+    'Kiosk',
+    '/kiosk?workspace=android',
+    Cog,
+    'kiosk.view',
+  ),
+  link(
+    'Geofencing',
+    '/geofencing?workspace=android',
+    MapPin,
+    'geofencing.view',
+  ),
 ]
 
 const helpdeskLinks: ModuleLink[] = [
-  {
-    label: 'Bandeja TIC',
-    path:
-      '/helpdesk?workspace=helpdesk',
-    icon: ClipboardList,
-    permissions: [
-      'helpdesk.view',
-      'tickets.view',
-    ],
-  },
-  {
-    label: 'Mis solicitudes',
-    path:
-      '/my-support?workspace=helpdesk',
-    icon: UserRound,
-    permissions: [
-      'tickets.create',
-      'tickets.view',
-    ],
-  },
-  {
-    label: 'Gráficos y KPI',
-    path:
-      '/helpdesk/reportes?workspace=helpdesk',
-    icon: BarChart3,
-    permissions: [
-      'helpdesk.view',
-      'tickets.view',
-    ],
-  },
-  {
-    label: 'Zonas y agentes',
-    path:
-      '/helpdesk/operations?workspace=helpdesk',
-    icon: Users,
-    permissions: [
-      'helpdesk.manage',
-      'settings.manage',
-    ],
-  },
-  {
-    label: 'Especialidades',
-    path:
-      '/helpdesk/especialidades?workspace=helpdesk',
-    icon: Sparkles,
-    permissions: [
-      'helpdesk.manage',
-      'settings.manage',
-    ],
-  },
-  {
-    label: 'Avance',
-    path:
-      '/helpdesk/avance?workspace=helpdesk',
-    icon: MapPin,
-    permissions: [
-      'helpdesk.view',
-      'tickets.view',
-    ],
-  },
+  link(
+    'Bandeja TIC',
+    '/helpdesk?workspace=helpdesk',
+    ClipboardList,
+    'helpdesk.view',
+    'tickets.view',
+  ),
+  link(
+    'Mis solicitudes',
+    '/my-support?workspace=helpdesk',
+    UserRound,
+  ),
+  link(
+    'Seguimiento SLA',
+    '/helpdesk/seguimiento?workspace=helpdesk',
+    Headphones,
+    'tickets.comment',
+    'tickets.assign',
+    'helpdesk.manage',
+    'settings.manage',
+  ),
+  link(
+    'Gráficos y KPI',
+    '/helpdesk/reportes?workspace=helpdesk',
+    BarChart3,
+    'helpdesk.view',
+    'tickets.view',
+  ),
+  link(
+    'Zonas y agentes',
+    '/helpdesk/operations?workspace=helpdesk',
+    Users,
+    'helpdesk.manage',
+    'settings.manage',
+  ),
+  link(
+    'Grupos, tareas y turnos',
+    '/helpdesk/especialidades?workspace=helpdesk',
+    Sparkles,
+    'helpdesk.manage',
+    'settings.manage',
+  ),
+]
+
+const requesterLinks: ModuleLink[] = [
+  link(
+    'Mis solicitudes',
+    '/my-support?workspace=helpdesk',
+    UserRound,
+  ),
 ]
 
 const adminLinks: ModuleLink[] = [
-  {
-    label: 'General',
-    path:
-      '/settings?workspace=administration',
-    icon: Settings,
-    permissions: [
-      'settings.view',
-    ],
-  },
-  {
-    label: 'Usuarios',
-    path:
-      '/users?workspace=administration',
-    icon: Users,
-    permissions: [
-      'users.view',
-    ],
-  },
-  {
-    label: 'Roles',
-    path:
-      '/roles?workspace=administration',
-    icon: Shield,
-    permissions: [
-      'roles.view',
-    ],
-  },
-  {
-    label: 'Auditoría',
-    path:
-      '/audit?workspace=administration',
-    icon: ScrollText,
-    permissions: [
-      'audit.view',
-    ],
-  },
-  {
-    label: 'Entra ID',
-    path:
-      '/helpdesk/entra?workspace=administration',
-    icon: UserRound,
-    permissions: [
-      'helpdesk.manage',
-      'settings.manage',
-    ],
-  },
+  link(
+    'General',
+    '/settings?workspace=administration',
+    Settings,
+    'settings.view',
+  ),
+  link(
+    'Usuarios',
+    '/users?workspace=administration',
+    Users,
+    'users.view',
+  ),
+  link(
+    'Roles',
+    '/roles?workspace=administration',
+    Shield,
+    'roles.view',
+  ),
+  link(
+    'Auditoría',
+    '/audit?workspace=administration',
+    ScrollText,
+    'audit.view',
+  ),
+  link(
+    'Entra ID',
+    '/helpdesk/entra?workspace=administration',
+    UserRound,
+    'helpdesk.manage',
+    'settings.manage',
+  ),
 ]
 
 export function ModuleNavigation() {
   const { hasPermission } = useAuth()
-  const { activeWorkspaceId } =
-    useWorkspace()
+  const { activeWorkspaceId } = useWorkspace()
   const location = useLocation()
 
+  if (
+    location.pathname === '/ponches' ||
+    location.pathname.startsWith('/ponches/')
+  ) {
+    return null
+  }
+
+  const staff = canUseHelpdeskConsole(hasPermission)
+
   const workspace =
-    location.pathname.startsWith(
-      '/my-support',
-    ) ||
-    location.pathname.startsWith(
-      '/helpdesk',
-    )
-      ? location.pathname.startsWith(
-          '/helpdesk/entra',
-        )
+    location.pathname.startsWith('/my-support') ||
+    location.pathname.startsWith('/helpdesk')
+      ? location.pathname.startsWith('/helpdesk/entra')
         ? 'administration'
         : 'helpdesk'
       : activeWorkspaceId
@@ -317,66 +273,55 @@ export function ModuleNavigation() {
           }
         : workspace === 'helpdesk'
           ? {
-              title:
-                'Mesa de ayuda',
-              links:
-                helpdeskLinks,
+              title: staff
+                ? 'Mesa de ayuda · TIC'
+                : 'Mis solicitudes',
+              links: staff
+                ? helpdeskLinks
+                : requesterLinks,
             }
-          : workspace ===
-              'administration'
+          : workspace === 'administration'
             ? {
-                title:
-                  'Configuración',
-                links:
-                  adminLinks,
+                title: 'Configuración',
+                links: adminLinks,
               }
             : null
 
   if (!config) return null
 
   const visible = config.links.filter(
-    (item) =>
-      !item.permissions ||
-      item.permissions.some(
-        hasPermission,
-      ),
+    item =>
+      !item.permissions?.length ||
+      item.permissions.some(hasPermission),
   )
 
-  if (visible.length === 0)
-    return null
+  if (!visible.length) return null
 
   return (
     <nav
       className="module-navigation"
-      aria-label={
-        `Opciones de ${config.title}`
-      }
+      aria-label={`Opciones de ${config.title}`}
     >
       <span className="module-navigation__title">
         {config.title}
       </span>
 
       <div className="module-navigation__links">
-        {visible.map((item) => {
+        {visible.map(item => {
           const Icon = item.icon
-          const pathname =
-            item.path.split('?')[0]
+          const pathname = item.path.split('?')[0]
 
           return (
             <NavLink
               key={item.path}
               to={item.path}
-              end={
-                pathname ===
-                  '/helpdesk' ||
-                pathname ===
-                  '/dashboard' ||
-                pathname ===
-                  '/settings'
-              }
+              end={[
+                '/helpdesk',
+                '/dashboard',
+                '/settings',
+              ].includes(pathname)}
               className={
-                location.pathname ===
-                pathname
+                location.pathname === pathname
                   ? 'module-navigation__link module-navigation__link--active'
                   : 'module-navigation__link'
               }
