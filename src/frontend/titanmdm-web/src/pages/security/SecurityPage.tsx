@@ -10,6 +10,7 @@ import {
   Smartphone,
   TerminalSquare,
 } from 'lucide-react'
+
 import {
   useCallback,
   useEffect,
@@ -17,8 +18,9 @@ import {
   useState,
   type ReactNode,
 } from 'react'
-import { useNavigate } from 'react-router-dom'
 
+import { useNavigate } from 'react-router-dom'
+import { useAuth } from '../../auth/AuthContext'
 import {
   securityApi,
   type DeviceSecurity,
@@ -42,44 +44,31 @@ const emptyDashboard: SecurityDashboard = {
 
 export function SecurityPage() {
   const navigate = useNavigate()
+  const { hasPermission } = useAuth()
+  const canCommand = hasPermission('devices.commands')
 
   const [dashboard, setDashboard] =
-    useState<SecurityDashboard>(
-      emptyDashboard,
-    )
-
-  const [devices, setDevices] =
-    useState<DeviceSecurity[]>([])
-
-  const [loading, setLoading] =
-    useState(true)
-
-  const [scanning, setScanning] =
-    useState<string | null>(null)
-
-  const [message, setMessage] =
-    useState<string | null>(null)
-
-  const [error, setError] =
-    useState<string | null>(null)
+    useState<SecurityDashboard>(emptyDashboard)
+  const [devices, setDevices] = useState<DeviceSecurity[]>([])
+  const [loading, setLoading] = useState(true)
+  const [scanning, setScanning] = useState<string | null>(null)
+  const [message, setMessage] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const load = useCallback(async () => {
     try {
       setLoading(true)
       setError(null)
 
-      const [summary, deviceList] =
-        await Promise.all([
-          securityApi.getDashboard(),
-          securityApi.getDevices(),
-        ])
+      const [summary, deviceList] = await Promise.all([
+        securityApi.getDashboard(),
+        securityApi.getDevices(),
+      ])
 
       setDashboard(summary)
       setDevices(deviceList)
     } catch {
-      setError(
-        'No fue posible cargar la postura de seguridad.',
-      )
+      setError('No fue posible cargar la postura de seguridad.')
     } finally {
       setLoading(false)
     }
@@ -89,54 +78,70 @@ export function SecurityPage() {
     void load()
   }, [load])
 
-  const securityIssues =
-    useMemo(
-      () =>
-        dashboard.rootedDevices +
-        dashboard.adbEnabledDevices +
-        dashboard.developerModeDevices +
-        dashboard.unsecuredDevices,
-      [dashboard],
-    )
+  const securityIssues = useMemo(
+    () =>
+      dashboard.rootedDevices +
+      dashboard.adbEnabledDevices +
+      dashboard.developerModeDevices +
+      dashboard.unsecuredDevices,
+    [dashboard],
+  )
 
-  async function scanDevice(
-    deviceId: string,
-  ) {
+  async function scanDevice(deviceId: string) {
+    if (!canCommand) return
+
     try {
       setScanning(deviceId)
       setError(null)
       setMessage(null)
 
-      await securityApi.sendSecurityScan(
-        deviceId,
-      )
+      await securityApi.sendSecurityScan(deviceId)
 
       setMessage(
-        'SECURITY_STATUS fue enviado al dispositivo.',
+        'Comando aceptado por el backend. La ejecución depende del agente.',
       )
     } catch {
-      setError(
-        'No fue posible enviar el análisis de seguridad.',
-      )
+      setError('No fue posible enviar el análisis de seguridad.')
     } finally {
       setScanning(null)
     }
   }
 
   async function scanFleet() {
-    if (devices.length === 0) {
-      return
-    }
+    if (!canCommand || devices.length === 0) return
 
     try {
       setScanning('ALL')
       setMessage(null)
       setError(null)
 
-      await securityApi.scanAll(devices)
+      let accepted = 0
+      let failed = 0
+
+      for (let offset = 0; offset < devices.length; offset += 5) {
+        const results = await Promise.allSettled(
+          devices
+            .slice(offset, offset + 5)
+            .map(device =>
+              securityApi.sendSecurityScan(device.deviceId),
+            ),
+        )
+
+        accepted += results.filter(
+          item => item.status === 'fulfilled',
+        ).length
+
+        failed += results.filter(
+          item => item.status === 'rejected',
+        ).length
+      }
+
+      if (failed) {
+        setError(`${failed} comandos no pudieron enviarse.`)
+      }
 
       setMessage(
-        `Análisis enviado a ${devices.length} dispositivo(s).`,
+        `Comandos aceptados: ${accepted}. Actualiza después para consultar resultados del agente.`,
       )
     } catch {
       setError(
@@ -158,8 +163,8 @@ export function SecurityPage() {
           <h1>Seguridad</h1>
 
           <p>
-            Postura de seguridad e integridad
-            de los dispositivos administrados.
+            Postura de seguridad e integridad de los dispositivos
+            administrados.
           </p>
         </div>
 
@@ -179,6 +184,7 @@ export function SecurityPage() {
             type="button"
             onClick={() => void scanFleet()}
             disabled={
+              !canCommand ||
               scanning !== null ||
               devices.length === 0
             }
@@ -190,15 +196,11 @@ export function SecurityPage() {
       </header>
 
       {message && (
-        <div className="security-message success">
-          {message}
-        </div>
+        <div className="security-message success">{message}</div>
       )}
 
       {error && (
-        <div className="security-message error">
-          {error}
-        </div>
+        <div className="security-message error">{error}</div>
       )}
 
       <section className="security-stats">
@@ -221,9 +223,7 @@ export function SecurityPage() {
           label="Riesgo crítico"
           value={dashboard.criticalRiskDevices}
           helper="Requieren atención"
-          danger={
-            dashboard.criticalRiskDevices > 0
-          }
+          danger={dashboard.criticalRiskDevices > 0}
         />
 
         <StatCard
@@ -241,21 +241,16 @@ export function SecurityPage() {
           title="Root detectado"
           value={dashboard.rootedDevices}
         />
-
         <RiskCard
           icon={<TerminalSquare size={18} />}
           title="ADB habilitado"
           value={dashboard.adbEnabledDevices}
         />
-
         <RiskCard
           icon={<KeyRound size={18} />}
           title="Modo desarrollador"
-          value={
-            dashboard.developerModeDevices
-          }
+          value={dashboard.developerModeDevices}
         />
-
         <RiskCard
           icon={<LockKeyhole size={18} />}
           title="Sin bloqueo seguro"
@@ -266,12 +261,10 @@ export function SecurityPage() {
       <section className="security-panel">
         <div className="security-panel-heading">
           <div>
-            <strong>
-              Postura por dispositivo
-            </strong>
+            <strong>Postura por dispositivo</strong>
             <span>
-              Estado reportado por TitanMDM
-              Android Agent.
+              Estado reportado por los agentes Windows y Android.
+              Resumen global de la organización.
             </span>
           </div>
         </div>
@@ -289,81 +282,51 @@ export function SecurityPage() {
                 <th>ADB</th>
                 <th>PARCHE</th>
                 <th>ÚLTIMO ANÁLISIS</th>
-                <th />
+                <th>ACCIONES</th>
               </tr>
             </thead>
 
             <tbody>
-              {!loading &&
-                devices.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={10}
-                      className="security-empty"
-                    >
-                      Aún no existen evaluaciones
-                      de seguridad.
-                    </td>
-                  </tr>
-                )}
+              {!loading && devices.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="security-empty">
+                    Aún no existen evaluaciones de seguridad.
+                  </td>
+                </tr>
+              )}
 
-              {devices.map((device) => (
+              {devices.map(device => (
                 <tr key={device.deviceId}>
                   <td>
                     <button
                       type="button"
                       className="security-device-link"
                       onClick={() =>
-                        navigate(
-                          `/devices/${device.deviceId}`,
-                        )
+                        navigate(`/devices/${device.deviceId}`)
                       }
                     >
-                      <strong>
-                        {device.deviceName}
-                      </strong>
-                      <span>
-                        {device.platform}
-                      </span>
+                      <strong>{device.deviceName}</strong>
+                      <span>{device.platform}</span>
                     </button>
                   </td>
 
                   <td>
-                    <RiskBadge
-                      value={
-                        device.riskLevel
-                      }
-                    />
+                    <RiskBadge value={device.riskLevel} />
                   </td>
 
                   <td>
-                    <strong>
-                      {
-                        device.complianceScore
-                      }
-                      %
-                    </strong>
+                    <strong>{device.complianceScore}%</strong>
                   </td>
+
+                  <td>
+                    <BooleanBadge value={device.deviceSecure} />
+                  </td>
+
+                  <td>{device.encryptionStatus}</td>
 
                   <td>
                     <BooleanBadge
-                      value={
-                        device.deviceSecure
-                      }
-                    />
-                  </td>
-
-                  <td>
-                    {
-                      device.encryptionStatus
-                    }
-                  </td>
-
-                  <td>
-                    <BooleanBadge
-                      value={
-                        !device.rootDetected
-                      }
+                      value={!device.rootDetected}
                       good="No"
                       bad="Sí"
                     />
@@ -371,43 +334,46 @@ export function SecurityPage() {
 
                   <td>
                     <BooleanBadge
-                      value={
-                        !device.adbEnabled
-                      }
+                      value={!device.adbEnabled}
                       good="Off"
                       bad="On"
                     />
                   </td>
 
+                  <td>{device.securityPatchLevel ?? 'N/D'}</td>
+
                   <td>
-                    {device.securityPatchLevel ??
-                      'N/D'}
+                    {formatDate(device.lastSecurityScanAtUtc)}
                   </td>
 
                   <td>
-                    {formatDate(
-                      device.lastSecurityScanAtUtc,
-                    )}
-                  </td>
+                    {device.platform === 'Windows' &&
+                      canCommand && (
+                        <button
+                          type="button"
+                          className="security-row-action"
+                          onClick={() =>
+                            navigate(
+                              `/devices/${device.deviceId}/control-center?workspace=windows`,
+                            )
+                          }
+                        >
+                          Centro de control
+                        </button>
+                      )}
 
-                  <td>
                     <button
                       type="button"
                       className="security-row-action"
                       disabled={
-                        scanning !== null
+                        !canCommand || scanning !== null
                       }
                       onClick={() =>
-                        void scanDevice(
-                          device.deviceId,
-                        )
+                        void scanDevice(device.deviceId)
                       }
                     >
-                      <ScanSearch
-                        size={15}
-                      />
-                      {scanning ===
-                      device.deviceId
+                      <ScanSearch size={15} />
+                      {scanning === device.deviceId
                         ? 'Enviando...'
                         : 'Analizar'}
                     </button>
@@ -438,15 +404,10 @@ function StatCard({
   return (
     <article
       className={
-        danger
-          ? 'security-stat danger'
-          : 'security-stat'
+        danger ? 'security-stat danger' : 'security-stat'
       }
     >
-      <div className="security-stat-icon">
-        {icon}
-      </div>
-
+      <div className="security-stat-icon">{icon}</div>
       <div>
         <span>{label}</span>
         <strong>{value}</strong>
@@ -476,17 +437,10 @@ function RiskCard({
   )
 }
 
-function RiskBadge({
-  value,
-}: {
-  value: string
-}) {
-  const normalized =
-    value.toLowerCase()
-
+function RiskBadge({ value }: { value: string }) {
   return (
     <span
-      className={`security-risk-badge ${normalized}`}
+      className={`security-risk-badge ${value.toLowerCase()}`}
     >
       {value}
     </span>
@@ -515,12 +469,6 @@ function BooleanBadge({
   )
 }
 
-function formatDate(
-  value: string | null,
-) {
-  if (!value) {
-    return 'Nunca'
-  }
-
-  return new Date(value).toLocaleString()
+function formatDate(value: string | null) {
+  return value ? new Date(value).toLocaleString() : 'Nunca'
 }

@@ -11,15 +11,12 @@ public sealed class ApplicationInventoryService
 {
     private readonly TitanMdmDbContext _dbContext;
 
-    private static readonly JsonSerializerOptions
-        JsonOptions =
-            new()
-            {
-                PropertyNameCaseInsensitive = true
-            };
+    private static readonly JsonSerializerOptions JsonOptions = new()
+    {
+        PropertyNameCaseInsensitive = true
+    };
 
-    public ApplicationInventoryService(
-        TitanMdmDbContext dbContext)
+    public ApplicationInventoryService(TitanMdmDbContext dbContext)
     {
         _dbContext = dbContext;
     }
@@ -41,13 +38,10 @@ public sealed class ApplicationInventoryService
                 "El resultado APP_INVENTORY está vacío.");
         }
 
-        var device =
-            await _dbContext.Devices
-                .SingleOrDefaultAsync(
-                    x =>
-                        x.Id == deviceId &&
-                        !x.IsDeleted,
-                    cancellationToken);
+        var device = await _dbContext.Devices
+            .SingleOrDefaultAsync(
+                x => x.Id == deviceId && !x.IsDeleted,
+                cancellationToken);
 
         if (device is null)
         {
@@ -55,53 +49,36 @@ public sealed class ApplicationInventoryService
                 "El dispositivo no existe.");
         }
 
-        var payload =
-            DeserializePayload(
-                resultJson);
+        var payload = DeserializePayload(resultJson);
 
-        var reportedPackages =
-            new HashSet<string>(
-                StringComparer.OrdinalIgnoreCase);
+        var reportedPackages = new HashSet<string>(
+            StringComparer.OrdinalIgnoreCase);
 
-        var currentApplications =
-            await _dbContext.DeviceApplications
-                .Where(
-                    x =>
-                        x.DeviceId == deviceId)
-                .ToListAsync(
-                    cancellationToken);
+        var currentApplications = await _dbContext.DeviceApplications
+            .Where(x => x.DeviceId == deviceId)
+            .ToListAsync(cancellationToken);
 
-        var currentByPackage =
-            currentApplications
-                .ToDictionary(
-                    x => x.PackageName,
-                    StringComparer.OrdinalIgnoreCase);
+        var currentByPackage = currentApplications.ToDictionary(
+            x => x.PackageName,
+            StringComparer.OrdinalIgnoreCase);
 
         foreach (var app in payload.Applications)
         {
-            if (string.IsNullOrWhiteSpace(
-                    app.PackageName))
-            {
+            if (string.IsNullOrWhiteSpace(app.PackageName))
                 continue;
-            }
 
-            var packageName =
-                app.PackageName.Trim();
-
-            reportedPackages.Add(
-                packageName);
+            var packageName = app.PackageName.Trim();
+            reportedPackages.Add(packageName);
 
             var firstInstall =
-                FromUnixMilliseconds(
-                    app.FirstInstallTimeUtc);
+                FromUnixMilliseconds(app.FirstInstallTimeUtc);
 
             var lastUpdate =
-                FromUnixMilliseconds(
-                    app.LastUpdateTimeUtc);
+                FromUnixMilliseconds(app.LastUpdateTimeUtc);
 
             if (currentByPackage.TryGetValue(
-                    packageName,
-                    out var existing))
+                packageName,
+                out var existing))
             {
                 existing.Synchronize(
                     app.ApplicationName,
@@ -116,60 +93,47 @@ public sealed class ApplicationInventoryService
                 continue;
             }
 
-            var entity =
-                new DeviceApplication(
-                    device.OrganizationId,
-                    device.Id,
-                    packageName,
-                    app.ApplicationName,
-                    app.VersionName,
-                    app.VersionCode,
-                    app.IsSystemApp,
-                    app.IsEnabled,
-                    firstInstall,
-                    lastUpdate,
-                    app.InstallerPackageName);
+            var entity = new DeviceApplication(
+                device.OrganizationId,
+                device.Id,
+                packageName,
+                app.ApplicationName,
+                app.VersionName,
+                app.VersionCode,
+                app.IsSystemApp,
+                app.IsEnabled,
+                firstInstall,
+                lastUpdate,
+                app.InstallerPackageName);
 
-            _dbContext.DeviceApplications.Add(
-                entity);
+            _dbContext.DeviceApplications.Add(entity);
         }
 
         foreach (var existing in currentApplications)
         {
-            if (!reportedPackages.Contains(
-                    existing.PackageName))
+            if (!reportedPackages.Contains(existing.PackageName))
             {
                 existing.MarkMissing();
             }
         }
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext.SaveChangesAsync(cancellationToken);
     }
 
-    public async Task<
-        IReadOnlyCollection<DeviceApplicationDto>>
+    public async Task<IReadOnlyCollection<DeviceApplicationDto>>
         GetDeviceApplicationsAsync(
             Guid organizationId,
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
         return await (
-            from app in _dbContext.DeviceApplications
-                .AsNoTracking()
-
-            join device in _dbContext.Devices
-                    .AsNoTracking()
+            from app in _dbContext.DeviceApplications.AsNoTracking()
+            join device in _dbContext.Devices.AsNoTracking()
                 on app.DeviceId equals device.Id
-
             where
                 app.OrganizationId == organizationId &&
                 app.DeviceId == deviceId
-
-            orderby
-                app.IsPresent descending,
-                app.ApplicationName
-
+            orderby app.IsPresent descending, app.ApplicationName
             select new DeviceApplicationDto(
                 app.Id,
                 app.DeviceId,
@@ -185,124 +149,95 @@ public sealed class ApplicationInventoryService
                 app.FirstInstallTimeUtc,
                 app.LastUpdateTimeUtc,
                 app.FirstSeenAtUtc,
-                app.LastSeenAtUtc
-            )
-        ).ToListAsync(
-            cancellationToken);
+                app.LastSeenAtUtc)
+        ).ToListAsync(cancellationToken);
     }
 
-    public async Task<
-        IReadOnlyCollection<ApplicationSummaryDto>>
+    public async Task<IReadOnlyCollection<ApplicationSummaryDto>>
         GetApplicationsAsync(
             Guid organizationId,
             string? search,
             bool? systemApp,
             CancellationToken cancellationToken = default)
     {
-        var query =
-            _dbContext.DeviceApplications
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId &&
-                        x.IsPresent);
+        var query = _dbContext.DeviceApplications
+            .AsNoTracking()
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.IsPresent);
 
         if (systemApp.HasValue)
         {
-            query =
-                query.Where(
-                    x =>
-                        x.IsSystemApp ==
-                            systemApp.Value);
+            query = query.Where(
+                x => x.IsSystemApp == systemApp.Value);
         }
 
         if (!string.IsNullOrWhiteSpace(search))
         {
-            var value =
-                search.Trim();
+            var value = search.Trim();
 
-            query =
-                query.Where(
-                    x =>
-                        x.ApplicationName.Contains(
-                            value) ||
-                        x.PackageName.Contains(
-                            value));
+            query = query.Where(x =>
+                x.ApplicationName.Contains(value) ||
+                x.PackageName.Contains(value));
         }
 
-        return await query
-            .GroupBy(
-                x => new
-                {
-                    x.PackageName,
-                    x.ApplicationName,
-                    x.VersionName,
-                    x.VersionCode,
-                    x.IsSystemApp
-                })
-            .Select(
-                group =>
-                    new ApplicationSummaryDto(
-                        group.Key.PackageName,
-                        group.Key.ApplicationName,
-                        group.Key.VersionName,
-                        group.Key.VersionCode,
-                        group.Key.IsSystemApp,
-                        group.Select(
-                                x => x.DeviceId)
-                            .Distinct()
-                            .Count(),
-                        group.Count(
-                            x => x.IsEnabled),
-                        group.Max(
-                            x => x.LastSeenAtUtc)
-                    ))
-            .OrderBy(
-                x => x.ApplicationName)
-            .ToListAsync(
-                cancellationToken);
+        var rows = await query
+            .GroupBy(x => new
+            {
+                x.PackageName,
+                x.ApplicationName,
+                x.VersionName,
+                x.VersionCode,
+                x.IsSystemApp
+            })
+            .Select(group => new
+            {
+                group.Key.PackageName,
+                group.Key.ApplicationName,
+                group.Key.VersionName,
+                group.Key.VersionCode,
+                group.Key.IsSystemApp,
+                DeviceCount = group
+                    .Select(x => x.DeviceId)
+                    .Distinct()
+                    .Count(),
+                EnabledCount = group.Count(x => x.IsEnabled),
+                LastSeenAtUtc = group.Max(x => x.LastSeenAtUtc)
+            })
+            .OrderBy(x => x.ApplicationName)
+            .ToListAsync(cancellationToken);
+
+        return rows.Select(x => new ApplicationSummaryDto(
+            x.PackageName,
+            x.ApplicationName,
+            x.VersionName,
+            x.VersionCode,
+            x.IsSystemApp,
+            x.DeviceCount,
+            x.EnabledCount,
+            x.LastSeenAtUtc)).ToArray();
     }
 
-    private static AppInventoryPayload
-        DeserializePayload(
-            string resultJson)
+    private static AppInventoryPayload DeserializePayload(
+        string resultJson)
     {
-        var payload =
-            JsonSerializer.Deserialize<
-                AppInventoryPayload>(
-                    resultJson,
-                    JsonOptions);
+        var payload = JsonSerializer.Deserialize<AppInventoryPayload>(
+            resultJson,
+            JsonOptions);
 
-        if (payload is null)
-        {
-            throw new InvalidOperationException(
-                "APP_INVENTORY contiene JSON inválido.");
-        }
-
-        if (payload.Applications.Count == 0)
-        {
-            return payload;
-        }
-
-        return payload;
+        return payload ?? throw new InvalidOperationException(
+            "APP_INVENTORY contiene JSON inválido.");
     }
 
-    private static DateTime?
-        FromUnixMilliseconds(
-            long? milliseconds)
+    private static DateTime? FromUnixMilliseconds(long? milliseconds)
     {
-        if (!milliseconds.HasValue ||
-            milliseconds.Value <= 0)
-        {
+        if (!milliseconds.HasValue || milliseconds.Value <= 0)
             return null;
-        }
 
         try
         {
             return DateTimeOffset
-                .FromUnixTimeMilliseconds(
-                    milliseconds.Value)
+                .FromUnixTimeMilliseconds(milliseconds.Value)
                 .UtcDateTime;
         }
         catch
@@ -314,39 +249,22 @@ public sealed class ApplicationInventoryService
     private sealed class AppInventoryPayload
     {
         public Guid CommandId { get; set; }
-
-        public string CommandType { get; set; } =
-            string.Empty;
-
-        public string Platform { get; set; } =
-            string.Empty;
-
+        public string CommandType { get; set; } = string.Empty;
+        public string Platform { get; set; } = string.Empty;
         public int ApplicationCount { get; set; }
-
-        public List<AppInventoryItem>
-            Applications { get; set; } = [];
+        public List<AppInventoryItem> Applications { get; set; } = [];
     }
 
     private sealed class AppInventoryItem
     {
-        public string PackageName { get; set; } =
-            string.Empty;
-
-        public string ApplicationName { get; set; } =
-            string.Empty;
-
+        public string PackageName { get; set; } = string.Empty;
+        public string ApplicationName { get; set; } = string.Empty;
         public string? VersionName { get; set; }
-
         public long VersionCode { get; set; }
-
         public bool IsSystemApp { get; set; }
-
         public bool IsEnabled { get; set; }
-
         public long? FirstInstallTimeUtc { get; set; }
-
         public long? LastUpdateTimeUtc { get; set; }
-
         public string? InstallerPackageName { get; set; }
     }
 }

@@ -1,132 +1,251 @@
-import {
-  Clock3,
-} from 'lucide-react'
+import { useMemo, useState } from 'react'
 
-import type {
-  SoftwareDeployment,
-} from '../../../api/applicationsApi'
+import { SoftwareDeploymentResults } from './SoftwareDeploymentResults'
+import { WindowsOperationResults } from '../../../components/windows/WindowsOperationResults'
+import type { SoftwareDeployment } from '../../../api/applicationsApi'
 
 interface Props {
-  deployments:
-    SoftwareDeployment[]
+  deployments: SoftwareDeployment[]
+}
+
+const labels: Record<string, string> = {
+  Draft: 'Borrador',
+  Pending: 'Pendiente',
+  Queued: 'En cola',
+  Running: 'En ejecución',
+  InProgress: 'En ejecución',
+  Completed: 'Completado',
+  Succeeded: 'Completado',
+  Failed: 'Fallido',
+  Cancelled: 'Cancelado',
+  PartiallyCompleted: 'Parcial',
+}
+
+function date(value: string) {
+  const parsed = new Date(value)
+
+  return Number.isNaN(parsed.getTime())
+    ? 'Sin fecha válida'
+    : parsed.toLocaleString()
 }
 
 export function SoftwareDeploymentsTab({
   deployments,
 }: Props) {
+  const [deploymentId, setDeploymentId] = useState('')
+  const [packageId, setPackageId] = useState('')
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('')
+
+  const statuses = useMemo(
+    () =>
+      [...new Set(
+        deployments.map(item => item.status),
+      )].sort(),
+    [deployments],
+  )
+
+  const visible = useMemo(() => {
+    const term = search.trim().toLocaleLowerCase()
+
+    return deployments
+      .filter(
+        item =>
+          (!status || item.status === status) &&
+          (!term ||
+            [
+              item.packageName,
+              item.packageVersion,
+              item.targetName,
+              item.targetType,
+            ].some(value =>
+              value.toLocaleLowerCase().includes(term),
+            )),
+      )
+      .sort(
+        (a, b) =>
+          Date.parse(b.createdAtUtc) -
+          Date.parse(a.createdAtUtc),
+      )
+  }, [deployments, search, status])
+
   return (
-    <div className="apps-table-wrapper">
-      <table className="apps-table">
-        <thead>
-          <tr>
-            <th>
-              Software
-            </th>
+    <section aria-label="Despliegues de software">
+      <h2>Despliegues de software</h2>
 
-            <th>
-              Versión
-            </th>
+      <p role="note">
+        En cola significa enviado. La cantidad de equipos
+        corresponde a comandos generados; no confirma
+        la instalación. Consulta el resultado del envío
+        y el inventario del equipo.
+      </p>
 
-            <th>
-              Destino
-            </th>
+      <div
+        style={{
+          display: 'flex',
+          flexWrap: 'wrap',
+          gap: 12,
+          margin: '18px 0',
+        }}
+      >
+        <label
+          style={{
+            display: 'grid',
+            gap: 6,
+            flex: '1 1 220px',
+          }}
+        >
+          Buscar paquete o destino
+          <input
+            value={search}
+            onChange={event =>
+              setSearch(event.target.value)
+            }
+            placeholder="Nombre, versión o grupo"
+          />
+        </label>
 
-            <th>
-              Tipo
-            </th>
+        <label style={{ display: 'grid', gap: 6 }}>
+          Estado
+          <select
+            value={status}
+            onChange={event =>
+              setStatus(event.target.value)
+            }
+          >
+            <option value="">Todos los estados</option>
 
-            <th>
-              Equipos
-            </th>
+            {statuses.map(value => (
+              <option key={value} value={value}>
+                {labels[value] ?? value}
+              </option>
+            ))}
+          </select>
+        </label>
 
-            <th>
-              Estado
-            </th>
+        <button
+          type="button"
+          onClick={() => {
+            setSearch('')
+            setStatus('')
+          }}
+          disabled={!search && !status}
+        >
+          Limpiar filtros
+        </button>
+      </div>
 
-            <th>
-              Fecha
-            </th>
-          </tr>
-        </thead>
+      <p aria-live="polite">
+        {visible.length} de {deployments.length} despliegues
+      </p>
 
-        <tbody>
-          {deployments.length ===
-          0 ? (
+      <div className="apps-table-wrapper">
+        <table className="apps-table">
+          <thead>
             <tr>
-              <td
-                colSpan={7}
-                className="apps-empty"
-              >
-                No hay deployments.
-              </td>
+              <th>Software</th>
+              <th>Versión</th>
+              <th>Destino</th>
+              <th>Tipo</th>
+              <th>Equipos en cola</th>
+              <th>Estado</th>
+              <th>Fecha de envío</th>
+              <th>Resultados</th>
             </tr>
-          ) : (
-            deployments.map(
-              item => (
-                <tr
-                  key={item.id}
-                >
-                  <td>
-                    <strong>
-                      {item.packageName}
-                    </strong>
-                  </td>
+          </thead>
 
+          <tbody>
+            {visible.length === 0 ? (
+              <tr>
+                <td colSpan={8} className="apps-empty">
+                  {deployments.length
+                    ? 'No hay resultados para estos filtros.'
+                    : 'Todavía no se han enviado paquetes.'}
+                </td>
+              </tr>
+            ) : (
+              visible.map(item => (
+                <tr key={item.id}>
                   <td>
-                    {
-                      item
-                        .packageVersion
-                    }
+                    <strong>{item.packageName}</strong>
                   </td>
-
+                  <td>{item.packageVersion}</td>
                   <td>
-                    {item.targetName}
+                    {item.targetName || item.targetId}
                   </td>
-
                   <td>
-                    <span className="apps-target-badge">
-                      {
-                        item
-                          .targetType
-                      }
-                    </span>
+                    {item.targetType === 'Group'
+                      ? 'Grupo'
+                      : item.targetType === 'Device'
+                        ? 'Equipo'
+                        : item.targetType}
                   </td>
-
-                  <td>
-                    {
-                      item
-                        .queuedDevices
-                    }
-                  </td>
-
+                  <td>{item.queuedDevices}</td>
                   <td>
                     <span
-                      className={
-                        `apps-deployment-status ${item.status.toLowerCase()}`
+                      className={`apps-deployment-status ${item.status.toLowerCase()}`}
+                    >
+                      {labels[item.status] ?? item.status}
+                    </span>
+                  </td>
+                  <td>{date(item.createdAtUtc)}</td>
+                  <td>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setDeploymentId(item.id)
                       }
                     >
-                      {item.status}
-                    </span>
-                  </td>
+                      Ver este envío
+                    </button>
 
-                  <td>
-                    <span className="apps-date-cell">
-                      <Clock3
-                        size={13}
-                      />
-
-                      {new Date(
-                        item.createdAtUtc,
-                      )
-                        .toLocaleString()}
-                    </span>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setPackageId(item.packageId)
+                      }
+                    >
+                      Historial del paquete
+                    </button>
                   </td>
                 </tr>
-              ),
-            )
-          )}
-        </tbody>
-      </table>
-    </div>
+              ))
+            )}
+          </tbody>
+        </table>
+      </div>
+
+      {deploymentId && (
+        <>
+          <button
+            type="button"
+            onClick={() => setDeploymentId('')}
+          >
+            Cerrar envío
+          </button>
+
+          <SoftwareDeploymentResults
+            key={deploymentId}
+            deploymentId={deploymentId}
+          />
+        </>
+      )}
+
+      {packageId && (
+        <>
+          <button
+            type="button"
+            onClick={() => setPackageId('')}
+          >
+            Cerrar resultados
+          </button>
+
+          <WindowsOperationResults
+            key={packageId}
+            packageId={packageId}
+          />
+        </>
+      )}
+    </section>
   )
 }

@@ -5,7 +5,6 @@ import {
   useRef,
   useState,
 } from 'react'
-
 import {
   CircleStop,
   Clock3,
@@ -19,2254 +18,857 @@ import {
   ShieldCheck,
 } from 'lucide-react'
 
-import {
-  devicesApi,
-} from '../../api/devicesApi'
-
+import { devicesApi } from '../../api/devicesApi'
 import {
   createRemoteSession,
   getRemoteSession,
   listRemoteSessions,
   terminateRemoteSession,
 } from '../../api/remoteSupportApi'
-
-import type {
-  RemoteSession,
-} from '../../api/remoteSupportApi'
-
+import type { RemoteSession } from '../../api/remoteSupportApi'
 import {
   RemoteSupportSignalRClient,
 } from '../../api/remoteSupportSignalR'
-
 import type {
   RemoteFrame,
   RemoteSessionChanged,
 } from '../../api/remoteSupportSignalR'
+import RemoteDesktopViewer from './RemoteDesktopViewer'
+import type { DeviceListItem } from '../../types/device'
+import { useAuth } from '../../auth/AuthContext'
+import './RemotePage.css'
 
-import RemoteDesktopViewer
-  from '../../components/remote/RemoteDesktopViewer'
-
-import type {
-  DeviceListItem,
-} from '../../types/device'
-
-function formatDate(
-  value?: string | null,
-): string {
-  if (!value) {
-    return '—'
-  }
-
-  return new Date(
-    value,
-  ).toLocaleString()
+function formatDate(value?: string | null): string {
+  if (!value) return '—'
+  return new Date(value).toLocaleString()
 }
 
-function statusLabel(
-  status?: string,
-): string {
-  switch (status) {
-    case 'Requested':
-      return 'Solicitada'
-
-    case 'Connecting':
-      return 'Conectando'
-
-    case 'Connected':
-      return 'Conectada'
-
-    case 'Disconnecting':
-      return 'Desconectando'
-
-    case 'Completed':
-      return 'Finalizada'
-
-    case 'Failed':
-      return 'Error'
-
-    case 'Expired':
-      return 'Expirada'
-
-    case 'Cancelled':
-      return 'Cancelada'
-
-    default:
-      return (
-        status ??
-        'Sin sesión'
-      )
+function statusLabel(status?: string): string {
+  const names: Record<string, string> = {
+    Requested: 'Solicitada',
+    Connecting: 'Conectando',
+    Connected: 'Conectada',
+    Disconnecting: 'Desconectando',
+    Completed: 'Finalizada',
+    Failed: 'Error',
+    Expired: 'Expirada',
+    Cancelled: 'Cancelada',
   }
+  return status ? names[status] ?? status : 'Sin sesión'
 }
 
-function isTerminal(
-  status: string,
-): boolean {
-  return [
-    'Completed',
-    'Failed',
-    'Expired',
-    'Cancelled',
-  ].includes(
-    status,
-  )
+function isTerminal(status: string): boolean {
+  return ['Completed', 'Failed', 'Expired', 'Cancelled']
+    .includes(status)
 }
 
 export function RemotePage() {
-  /*
-   * ============================================================
-   * SIGNALR / REFERENCES
-   * ============================================================
-   */
+  const { user } = useAuth()
+  const canManage =
+    user?.permissions?.includes('remote.manage') ?? false
 
+  const [deviceSearch, setDeviceSearch] = useState('')
+  const loadGeneration = useRef(0)
   const signalRRef =
-    useRef<
-      RemoteSupportSignalRClient | null
-    >(
-      null,
-    )
+    useRef<RemoteSupportSignalRClient | null>(null)
+  const selectedSessionIdRef = useRef('')
+  const viewerContainerRef = useRef<HTMLDivElement | null>(null)
 
-  /*
-   * Este ref mantiene siempre el SessionId actual sin obligar
-   * a reconstruir la conexión SignalR cuando cambia la sesión.
-   */
-  const selectedSessionIdRef =
-    useRef<string>(
-      '',
-    )
+  const [devices, setDevices] = useState<DeviceListItem[]>([])
+  const [sessions, setSessions] = useState<RemoteSession[]>([])
+  const [activeSession, setActiveSession] =
+    useState<RemoteSession | null>(null)
+  const [selectedSessionId, setSelectedSessionId] = useState('')
+  const [selectedDeviceId, setSelectedDeviceId] = useState('')
 
-  const viewerContainerRef =
-    useRef<
-      HTMLDivElement | null
-    >(
-      null,
-    )
+  const [reason, setReason] = useState('Soporte técnico remoto')
+  const [maximumDurationMinutes, setMaximumDurationMinutes] =
+    useState(120)
+  const [allowMouse, setAllowMouse] = useState(true)
+  const [allowKeyboard, setAllowKeyboard] = useState(true)
+  const [allowClipboard, setAllowClipboard] = useState(false)
+  const [allowFileTransfer, setAllowFileTransfer] = useState(false)
 
-  /*
-   * ============================================================
-   * DATA
-   * ============================================================
-   */
+  const [frame, setFrame] = useState<RemoteFrame | null>(null)
+  const [loading, setLoading] = useState(true)
+  const [creating, setCreating] = useState(false)
+  const [terminating, setTerminating] = useState(false)
+  const [channelConnected, setChannelConnected] = useState(false)
+  const [error, setError] = useState<string | null>(null)
 
-  const [
-    devices,
-    setDevices,
-  ] =
-    useState<
-      DeviceListItem[]
-    >(
-      [],
-    )
+  useEffect(() => {
+    selectedSessionIdRef.current = selectedSessionId
+  }, [selectedSessionId])
 
-  const [
-    sessions,
-    setSessions,
-  ] =
-    useState<
-      RemoteSession[]
-    >(
-      [],
-    )
-
-  const [
-    activeSession,
-    setActiveSession,
-  ] =
-    useState<
-      RemoteSession | null
-    >(
-      null,
-    )
-
-  /*
-   * ============================================================
-   * SELECTION
-   * ============================================================
-   */
-
-  const [
-    selectedSessionId,
-    setSelectedSessionId,
-  ] =
-    useState(
-      '',
-    )
-
-  const [
-    selectedDeviceId,
-    setSelectedDeviceId,
-  ] =
-    useState(
-      '',
-    )
-
-  /*
-   * Mantener sincronizado el ref con el state.
-   */
-  useEffect(
-    () => {
-      selectedSessionIdRef.current =
-        selectedSessionId
-    },
-    [
-      selectedSessionId,
-    ],
+  const frameUrl = useMemo(
+    () => frame
+      ? `data:${frame.mimeType};base64,${frame.base64Data}`
+      : null,
+    [frame],
   )
 
-  /*
-   * ============================================================
-   * NEW SESSION FORM
-   * ============================================================
-   */
+  const windowsDevices = useMemo(
+    () => devices.filter(x =>
+      x.platform === 'Windows' && x.isManaged,
+    ),
+    [devices],
+  )
 
-  const [
-    reason,
-    setReason,
-  ] =
-    useState(
-      'Soporte técnico remoto',
-    )
+  const activeSessions = useMemo(
+    () => sessions.filter(x => !isTerminal(x.status)),
+    [sessions],
+  )
 
-  const [
-    maximumDurationMinutes,
-    setMaximumDurationMinutes,
-  ] =
-    useState(
-      120,
-    )
+  const selectedDevice = useMemo(
+    () => windowsDevices.find(x =>
+      x.id === selectedDeviceId,
+    ) ?? null,
+    [windowsDevices, selectedDeviceId],
+  )
 
-  const [
-    allowMouse,
-    setAllowMouse,
-  ] =
-    useState(
-      true,
-    )
+  const loadData = useCallback(async () => {
+    const request = ++loadGeneration.current
 
-  const [
-    allowKeyboard,
-    setAllowKeyboard,
-  ] =
-    useState(
-      true,
-    )
+    try {
+      const [deviceResult, sessionResult] = await Promise.all([
+        devicesApi.getDevices({
+          platform: 'Windows',
+          search: deviceSearch,
+          page: 1,
+          pageSize: 100,
+        }),
+        listRemoteSessions(200),
+      ])
 
-  const [
-    allowClipboard,
-    setAllowClipboard,
-  ] =
-    useState(
-      false,
-    )
+      if (request !== loadGeneration.current) return
 
-  const [
-    allowFileTransfer,
-    setAllowFileTransfer,
-  ] =
-    useState(
-      false,
-    )
+      setDevices(deviceResult.items)
+      setSessions(sessionResult)
+    } catch (requestError) {
+      if (request !== loadGeneration.current) return
+      console.error(requestError)
+      setError(
+        'No fue posible cargar los dispositivos o las sesiones remotas.',
+      )
+    } finally {
+      if (request === loadGeneration.current) {
+        setLoading(false)
+      }
+    }
+  }, [deviceSearch])
 
-  /*
-   * ============================================================
-   * REMOTE FRAME
-   * ============================================================
-   */
-
-  const [
-    frame,
-    setFrame,
-  ] =
-    useState<
-      RemoteFrame | null
-    >(
-      null,
-    )
-
-  /*
-   * ============================================================
-   * UI STATE
-   * ============================================================
-   */
-
-  const [
-    loading,
-    setLoading,
-  ] =
-    useState(
-      true,
-    )
-
-  const [
-    creating,
-    setCreating,
-  ] =
-    useState(
-      false,
-    )
-
-  const [
-    terminating,
-    setTerminating,
-  ] =
-    useState(
-      false,
-    )
-
-  const [
-    channelConnected,
-    setChannelConnected,
-  ] =
-    useState(
-      false,
-    )
-
-  const [
-    error,
-    setError,
-  ] =
-    useState<
-      string | null
-    >(
-      null,
-    )
-
-  /*
-   * ============================================================
-   * FRAME URL
-   * ============================================================
-   */
-
-  const frameUrl =
-    useMemo(
-      () => {
-        if (!frame) {
-          return null
-        }
-
-        return (
-          `data:${frame.mimeType};base64,` +
-          frame.base64Data
-        )
-      },
-      [
-        frame,
-      ],
-    )
-
-  /*
-   * ============================================================
-   * WINDOWS DEVICES
-   * ============================================================
-   */
-
-  const windowsDevices =
-    useMemo(
-      () =>
-        devices.filter(
-          (
-            device,
-          ) =>
-            device.platform ===
-              'Windows'
-            &&
-            device.isManaged,
-        ),
-      [
-        devices,
-      ],
-    )
-
-  /*
-   * ============================================================
-   * ACTIVE SESSIONS
-   * ============================================================
-   */
-
-  const activeSessions =
-    useMemo(
-      () =>
-        sessions.filter(
-          (
-            session,
-          ) =>
-            !isTerminal(
-              session.status,
-            ),
-        ),
-      [
-        sessions,
-      ],
-    )
-
-  /*
-   * ============================================================
-   * SELECTED DEVICE
-   * ============================================================
-   */
-
-  const selectedDevice =
-    useMemo(
-      () =>
-        windowsDevices.find(
-          (
-            device,
-          ) =>
-            device.id ===
-            selectedDeviceId,
-        )
-        ??
-        null,
-      [
-        windowsDevices,
-        selectedDeviceId,
-      ],
-    )
-
-  /*
-   * ============================================================
-   * LOAD DATA
-   * ============================================================
-   */
-
-  const loadData =
-    useCallback(
-      async () => {
-        try {
-          setError(
-            null,
-          )
-
-          const [
-            deviceResult,
-            sessionResult,
-          ] =
-            await Promise.all(
-              [
-                devicesApi
-                  .getDevices(
-                    {
-                      platform:
-                        'Windows',
-
-                      page:
-                        1,
-
-                      pageSize:
-                        200,
-                    },
-                  ),
-
-                listRemoteSessions(
-                  200,
-                ),
-              ],
-            )
-
-          setDevices(
-            deviceResult.items,
-          )
-
-          setSessions(
-            sessionResult,
-          )
-        } catch (
-          requestError
-        ) {
-          console.error(
-            requestError,
-          )
-
-          setError(
-            'No fue posible cargar los dispositivos o las sesiones remotas.',
-          )
-        } finally {
-          setLoading(
-            false,
-          )
-        }
-      },
-      [],
-    )
-
-  /*
-   * Initial load
-   */
-
-  useEffect(
-    () => {
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
       void loadData()
-    },
-    [
-      loadData,
-    ],
-  )
+    }, 300)
+    return () => window.clearTimeout(timer)
+  }, [loadData])
 
-  /*
-   * Background refresh.
-   */
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      void loadData()
+    }, 15000)
+    return () => window.clearInterval(timer)
+  }, [loadData])
 
-  useEffect(
-    () => {
-      const timer =
-        window.setInterval(
-          () => {
-            void loadData()
-          },
-          15000,
-        )
+  const refreshActiveSession = useCallback(
+    async (sessionId: string) => {
+      try {
+        const updated = await getRemoteSession(sessionId)
 
-      return () => {
-        window.clearInterval(
-          timer,
+        if (selectedSessionIdRef.current === updated.id) {
+          setActiveSession(updated)
+        }
+
+        setSessions(current => {
+          if (!current.some(x => x.id === updated.id)) {
+            return [updated, ...current]
+          }
+          return current.map(x =>
+            x.id === updated.id ? updated : x,
+          )
+        })
+      } catch (requestError) {
+        console.error(
+          'No fue posible actualizar la sesión remota.',
+          requestError,
         )
       }
     },
-    [
-      loadData,
-    ],
+    [],
   )
 
-  /*
-   * ============================================================
-   * REFRESH ACTIVE SESSION
-   * ============================================================
-   */
+  useEffect(() => {
+    let disposed = false
+    const client = new RemoteSupportSignalRClient()
+    signalRRef.current = client
 
-  const refreshActiveSession =
-    useCallback(
-      async (
-        sessionId:
-          string,
-      ) => {
+    const joinCurrentSession = async () => {
+      const sessionId = selectedSessionIdRef.current
+      if (!sessionId) return
+
+      try {
+        await client.joinSession(sessionId)
+      } catch (joinError) {
+        console.error('JoinSession falló.', joinError)
+        if (!disposed) {
+          setError(
+            'El canal está conectado, pero no fue posible ' +
+            'unirse a la sesión. Revisa permisos y estado.',
+          )
+        }
+      }
+    }
+
+    void client.connect({
+      onFrame: nextFrame => {
+        if (
+          nextFrame.sessionId !== selectedSessionIdRef.current
+        ) return
+
+        setFrame(current => {
+          if (
+            current &&
+            current.sessionId === nextFrame.sessionId &&
+            nextFrame.sequence <= current.sequence
+          ) return current
+
+          return nextFrame
+        })
+      },
+      onSessionChanged: (update: RemoteSessionChanged) => {
+        void refreshActiveSession(update.sessionId)
+      },
+      onReconnecting: () => {
+        if (!disposed) setChannelConnected(false)
+      },
+      onReconnected: () => {
+        if (disposed) return
+        setChannelConnected(true)
+        void joinCurrentSession()
+      },
+      onClosed: closeError => {
+        if (disposed) return
+        setChannelConnected(false)
+        if (closeError) {
+          console.error('Canal remoto cerrado.', closeError)
+        }
+      },
+    }).then(async () => {
+      if (disposed) return
+      setChannelConnected(true)
+      await joinCurrentSession()
+    }).catch(connectionError => {
+      if (disposed) return
+      console.error(connectionError)
+      setChannelConnected(false)
+      setError(
+        'No fue posible establecer el canal de soporte remoto.',
+      )
+    })
+
+    return () => {
+      disposed = true
+      if (signalRRef.current === client) {
+        signalRRef.current = null
+      }
+      void client.disconnect()
+    }
+  }, [refreshActiveSession])
+
+  const selectSession = async (sessionId: string) => {
+    try {
+      setError(null)
+      setFrame(null)
+      setActiveSession(null)
+
+      const previousSessionId = selectedSessionIdRef.current
+
+      if (
+        previousSessionId &&
+        previousSessionId !== sessionId &&
+        signalRRef.current
+      ) {
         try {
-          const updated =
-            await getRemoteSession(
-              sessionId,
-            )
-
-          /*
-           * Solo modificar activeSession si seguimos visualizando
-           * esa misma sesión.
-           */
-          if (
-            selectedSessionIdRef.current ===
-            updated.id
-          ) {
-            setActiveSession(
-              updated,
-            )
-          }
-
-          setSessions(
-            (
-              current,
-            ) => {
-              const exists =
-                current.some(
-                  (
-                    item,
-                  ) =>
-                    item.id ===
-                    updated.id,
-                )
-
-              if (
-                !exists
-              ) {
-                return [
-                  updated,
-                  ...current,
-                ]
-              }
-
-              return current.map(
-                (
-                  item,
-                ) =>
-                  item.id ===
-                  updated.id
-                    ? updated
-                    : item,
-              )
-            },
-          )
-        } catch (
-          requestError
-        ) {
-          console.error(
-            'No fue posible actualizar la sesión remota.',
-            requestError,
+          await signalRRef.current.leaveSession(previousSessionId)
+        } catch (leaveError) {
+          console.warn(
+            'No fue posible abandonar la sesión anterior.',
+            leaveError,
           )
         }
-      },
-      [],
-    )
-
-  /*
-   * ============================================================
-   * SIGNALR
-   * ============================================================
-   *
-   * IMPORTANT:
-   *
-   * Este effect NO depende de selectedSessionId.
-   *
-   * Queremos una sola conexión SignalR durante toda la vida
-   * de RemotePage.
-   * ============================================================
-   */
-
-  useEffect(
-    () => {
-      let disposed =
-        false
-
-      const client =
-        new RemoteSupportSignalRClient()
-
-      signalRRef.current =
-        client
-
-      const joinCurrentSession =
-        async () => {
-          const sessionId =
-            selectedSessionIdRef.current
-
-          if (
-            !sessionId
-          ) {
-            return
-          }
-
-          try {
-            await client
-              .joinSession(
-                sessionId,
-              )
-          } catch (
-            joinError
-          ) {
-            console.error(
-              'SignalR está conectado, pero JoinSession falló.',
-              joinError,
-            )
-
-            /*
-             * IMPORTANTE:
-             *
-             * No ponemos channelConnected=false aquí.
-             *
-             * El websocket puede estar perfectamente conectado
-             * aunque JoinSession haya fallado por permisos,
-             * autenticación o estado de la sesión.
-             */
-            if (
-              !disposed
-            ) {
-              setError(
-                'SignalR está conectado, pero TitanMDM no pudo unirse a la sesión remota. Revisa autenticación, permisos remote.view y el estado de la sesión.',
-              )
-            }
-          }
-        }
-
-      void client
-        .connect(
-          {
-            onFrame:
-              (
-                nextFrame,
-              ) => {
-                /*
-                 * Ignorar frames pertenecientes a otra sesión.
-                 */
-                if (
-                  nextFrame.sessionId !==
-                  selectedSessionIdRef.current
-                ) {
-                  return
-                }
-
-                setFrame(
-                  (
-                    current,
-                  ) => {
-                    /*
-                     * Ignorar frames viejos o duplicados.
-                     */
-                    if (
-                      current
-                      &&
-                      current.sessionId ===
-                        nextFrame.sessionId
-                      &&
-                      nextFrame.sequence <=
-                        current.sequence
-                    ) {
-                      return current
-                    }
-
-                    return nextFrame
-                  },
-                )
-              },
-
-            onSessionChanged:
-              (
-                update:
-                  RemoteSessionChanged,
-              ) => {
-                /*
-                 * Actualizamos siempre la colección local.
-                 * activeSession solo se modifica dentro de
-                 * refreshActiveSession si corresponde.
-                 */
-                void refreshActiveSession(
-                  update.sessionId,
-                )
-              },
-
-            onReconnecting:
-              () => {
-                if (
-                  disposed
-                ) {
-                  return
-                }
-
-                setChannelConnected(
-                  false,
-                )
-              },
-
-            onReconnected:
-              () => {
-                if (
-                  disposed
-                ) {
-                  return
-                }
-
-                setChannelConnected(
-                  true,
-                )
-
-                /*
-                 * La conexión SignalR recibe un ConnectionId nuevo
-                 * después de reconectarse, por lo que el técnico
-                 * debe volver al grupo de la sesión.
-                 */
-                void joinCurrentSession()
-              },
-
-            onClosed:
-              (
-                closeError,
-              ) => {
-                if (
-                  disposed
-                ) {
-                  return
-                }
-
-                setChannelConnected(
-                  false,
-                )
-
-                if (
-                  closeError
-                ) {
-                  console.error(
-                    'SignalR Remote Support cerrado.',
-                    closeError,
-                  )
-                }
-              },
-          },
-        )
-        .then(
-          async () => {
-            if (
-              disposed
-            ) {
-              return
-            }
-
-            /*
-             * El socket ya está realmente conectado.
-             */
-            setChannelConnected(
-              true,
-            )
-
-            /*
-             * Si entramos a la pantalla con una sesión ya elegida,
-             * volver a unirnos.
-             */
-            await joinCurrentSession()
-          },
-        )
-        .catch(
-          (
-            connectionError,
-          ) => {
-            if (
-              disposed
-            ) {
-              return
-            }
-
-            console.error(
-              'No fue posible conectar SignalR Remote Support.',
-              connectionError,
-            )
-
-            setChannelConnected(
-              false,
-            )
-
-            setError(
-              'No fue posible establecer el canal SignalR de soporte remoto.',
-            )
-          },
-        )
-
-      return () => {
-        disposed =
-          true
-
-        if (
-          signalRRef.current ===
-          client
-        ) {
-          signalRRef.current =
-            null
-        }
-
-        void client
-          .disconnect()
       }
-    },
-    [
-      refreshActiveSession,
-    ],
+
+      selectedSessionIdRef.current = sessionId
+      setSelectedSessionId(sessionId)
+
+      if (!sessionId) return
+
+      const session = await getRemoteSession(sessionId)
+
+      if (selectedSessionIdRef.current !== sessionId) return
+
+      setActiveSession(session)
+      setSelectedDeviceId(session.deviceId)
+
+      if (signalRRef.current && channelConnected) {
+        try {
+          await signalRRef.current.joinSession(sessionId)
+        } catch (joinError) {
+          console.error(joinError)
+          setError(
+            'El canal está disponible, pero no fue posible ' +
+            'unirse a esta sesión remota.',
+          )
+        }
+      }
+    } catch {
+      if (selectedSessionIdRef.current === sessionId) {
+        setError('No fue posible abrir la sesión seleccionada.')
+      }
+    }
+  }
+
+  const startSession = async () => {
+    if (
+      !canManage ||
+      creating ||
+      (activeSession && !isTerminal(activeSession.status))
+    ) return
+
+    if (!selectedDeviceId) {
+      setError('Selecciona un equipo Windows.')
+      return
+    }
+
+    if (reason.trim().length < 3) {
+      setError('Indica el motivo de la conexión remota.')
+      return
+    }
+
+    try {
+      setCreating(true)
+      setError(null)
+      setFrame(null)
+
+      const session = await createRemoteSession({
+        deviceId: selectedDeviceId,
+        reason: reason.trim(),
+        allowKeyboard,
+        allowMouse,
+        allowClipboard,
+        allowFileTransfer,
+        maximumDurationMinutes,
+      })
+
+      setSessions(current => [
+        session,
+        ...current.filter(x => x.id !== session.id),
+      ])
+
+      selectedSessionIdRef.current = session.id
+      setSelectedSessionId(session.id)
+      setActiveSession(session)
+
+      if (signalRRef.current && channelConnected) {
+        try {
+          await signalRRef.current.joinSession(session.id)
+        } catch (joinError) {
+          const message = joinError instanceof Error
+            ? joinError.message
+            : String(joinError)
+
+          setError(
+            `La sesión fue creada, pero no se pudo unir el canal. ${message}`,
+          )
+        }
+      }
+    } catch (requestError) {
+      const message = requestError instanceof Error
+        ? requestError.message
+        : String(requestError)
+      setError(`No fue posible crear la sesión remota. ${message}`)
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  const endSession = async () => {
+    if (!canManage || !activeSession || terminating) return
+
+    const sessionId = activeSession.id
+
+    try {
+      setTerminating(true)
+      setError(null)
+      await terminateRemoteSession(sessionId)
+      setFrame(null)
+      await refreshActiveSession(sessionId)
+      await loadData()
+    } catch {
+      setError('No fue posible finalizar la sesión remota.')
+    } finally {
+      setTerminating(false)
+    }
+  }
+
+  const pointerMove = useCallback((x: number, y: number) => {
+    if (
+      !activeSession ||
+      !signalRRef.current ||
+      !channelConnected ||
+      activeSession.status !== 'Connected'
+    ) return
+
+    void signalRRef.current
+      .pointerMove(activeSession.id, x, y)
+      .catch(console.error)
+  }, [activeSession, channelConnected])
+
+  const pointerButton = useCallback((
+    action: 'left-down' | 'left-up' | 'right-down' | 'right-up',
+  ) => {
+    if (
+      !activeSession ||
+      !signalRRef.current ||
+      !channelConnected ||
+      activeSession.status !== 'Connected'
+    ) return
+
+    void signalRRef.current
+      .pointerButton(activeSession.id, action)
+      .catch(console.error)
+  }, [activeSession, channelConnected])
+
+  const wheel = useCallback((delta: number) => {
+    if (
+      !activeSession ||
+      !signalRRef.current ||
+      !channelConnected ||
+      activeSession.status !== 'Connected'
+    ) return
+
+    void signalRRef.current
+      .pointerWheel(activeSession.id, delta)
+      .catch(console.error)
+  }, [activeSession, channelConnected])
+
+  const keyboard = useCallback((
+    virtualKey: number,
+    keyDown: boolean,
+  ) => {
+    if (
+      !activeSession ||
+      !signalRRef.current ||
+      !channelConnected ||
+      activeSession.status !== 'Connected'
+    ) return
+
+    void signalRRef.current
+      .keyboard(activeSession.id, virtualKey, keyDown)
+      .catch(console.error)
+  }, [activeSession, channelConnected])
+
+  const toggleFullscreen = async () => {
+    const element = viewerContainerRef.current
+    if (!element) return
+
+    if (document.fullscreenElement) {
+      await document.exitFullscreen()
+      return
+    }
+
+    try {
+      await element.requestFullscreen()
+    } catch {
+      setError('No fue posible activar pantalla completa.')
+    }
+  }
+
+  const connected = activeSession?.status === 'Connected'
+  const busySession =
+    !!activeSession && !isTerminal(activeSession.status)
+
+  const candidates = windowsDevices.filter(x =>
+    !deviceSearch.trim() ||
+    `${x.deviceName} ${x.assignedUser ?? ''} ${x.ipAddress ?? ''}`
+      .toLowerCase()
+      .includes(deviceSearch.trim().toLowerCase()),
   )
-
-  /*
-   * ============================================================
-   * SELECT SESSION
-   * ============================================================
-   */
-
-  const selectSession =
-    async (
-      sessionId:
-        string,
-    ) => {
-      try {
-        setError(
-          null,
-        )
-
-        setFrame(
-          null,
-        )
-
-        const previousSessionId =
-          selectedSessionIdRef.current
-
-        /*
-         * Salir del grupo SignalR anterior antes de seleccionar
-         * la siguiente sesión.
-         */
-        if (
-          previousSessionId
-          &&
-          previousSessionId !==
-            sessionId
-          &&
-          signalRRef.current
-        ) {
-          try {
-            await signalRRef.current
-              .leaveSession(
-                previousSessionId,
-              )
-          } catch (
-            leaveError
-          ) {
-            console.warn(
-              'No fue posible abandonar el grupo SignalR anterior.',
-              leaveError,
-            )
-          }
-        }
-
-        /*
-         * Actualizamos ref inmediatamente para evitar races.
-         */
-        selectedSessionIdRef.current =
-          sessionId
-
-        setSelectedSessionId(
-          sessionId,
-        )
-
-        if (
-          !sessionId
-        ) {
-          setActiveSession(
-            null,
-          )
-
-          return
-        }
-
-        const session =
-          await getRemoteSession(
-            sessionId,
-          )
-
-        setActiveSession(
-          session,
-        )
-
-        setSelectedDeviceId(
-          session.deviceId,
-        )
-
-        if (
-          signalRRef.current
-          &&
-          channelConnected
-        ) {
-          try {
-            await signalRRef.current
-              .joinSession(
-                sessionId,
-              )
-          } catch (
-            joinError
-          ) {
-            console.error(
-              'No fue posible unirse a la sesión SignalR seleccionada.',
-              joinError,
-            )
-
-            setError(
-              'El canal SignalR está disponible, pero no fue posible unirse a esta sesión remota.',
-            )
-          }
-        }
-      } catch (
-        requestError
-      ) {
-        console.error(
-          requestError,
-        )
-
-        setError(
-          'No fue posible abrir la sesión seleccionada.',
-        )
-      }
-    }
-
-  /*
-   * ============================================================
-   * START SESSION
-   * ============================================================
-   */
-
-  const startSession =
-    async () => {
-      if (
-        !selectedDeviceId
-      ) {
-        setError(
-          'Selecciona un equipo Windows.',
-        )
-
-        return
-      }
-
-      if (
-        reason
-          .trim()
-          .length <
-        3
-      ) {
-        setError(
-          'Indica el motivo de la conexión remota.',
-        )
-
-        return
-      }
-
-      try {
-        setCreating(
-          true,
-        )
-
-        setError(
-          null,
-        )
-
-        setFrame(
-          null,
-        )
-
-        const session =
-          await createRemoteSession(
-            {
-              deviceId:
-                selectedDeviceId,
-
-              reason:
-                reason.trim(),
-
-              allowKeyboard,
-
-              allowMouse,
-
-              allowClipboard,
-
-              allowFileTransfer,
-
-              maximumDurationMinutes,
-            },
-          )
-
-        setSessions(
-          (
-            current,
-          ) => [
-            session,
-
-            ...current.filter(
-              (
-                item,
-              ) =>
-                item.id !==
-                session.id,
-            ),
-          ],
-        )
-
-        /*
-         * Actualizamos el ref antes del estado React para que
-         * cualquier evento SignalR inmediato conozca la sesión.
-         */
-        selectedSessionIdRef.current =
-          session.id
-
-        setSelectedSessionId(
-          session.id,
-        )
-
-        setActiveSession(
-          session,
-        )
-
-        /*
-         * Si SignalR ya está conectado, unir al técnico al grupo.
-         */
-        if (
-          signalRRef.current
-          &&
-          channelConnected
-        ) {
-          try {
-            await signalRRef.current
-              .joinSession(
-                session.id,
-              )
-          } catch (
-                joinError
-              ) {
-                console.error(
-                  'Sesión creada, pero JoinSession falló.',
-                  joinError,
-                )
-
-                const message =
-                  joinError instanceof Error
-                    ? joinError.message
-                    : String(
-                        joinError,
-                      )
-
-                setError(
-                  `La sesión fue creada, pero JoinSession falló. ${message}`,
-                )
-              }
-        }
-     } 
-               catch (
-  joinError
-) {
-  console.error(
-    'No fue posible unirse a la sesión SignalR seleccionada.',
-    joinError,
-  )
-
-  const message =
-    joinError instanceof Error
-      ? joinError.message
-      : String(
-          joinError,
-        )
-
-  setError(
-    `El canal SignalR está conectado, pero JoinSession falló. ${message}`,
-  )
-}finally {
-        setCreating(
-          false,
-        )
-      }
-    }
-
-  /*
-   * ============================================================
-   * END SESSION
-   * ============================================================
-   */
-
-  const endSession =
-    async () => {
-      if (
-        !activeSession
-      ) {
-        return
-      }
-
-      const sessionId =
-        activeSession.id
-
-      try {
-        setTerminating(
-          true,
-        )
-
-        setError(
-          null,
-        )
-
-        await terminateRemoteSession(
-          sessionId,
-        )
-
-        setFrame(
-          null,
-        )
-
-        await refreshActiveSession(
-          sessionId,
-        )
-
-        await loadData()
-      } catch (
-        requestError
-      ) {
-        console.error(
-          requestError,
-        )
-
-        setError(
-          'No fue posible finalizar la sesión remota.',
-        )
-      } finally {
-        setTerminating(
-          false,
-        )
-      }
-    }
-
-  /*
-   * ============================================================
-   * REMOTE INPUT
-   * ============================================================
-   */
-
-  const pointerMove =
-    useCallback(
-      (
-        x:
-          number,
-
-        y:
-          number,
-      ) => {
-        if (
-          !activeSession
-          ||
-          !signalRRef.current
-          ||
-          !channelConnected
-          ||
-          activeSession.status !==
-            'Connected'
-        ) {
-          return
-        }
-
-        void signalRRef.current
-          .pointerMove(
-            activeSession.id,
-            x,
-            y,
-          )
-          .catch(
-            (
-              inputError,
-            ) => {
-              console.error(
-                'PointerMove falló.',
-                inputError,
-              )
-            },
-          )
-      },
-      [
-        activeSession,
-        channelConnected,
-      ],
-    )
-
-  const pointerButton =
-    useCallback(
-      (
-        action:
-          | 'left-down'
-          | 'left-up'
-          | 'right-down'
-          | 'right-up',
-      ) => {
-        if (
-          !activeSession
-          ||
-          !signalRRef.current
-          ||
-          !channelConnected
-          ||
-          activeSession.status !==
-            'Connected'
-        ) {
-          return
-        }
-
-        void signalRRef.current
-          .pointerButton(
-            activeSession.id,
-            action,
-          )
-          .catch(
-            (
-              inputError,
-            ) => {
-              console.error(
-                'PointerButton falló.',
-                inputError,
-              )
-            },
-          )
-      },
-      [
-        activeSession,
-        channelConnected,
-      ],
-    )
-
-  const wheel =
-    useCallback(
-      (
-        delta:
-          number,
-      ) => {
-        if (
-          !activeSession
-          ||
-          !signalRRef.current
-          ||
-          !channelConnected
-          ||
-          activeSession.status !==
-            'Connected'
-        ) {
-          return
-        }
-
-        void signalRRef.current
-          .pointerWheel(
-            activeSession.id,
-            delta,
-          )
-          .catch(
-            (
-              inputError,
-            ) => {
-              console.error(
-                'PointerWheel falló.',
-                inputError,
-              )
-            },
-          )
-      },
-      [
-        activeSession,
-        channelConnected,
-      ],
-    )
-
-  const keyboard =
-    useCallback(
-      (
-        virtualKey:
-          number,
-
-        keyDown:
-          boolean,
-      ) => {
-        if (
-          !activeSession
-          ||
-          !signalRRef.current
-          ||
-          !channelConnected
-          ||
-          activeSession.status !==
-            'Connected'
-        ) {
-          return
-        }
-
-        void signalRRef.current
-          .keyboard(
-            activeSession.id,
-            virtualKey,
-            keyDown,
-          )
-          .catch(
-            (
-              inputError,
-            ) => {
-              console.error(
-                'Keyboard remoto falló.',
-                inputError,
-              )
-            },
-          )
-      },
-      [
-        activeSession,
-        channelConnected,
-      ],
-    )
-
-  /*
-   * ============================================================
-   * FULLSCREEN
-   * ============================================================
-   */
-
-  const toggleFullscreen =
-    async () => {
-      const element =
-        viewerContainerRef.current
-
-      if (
-        !element
-      ) {
-        return
-      }
-
-      if (
-        document.fullscreenElement
-      ) {
-        await document
-          .exitFullscreen()
-
-        return
-      }
-
-      await element
-        .requestFullscreen()
-    }
-
-  /*
-   * Una sesión solamente permite periféricos cuando el servidor
-   * confirma realmente el estado Connected.
-   */
-  const connected =
-    activeSession
-      ?.status ===
-    'Connected'
-
-  /*
-   * ============================================================
-   * RENDER
-   * ============================================================
-   */
 
   return (
-  <div
-    className="remote-page"
-    style={{
-        display:
-          'grid',
+    <main className="remote-page wr">
+      <header className="wr-header">
+        <div>
+          <span className="wr-eyebrow">
+            WINDOWS · CONSOLA DE SOPORTE
+          </span>
+          <h1><RadioTower size={28} /> Soporte remoto</h1>
+          <p>
+            Selecciona un equipo, inicia la sesión
+            y trabaja desde una consola central.
+          </p>
+        </div>
 
-        gap:
-          20,
-      }}
-    >
-      <header>
-        <div
-          style={{
-            display:
-              'flex',
+        <div className="wr-header-actions">
+          <span className={
+            `wr-chip ${channelConnected ? 'wr-online' : 'wr-offline'}`
+          }>
+            <RadioTower size={15} />
+            {channelConnected
+              ? 'Canal conectado'
+              : 'Canal desconectado'}
+          </span>
 
-            alignItems:
-              'center',
-
-            gap:
-              12,
-          }}
-        >
-          <RadioTower
-            size={
-              30
-            }
-          />
-
-          <div>
-            <h1
-              style={{
-                margin:
-                  0,
-              }}
-            >
-              Soporte remoto
-            </h1>
-
-            <div
-              style={{
-                marginTop:
-                  5,
-
-                opacity:
-                  0.72,
-              }}
-            >
-              Control remoto de
-              endpoints Windows
-              administrados por
-              TitanMDM.
-            </div>
-          </div>
+          <button
+            onClick={() => void loadData()}
+            disabled={creating}
+          >
+            <RefreshCw size={16} /> Actualizar
+          </button>
         </div>
       </header>
 
       {error && (
-        <div
-          style={{
-            padding:
-              14,
-
-            borderRadius:
-              12,
-
-            border:
-              '1px solid rgba(239,68,68,.35)',
-
-            background:
-              'rgba(239,68,68,.10)',
-          }}
-        >
-          {error}
-        </div>
+        <div className="wr-error" role="alert">{error}</div>
       )}
 
-      <section
-        style={{
-          display:
-            'grid',
+      <div className="wr-layout">
+        <aside className="wr-sidebar">
+          <section className="wr-card">
+            <div className="wr-card-title">
+              <h2>Nueva conexión</h2>
+              <Monitor size={19} />
+            </div>
 
-          gridTemplateColumns:
-            '320px minmax(0, 1fr)',
+            <label>
+              Buscar equipo
+              <input
+                value={deviceSearch}
+                onChange={e => setDeviceSearch(e.target.value)}
+                placeholder="Nombre del equipo"
+                disabled={creating || busySession}
+              />
+            </label>
 
-          gap:
-            18,
-        }}
-      >
-        <aside
-          style={{
-            display:
-              'grid',
+            <label>
+              Equipo Windows
+              <select
+                value={selectedDeviceId}
+                disabled={creating || busySession}
+                onChange={e => setSelectedDeviceId(e.target.value)}
+              >
+                <option value="">Selecciona un equipo</option>
 
-            alignContent:
-              'start',
-
-            gap:
-              16,
-          }}
-        >
-          <div
-            style={{
-              padding:
-                16,
-
-              borderRadius:
-                14,
-
-              border:
-                '1px solid rgba(148,163,184,.2)',
-            }}
-          >
-            <strong>
-              Nueva conexión
-            </strong>
-
-            <div
-              style={{
-                display:
-                  'grid',
-
-                gap:
-                  12,
-
-                marginTop:
-                  14,
-              }}
-            >
-              <label>
-                Equipo Windows
-
-                <select
-                  value={
-                    selectedDeviceId
-                  }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setSelectedDeviceId(
-                      event.target.value,
-                    )
-                  }
-                  style={{
-                    width:
-                      '100%',
-
-                    marginTop:
-                      6,
-
-                    padding:
-                      9,
-                  }}
-                >
-                  <option
-                    value=""
-                  >
-                    Seleccionar
-                  </option>
-
-                  {windowsDevices.map(
-                    (
-                      device,
-                    ) => (
-                      <option
-                        key={
-                          device.id
-                        }
-                        value={
-                          device.id
-                        }
-                      >
-                        {
-                          device.deviceName
-                        }
-                        {' · '}
-                        {
-                          device.status
-                        }
-                      </option>
-                    ),
+                {selectedDevice &&
+                  !candidates.some(x =>
+                    x.id === selectedDevice.id,
+                  ) && (
+                    <option value={selectedDevice.id}>
+                      {selectedDevice.deviceName}
+                    </option>
                   )}
-                </select>
-              </label>
 
-              {selectedDevice && (
-                <div
-                  style={{
-                    fontSize:
-                      12,
+                {candidates.map(x => (
+                  <option key={x.id} value={x.id}>
+                    {x.deviceName} · {x.status}
+                  </option>
+                ))}
+              </select>
+            </label>
 
-                    opacity:
-                      0.72,
-                  }}
-                >
-                  {
-                    selectedDevice
-                      .manufacturer
-                    ??
-                    'Windows'
-                  }
-                  {' '}
-                  {
-                    selectedDevice
-                      .model
-                    ??
-                    ''
-                  }
+            <small>
+              Hasta 100 resultados por búsqueda. Refina el nombre
+              para localizar otros equipos.
+            </small>
 
-                  <br />
-
+            {selectedDevice && (
+              <div className="wr-device-info">
+                <strong>{selectedDevice.deviceName}</strong>
+                <span>
+                  {selectedDevice.assignedUser ??
+                    'Usuario sin asignar'}
+                </span>
+                <span>
+                  {selectedDevice.ipAddress ?? 'IP sin reportar'}
+                </span>
+                <span>
                   Último contacto:{' '}
+                  {formatDate(selectedDevice.lastSeenAtUtc)}
+                </span>
+              </div>
+            )}
 
-                  {formatDate(
-                    selectedDevice
-                      .lastSeenAtUtc,
-                  )}
-                </div>
-              )}
+            <label>
+              Motivo
+              <textarea
+                rows={3}
+                maxLength={500}
+                value={reason}
+                disabled={creating || busySession}
+                onChange={e => setReason(e.target.value)}
+              />
+            </label>
 
+            <label>
+              Duración máxima
+              <select
+                value={maximumDurationMinutes}
+                disabled={creating || busySession}
+                onChange={e =>
+                  setMaximumDurationMinutes(Number(e.target.value))
+                }
+              >
+                {[30, 60, 120, 240, 480].map(n => (
+                  <option key={n} value={n}>
+                    {n < 60 ? `${n} minutos` : `${n / 60} horas`}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            <div className="wr-permissions">
               <label>
-                Motivo
-
-                <textarea
-                  value={
-                    reason
-                  }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setReason(
-                      event.target.value,
-                    )
-                  }
-                  rows={
-                    3
-                  }
-                  style={{
-                    width:
-                      '100%',
-
-                    marginTop:
-                      6,
-
-                    padding:
-                      9,
-
-                    resize:
-                      'vertical',
-                  }}
+                <input
+                  type="checkbox"
+                  checked={allowMouse}
+                  disabled={creating || busySession}
+                  onChange={e => setAllowMouse(e.target.checked)}
                 />
-              </label>
-
-              <label>
-                Duración máxima
-
-                <select
-                  value={
-                    maximumDurationMinutes
-                  }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setMaximumDurationMinutes(
-                      Number(
-                        event.target.value,
-                      ),
-                    )
-                  }
-                  style={{
-                    width:
-                      '100%',
-
-                    marginTop:
-                      6,
-
-                    padding:
-                      9,
-                  }}
-                >
-                  <option
-                    value={
-                      30
-                    }
-                  >
-                    30 minutos
-                  </option>
-
-                  <option
-                    value={
-                      60
-                    }
-                  >
-                    1 hora
-                  </option>
-
-                  <option
-                    value={
-                      120
-                    }
-                  >
-                    2 horas
-                  </option>
-
-                  <option
-                    value={
-                      240
-                    }
-                  >
-                    4 horas
-                  </option>
-
-                  <option
-                    value={
-                      480
-                    }
-                  >
-                    8 horas
-                  </option>
-                </select>
+                Mouse
               </label>
 
               <label>
                 <input
                   type="checkbox"
-                  checked={
-                    allowMouse
+                  checked={allowKeyboard}
+                  disabled={creating || busySession}
+                  onChange={e =>
+                    setAllowKeyboard(e.target.checked)
                   }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setAllowMouse(
-                      event.target.checked,
-                    )
-                  }
-                />{' '}
-                Control de mouse
+                />
+                Teclado
               </label>
 
               <label>
                 <input
                   type="checkbox"
-                  checked={
-                    allowKeyboard
+                  checked={allowClipboard}
+                  disabled={creating || busySession}
+                  onChange={e =>
+                    setAllowClipboard(e.target.checked)
                   }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setAllowKeyboard(
-                      event.target.checked,
-                    )
-                  }
-                />{' '}
-                Control de teclado
-              </label>
-
-              <label>
-                <input
-                  type="checkbox"
-                  checked={
-                    allowClipboard
-                  }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setAllowClipboard(
-                      event.target.checked,
-                    )
-                  }
-                />{' '}
+                />
                 Portapapeles
               </label>
 
               <label>
                 <input
                   type="checkbox"
-                  checked={
-                    allowFileTransfer
-                  }
-                  disabled={
-                    creating
-                    ||
-                    connected
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setAllowFileTransfer(
-                      event.target.checked,
-                    )
-                  }
-                />{' '}
-                Transferencia de archivos
-              </label>
-
-              <button
-                type="button"
-                disabled={
-                  creating
-                  ||
-                  !selectedDeviceId
-                  ||
-                  connected
-                }
-                onClick={
-                  () =>
-                    void startSession()
-                }
-                style={{
-                  padding:
-                    11,
-
-                  cursor:
-                    creating
-                      ? 'wait'
-                      : 'pointer',
-                }}
-              >
-                <Play
-                  size={
-                    15
-                  }
-                />{' '}
-
-                {
-                  creating
-                    ? 'Creando...'
-                    : 'Iniciar soporte remoto'
-                }
-              </button>
-            </div>
-          </div>
-
-          <div
-            style={{
-              padding:
-                16,
-
-              borderRadius:
-                14,
-
-              border:
-                '1px solid rgba(148,163,184,.2)',
-            }}
-          >
-            <div
-              style={{
-                display:
-                  'flex',
-
-                alignItems:
-                  'center',
-
-                justifyContent:
-                  'space-between',
-              }}
-            >
-              <strong>
-                Sesiones activas
-              </strong>
-
-              <button
-                type="button"
-                onClick={
-                  () =>
-                    void loadData()
-                }
-                title="Actualizar sesiones"
-              >
-                <RefreshCw
-                  size={
-                    15
+                  checked={allowFileTransfer}
+                  disabled={creating || busySession}
+                  onChange={e =>
+                    setAllowFileTransfer(e.target.checked)
                   }
                 />
-              </button>
+                Archivos
+              </label>
             </div>
 
-            <select
-              value={
-                selectedSessionId
-              }
+            <small>
+              Portapapeles y archivos requieren soporte funcional
+              del agente; seleccionarlos no confirma disponibilidad.
+            </small>
+
+            <button
+              className="wr-primary"
               disabled={
-                loading
+                !canManage ||
+                creating ||
+                !selectedDeviceId ||
+                busySession ||
+                !channelConnected ||
+                reason.trim().length < 3
               }
-              onChange={(
-                event,
-              ) =>
-                void selectSession(
-                  event.target.value,
-                )
-              }
-              style={{
-                width:
-                  '100%',
-
-                marginTop:
-                  12,
-
-                padding:
-                  9,
-              }}
+              onClick={() => void startSession()}
             >
-              <option
-                value=""
+              <Play size={16} />
+              {creating
+                ? 'Creando sesión…'
+                : 'Conectar al equipo'}
+            </button>
+
+            {!canManage && (
+              <small>
+                Tu rol permite consultar; iniciar sesiones
+                requiere remote.manage.
+              </small>
+            )}
+          </section>
+
+          <section className="wr-card">
+            <div className="wr-card-title">
+              <h2>Sesiones activas</h2>
+              <span className="wr-chip">
+                {activeSessions.length}
+              </span>
+            </div>
+
+            <label>
+              Sesión
+              <select
+                value={selectedSessionId}
+                disabled={loading || creating}
+                onChange={e =>
+                  void selectSession(e.target.value)
+                }
               >
-                Seleccionar sesión
-              </option>
+                <option value="">Selecciona una sesión</option>
 
-              {activeSessions.map(
-                (
-                  session,
-                ) => (
-                  <option
-                    key={
-                      session.id
-                    }
-                    value={
-                      session.id
-                    }
-                  >
-                    {
-                      statusLabel(
-                        session.status,
-                      )
-                    }
-
-                    {' · '}
-
-                    {
-                      session
-                        .technicianName
-                    }
+                {activeSessions.map(x => (
+                  <option key={x.id} value={x.id}>
+                    {windowsDevices.find(d =>
+                      d.id === x.deviceId,
+                    )?.deviceName ?? x.deviceId.slice(0, 8)}
+                    {' · '}{statusLabel(x.status)}
+                    {' · '}{x.technicianName}
                   </option>
-                ),
-              )}
-            </select>
-          </div>
+                ))}
+              </select>
+            </label>
+
+            {!activeSessions.length && (
+              <p className="wr-muted">
+                No hay sesiones activas.
+              </p>
+            )}
+          </section>
         </aside>
 
-        <main
-          style={{
-            minWidth:
-              0,
-          }}
-        >
-          <div
-            style={{
-              padding:
-                14,
-
-              borderRadius:
-                14,
-
-              border:
-                '1px solid rgba(148,163,184,.2)',
-
-              marginBottom:
-                12,
-
-              display:
-                'flex',
-
-              justifyContent:
-                'space-between',
-
-              gap:
-                16,
-
-              flexWrap:
-                'wrap',
-            }}
-          >
-            <div
-              style={{
-                display:
-                  'flex',
-
-                alignItems:
-                  'center',
-
-                gap:
-                  16,
-
-                flexWrap:
-                  'wrap',
-              }}
-            >
-              <span>
-                <Monitor
-                  size={
-                    16
-                  }
-                />{' '}
-
-                {
-                  selectedDevice
-                    ?.deviceName
-                  ??
-                  'Sin equipo'
-                }
-              </span>
-
-              <span>
-                <ShieldCheck
-                  size={
-                    16
-                  }
-                />{' '}
-
-                {statusLabel(
-                  activeSession
-                    ?.status,
-                )}
-              </span>
-
-              <span>
-                <RadioTower
-                  size={
-                    16
-                  }
-                />{' '}
-
-                {
-                  channelConnected
-                    ? 'SignalR conectado'
-                    : 'SignalR desconectado'
-                }
-              </span>
-
-              <span>
-                <MousePointer2
-                  size={
-                    16
-                  }
-                />{' '}
-
-                {
-                  activeSession
-                    ?.allowMouse
-                    ? 'Mouse'
-                    : 'Mouse deshabilitado'
-                }
-              </span>
-
-              <span>
-                <Keyboard
-                  size={
-                    16
-                  }
-                />{' '}
-
-                {
-                  activeSession
-                    ?.allowKeyboard
-                    ? 'Teclado'
-                    : 'Teclado deshabilitado'
-                }
+        <section className="wr-console">
+          <div className="wr-toolbar">
+            <div>
+              <strong>
+                <Monitor size={17} />
+                {selectedDevice?.deviceName ?? 'Área de trabajo'}
+              </strong>
+              <span className="wr-chip">
+                <ShieldCheck size={15} />
+                {statusLabel(activeSession?.status)}
               </span>
             </div>
 
-            <div
-              style={{
-                display:
-                  'flex',
+            <div>
+              <span className={
+                `wr-chip ${
+                  connected && activeSession?.allowMouse
+                    ? 'wr-online'
+                    : ''
+                }`
+              }>
+                <MousePointer2 size={15} /> Mouse
+              </span>
 
-                gap:
-                  8,
-              }}
-            >
+              <span className={
+                `wr-chip ${
+                  connected && activeSession?.allowKeyboard
+                    ? 'wr-online'
+                    : ''
+                }`
+              }>
+                <Keyboard size={15} /> Teclado
+              </span>
+
               <button
-                type="button"
-                disabled={
-                  !activeSession
-                }
-                onClick={
-                  () =>
-                    void toggleFullscreen()
-                }
+                disabled={!activeSession}
+                onClick={() => void toggleFullscreen()}
               >
-                <Maximize2
-                  size={
-                    15
-                  }
-                />{' '}
-
-                Pantalla completa
+                <Maximize2 size={16} /> Pantalla completa
               </button>
 
               <button
-                type="button"
+                className="wr-danger"
                 disabled={
-                  !activeSession
-                  ||
-                  isTerminal(
-                    activeSession.status,
-                  )
-                  ||
-                  terminating
+                  !canManage || !busySession || terminating
                 }
-                onClick={
-                  () =>
-                    void endSession()
-                }
+                onClick={() => void endSession()}
               >
-                <CircleStop
-                  size={
-                    15
-                  }
-                />{' '}
-
-                {
-                  terminating
-                    ? 'Finalizando...'
-                    : 'Finalizar'
-                }
+                <CircleStop size={16} />
+                {terminating ? 'Finalizando…' : 'Finalizar'}
               </button>
             </div>
           </div>
 
-          {activeSession && (
-            <div
-              style={{
-                display:
-                  'flex',
-
-                gap:
-                  18,
-
-                flexWrap:
-                  'wrap',
-
-                marginBottom:
-                  12,
-
-                fontSize:
-                  13,
-
-                opacity:
-                  0.8,
-              }}
-            >
-              <span>
-                Técnico:{' '}
-
-                {
-                  activeSession
-                    .technicianName
-                }
-              </span>
-
-              <span>
-                <Clock3
-                  size={
-                    14
-                  }
-                />{' '}
-
-                Inicio:{' '}
-
-                {formatDate(
-                  activeSession
-                    .connectedAtUtc
-                  ??
-                  activeSession
-                    .requestedAtUtc,
-                )}
-              </span>
-
-              <span>
-                Motivo:{' '}
-
-                {
-                  activeSession.reason
-                }
-              </span>
-            </div>
-          )}
-
           <div
-            ref={
-              viewerContainerRef
+            ref={viewerContainerRef}
+            className={
+              `wr-viewer ${frameUrl ? 'wr-viewer-live' : ''}`
             }
-            style={{
-              minHeight:
-                560,
-            }}
           >
-            <RemoteDesktopViewer
-              frameUrl={
-                frameUrl
-              }
-              width={
-                frame?.width
-              }
-              height={
-                frame?.height
-              }
-              connected={
-                connected
-              }
-              allowMouse={
-                activeSession
-                  ?.allowMouse
-                ??
-                false
-              }
-              allowKeyboard={
-                activeSession
-                  ?.allowKeyboard
-                ??
-                false
-              }
-              onPointerMove={
-                pointerMove
-              }
-              onPointerButton={
-                pointerButton
-              }
-              onWheel={
-                wheel
-              }
-              onKeyboard={
-                keyboard
-              }
-            />
+            {frameUrl ? (
+              <RemoteDesktopViewer
+                frameUrl={frameUrl}
+                width={frame?.width}
+                height={frame?.height}
+                connected={connected}
+                allowMouse={activeSession?.allowMouse ?? false}
+                allowKeyboard={
+                  activeSession?.allowKeyboard ?? false
+                }
+                onPointerMove={pointerMove}
+                onPointerButton={pointerButton}
+                onWheel={wheel}
+                onKeyboard={keyboard}
+              />
+            ) : (
+              <div className="wr-placeholder">
+                <div className="wr-placeholder-icon">
+                  <Monitor size={54} />
+                </div>
+
+                <h2>
+                  {busySession
+                    ? 'Esperando transmisión del equipo'
+                    : 'Tu espacio de soporte remoto'}
+                </h2>
+
+                <p>
+                  {busySession
+                    ? 'La sesión está registrada. La imagen aparecerá cuando el agente publique la transmisión.'
+                    : 'Busca un equipo Windows o selecciona una sesión existente para comenzar.'}
+                </p>
+
+                <div className="wr-guide">
+                  <span>1 · Seleccionar equipo</span>
+                  <span>2 · Conectar</span>
+                  <span>3 · Brindar asistencia</span>
+                </div>
+              </div>
+            )}
           </div>
-        </main>
-      </section>
-    </div>
+
+          <footer className="wr-session-info">
+            <span>
+              <Clock3 size={15} />
+              {activeSession
+                ? formatDate(
+                    activeSession.connectedAtUtc ??
+                    activeSession.requestedAtUtc,
+                  )
+                : 'Sin sesión seleccionada'}
+            </span>
+
+            <span>
+              Técnico: {activeSession?.technicianName ?? '—'}
+            </span>
+
+            <span>
+              {activeSession?.reason ??
+                'Las acciones de sesión se registran en el servidor.'}
+            </span>
+          </footer>
+        </section>
+      </div>
+    </main>
   )
 }
