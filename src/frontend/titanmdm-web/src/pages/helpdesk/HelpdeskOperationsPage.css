@@ -1,0 +1,208 @@
+.hd-operation {
+  --hd-accent: #2563eb;
+}
+
+.hd-operation__metrics {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 20px 0;
+}
+
+.hd-operation__metrics > div {
+  background: var(--surface, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 18px;
+  padding: 18px;
+  display: grid;
+  gap: 8px;
+}
+
+.hd-operation__metrics span {
+  font-size: 13px;
+  color: #64748b;
+}
+
+.hd-operation__metrics strong {
+  font-size: 28px;
+  color: var(--hd-accent);
+}
+
+.hd-operation__tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin: 18px 0;
+}
+
+.hd-operation__tabs button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 14px;
+  border: 1px solid #dbe3ef;
+  border-radius: 12px;
+  background: #fff;
+  color: #475569;
+  cursor: pointer;
+}
+
+.hd-operation__tabs button[aria-pressed="true"] {
+  background: #eff6ff;
+  border-color: #93c5fd;
+  color: #1d4ed8;
+  font-weight: 700;
+}
+
+.hd-operation__fieldset {
+  border: 0;
+  padding: 0;
+  margin: 0;
+  min-width: 0;
+}
+
+.hd-operation__card {
+  background: var(--surface, #fff);
+  border: 1px solid #e2e8f0;
+  border-radius: 20px;
+  padding: 24px;
+}
+
+.hd-operation__card h2 {
+  margin: 0 0 8px;
+  font-size: 19px;
+}
+
+.hd-operation__card p,
+.hd-operation__hint {
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.hd-operation__card form {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: end;
+  padding: 18px 0;
+}
+
+.hd-operation__card label {
+  display: grid;
+  gap: 7px;
+  min-width: 180px;
+  flex: 1;
+  font-size: 13px;
+  font-weight: 600;
+  color: #334155;
+}
+
+.hd-operation__card input:not([type="checkbox"]),
+.hd-operation__card select {
+  width: 100%;
+  min-width: 0;
+  padding: 11px 12px;
+  border: 1px solid #cbd5e1;
+  border-radius: 11px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  box-sizing: border-box;
+}
+
+.hd-operation__card input:focus-visible,
+.hd-operation__card select:focus-visible,
+.hd-operation button:focus-visible {
+  outline: 3px solid #bfdbfe;
+  outline-offset: 2px;
+}
+
+.hd-operation__card label.hd-operation__check {
+  display: flex;
+  align-items: center;
+  min-height: 42px;
+  gap: 8px;
+  flex: 0 1 auto;
+}
+
+.hd-operation__check input {
+  accent-color: var(--hd-accent);
+}
+
+.hd-operation__table {
+  overflow: auto;
+  max-height: 540px;
+  margin-top: 12px;
+}
+
+.hd-operation__table table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.hd-operation__table th {
+  background: #f8fafc;
+  color: #64748b;
+  text-align: left;
+  padding: 12px;
+  white-space: nowrap;
+}
+
+.hd-operation__table td {
+  border-bottom: 1px solid #edf2f7;
+  padding: 12px;
+}
+
+.hd-operation__table small {
+  display: block;
+  color: #b45309;
+  margin-top: 4px;
+}
+
+.hd-operation__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.hd-operation__success {
+  background: #ecfdf5;
+  color: #047857;
+  border: 1px solid #a7f3d0;
+  padding: 14px;
+  border-radius: 12px;
+  margin: 12px 0;
+}
+
+.hd-operation button:disabled,
+.hd-operation fieldset:disabled button {
+  opacity: .5;
+  cursor: wait;
+}
+
+@media (max-width: 900px) {
+  .hd-operation__metrics {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 600px) {
+  .hd-operation__card {
+    padding: 16px;
+  }
+
+  .hd-operation__card form {
+    display: grid;
+  }
+
+  .hd-operation__card label {
+    min-width: 0;
+  }
+
+  .hd-operation__tabs button {
+    flex: 1 1 45%;
+    justify-content: center;
+  }
+}

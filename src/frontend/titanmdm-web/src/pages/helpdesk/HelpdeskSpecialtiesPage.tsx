@@ -1,573 +1,913 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
-import {
-  AlertCircle,
-  CheckCircle2,
-  Headphones,
-  MapPin,
-  RefreshCw,
-  Save,
-  ShieldCheck,
-  Users,
-} from 'lucide-react'
+import axios from 'axios'
 import apiClient from '../../api/apiClient'
-import './HelpdeskPages.css'
 import './HelpdeskSpecialtiesPage.css'
 
-interface SpecialtyTeam {
-  id: string
-  name: string
-  isActive: boolean
-  categories: string[]
+type Slot = {
+  day: number
+  start: string
+  end: string
 }
 
-interface Zone {
-  id: string
-  name: string
-  type: string
-  parentZoneId: string | null
-  isActive: boolean
-}
-
-interface Coverage {
-  teamId: string
-  zoneId: string
-}
-
-interface Member {
-  teamId: string
+type Technician = {
   userId: string
   isAvailable: boolean
   acceptsAutomaticAssignments: boolean
   maxOpenTickets: number
+  priority: number
+  timeZoneId: string
+  slots: Slot[]
+  onDuty?: boolean
 }
 
-interface Catalog {
-  zones: Zone[]
-  teams: {
-    id: string
-    name: string
-    isActive: boolean
-  }[]
-  coverage: Coverage[]
-  members: Member[]
+type Group = {
+  id: string
+  name: string
+  description: string | null
+  isActive: boolean
+  tasks: string[]
+  zoneIds: string[]
+  technicians: Technician[]
 }
 
-interface StaffUser {
+type Zone = {
+  id: string
+  name: string
+  type: string
+}
+
+type Staff = {
   id: string
   name: string
   email: string
-  canWorkTickets: boolean
+  eligible: boolean
+  zoneIds: string[]
 }
 
-function parseCategories(value: string): string[] {
-  return [
-    ...new Set(
-      value
-        .split(',')
-        .map((item) => item.trim().toLowerCase())
-        .filter(Boolean),
-    ),
-  ]
+type Catalog = {
+  groups: Group[]
+  zones: Zone[]
+  users: Staff[]
+}
+
+const days = [
+  'Domingo',
+  'Lunes',
+  'Martes',
+  'Miércoles',
+  'Jueves',
+  'Viernes',
+  'Sábado',
+]
+
+const defaultSlots = (): Slot[] =>
+  [1, 2, 3, 4, 5].map(day => ({
+    day,
+    start: '08:00',
+    end: '17:00',
+  }))
+
+const clone = (group: Group): Group => ({
+  ...group,
+  tasks: [...group.tasks],
+  zoneIds: [...group.zoneIds],
+  technicians: group.technicians.map(technician => ({
+    ...technician,
+    slots: technician.slots.map(slot => ({ ...slot })),
+  })),
+})
+
+function errorMessage(error: unknown) {
+  if (
+    axios.isAxiosError<{
+      message?: string
+      detail?: string
+    }>(error)
+  ) {
+    return (
+      error.response?.data?.message ??
+      error.response?.data?.detail ??
+      'No se pudo completar la operación. Revisa el backend y la migración.'
+    )
+  }
+
+  return error instanceof Error
+    ? error.message
+    : 'No se pudo completar la operación.'
 }
 
 export function HelpdeskSpecialtiesPage() {
-  const [teams, setTeams] = useState<SpecialtyTeam[]>([])
   const [catalog, setCatalog] = useState<Catalog>({
+    groups: [],
     zones: [],
-    teams: [],
-    coverage: [],
-    members: [],
+    users: [],
   })
-  const [staff, setStaff] = useState<StaffUser[]>([])
-  const [drafts, setDrafts] = useState<Record<string, string>>({})
+
+  const [selected, setSelected] = useState<Group | null>(null)
+  const [dirty, setDirty] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [savingId, setSavingId] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [task, setTask] = useState('')
+  const [staffId, setStaffId] = useState('')
+  const [search, setSearch] = useState('')
+  const [newName, setNewName] = useState('')
+  const [description, setDescription] = useState('')
+  const [showCreate, setShowCreate] = useState(false)
 
-  const load = useCallback(async () => {
+  const load = useCallback(async (preferredId?: string) => {
     setLoading(true)
-    setError('')
 
     try {
-      const [specialties, operations, users] =
-        await Promise.all([
-          apiClient.get<SpecialtyTeam[]>(
-            '/helpdesk/specialties',
-          ),
-          apiClient.get<Catalog>(
-            '/helpdesk/operations/catalog',
-          ),
-          apiClient.get<StaffUser[]>(
-            '/helpdesk/staff/users',
-          ),
-        ])
-
-      setTeams(specialties.data)
-      setCatalog(operations.data)
-      setStaff(users.data)
-
-      setDrafts(
-        Object.fromEntries(
-          specialties.data.map((team) => [
-            team.id,
-            team.categories.join(', '),
-          ]),
-        ),
+      const { data } = await apiClient.get<Catalog>(
+        '/helpdesk/group-planning',
       )
-    } catch {
-      setError(
-        'No se pudo cargar la configuración. Comprueba los permisos de administración de Helpdesk.',
-      )
+
+      setCatalog(data)
+
+      const group =
+        data.groups.find(item => item.id === preferredId) ??
+        data.groups[0]
+
+      setSelected(group ? clone(group) : null)
+      setDirty(false)
     } finally {
       setLoading(false)
     }
   }, [])
 
   useEffect(() => {
-    void load()
+    void load().catch(error => setError(errorMessage(error)))
   }, [load])
 
-  const activeTeams = useMemo(
-    () => teams.filter((team) => team.isActive),
-    [teams],
-  )
+  const update = (patch: Partial<Group>) => {
+    setSelected(group => (group ? { ...group, ...patch } : null))
+    setDirty(true)
+    setMessage('')
+    setError('')
+  }
 
-  const configuredCategories = useMemo(
-    () => [
-      ...new Set(
-        activeTeams.flatMap((team) =>
-          team.categories.map((category) =>
-            category.trim().toLowerCase(),
-          ),
-        ),
+  const updateTech = (
+    userId: string,
+    patch: Partial<Technician>,
+  ) => {
+    if (!selected) return
+
+    update({
+      technicians: selected.technicians.map(technician =>
+        technician.userId === userId
+          ? { ...technician, ...patch }
+          : technician,
       ),
-    ].sort((a, b) => a.localeCompare(b)),
-    [activeTeams],
-  )
+    })
+  }
 
-  const activeZoneIds = useMemo(
-    () =>
-      new Set(
-        catalog.zones
-          .filter((zone) => zone.isActive)
-          .map((zone) => zone.id),
-      ),
-    [catalog.zones],
-  )
+  const choose = (group: Group) => {
+    if (
+      dirty &&
+      !window.confirm('¿Descartar los cambios sin guardar?')
+    ) {
+      return
+    }
 
-  const staffById = useMemo(
-    () =>
-      new Map(
-        staff.map((user) => [
-          user.id,
-          user,
-        ]),
-      ),
-    [staff],
-  )
+    setSelected(clone(group))
+    setDirty(false)
+    setError('')
+    setMessage('')
+    setTask('')
+    setStaffId('')
+  }
 
-  const readiness = useMemo(() => {
-    const coveredTeams = new Set(
-      catalog.coverage
-        .filter((item) =>
-          activeZoneIds.has(item.zoneId),
-        )
-        .map((item) => item.teamId),
-    )
+  const addTask = () => {
+    if (!selected) return
 
-    const eligibleMembers = catalog.members.filter(
-      (member) =>
-        member.isAvailable &&
-        member.acceptsAutomaticAssignments &&
-        member.maxOpenTickets > 0 &&
-        staffById.get(member.userId)
-          ?.canWorkTickets,
-    )
-
-    return [
-      {
-        label: 'Zonas activas',
-        ready: activeZoneIds.size > 0,
-        detail: `${activeZoneIds.size} configuradas`,
-      },
-      {
-        label: 'Grupos TIC activos',
-        ready: activeTeams.length > 0,
-        detail: `${activeTeams.length} configurados`,
-      },
-      {
-        label: 'Cobertura de zonas',
-        ready: activeTeams.some((team) =>
-          coveredTeams.has(team.id),
-        ),
-        detail: `${
-          catalog.coverage.filter((item) =>
-            activeZoneIds.has(item.zoneId),
-          ).length
-        } relaciones`,
-      },
-      {
-        label: 'Agentes disponibles',
-        ready: eligibleMembers.length > 0,
-        detail: `${
-          new Set(
-            eligibleMembers.map(
-              (member) => member.userId,
-            ),
-          ).size
-        } agentes`,
-      },
-      {
-        label: 'Especialidades definidas',
-        ready: configuredCategories.length > 0,
-        detail: `${configuredCategories.length} categorías`,
-      },
+    const tasks = [
+      ...new Set([
+        ...selected.tasks,
+        ...task
+          .split(/[,;\n]/)
+          .map(value => value.trim().toLowerCase())
+          .filter(Boolean),
+      ]),
     ]
-  }, [
-    activeTeams,
-    activeZoneIds,
-    catalog.coverage,
-    catalog.members,
-    configuredCategories,
-    staffById,
-  ])
-
-  async function save(teamId: string) {
-    if (savingId) return
-
-    const categories = parseCategories(
-      drafts[teamId] ?? '',
-    )
 
     if (
-      categories.some(
-        (category) => category.length > 80,
-      )
+      tasks.length > 15 ||
+      tasks.some(value => value.length > 50 || value.includes('|'))
     ) {
       setError(
-        'Cada categoría debe tener como máximo 80 caracteres.',
+        'Admite hasta 15 tareas por grupo, de hasta 50 caracteres.',
       )
       return
     }
 
-    setSavingId(teamId)
-    setMessage('')
+    update({ tasks })
+    setTask('')
+  }
+
+  const addTech = () => {
+    if (!selected || !staffId) return
+
+    update({
+      technicians: [
+        ...selected.technicians,
+        {
+          userId: staffId,
+          isAvailable: true,
+          acceptsAutomaticAssignments: true,
+          maxOpenTickets: 20,
+          priority: Math.min(
+            100,
+            Math.max(
+              0,
+              ...selected.technicians.map(item => item.priority),
+            ) + 1,
+          ),
+          timeZoneId: 'America/Santo_Domingo',
+          slots: defaultSlots(),
+        },
+      ],
+    })
+
+    setStaffId('')
+  }
+
+  const save = async () => {
+    if (!selected) return
+
+    if (!selected.tasks.length || !selected.zoneIds.length) {
+      setError('Agrega al menos una tarea y una zona de cobertura.')
+      return
+    }
+
+    if (
+      selected.technicians.some(
+        technician =>
+          technician.acceptsAutomaticAssignments &&
+          !technician.slots.length,
+      )
+    ) {
+      setError('Cada técnico automático necesita un horario.')
+      return
+    }
+
+    setSaving(true)
     setError('')
+    setMessage('')
 
     try {
       await apiClient.put(
-        `/helpdesk/specialties/teams/${teamId}`,
-        { categories },
+        `/helpdesk/group-planning/groups/${selected.id}`,
+        {
+          tasks: selected.tasks,
+          zoneIds: selected.zoneIds,
+          technicians: selected.technicians,
+        },
       )
 
-      await load()
+      setDirty(false)
       setMessage(
-        categories.length > 0
-          ? 'Especialidades guardadas. Comprueba su cobertura y agentes.'
-          : 'El grupo quedó configurado como respaldo general.',
+        'Grupo, tareas, cobertura, técnicos y horarios guardados.',
       )
-    } catch {
-      setError(
-        'No se pudieron guardar las categorías. Revisa el nombre del grupo y los permisos.',
-      )
+
+      try {
+        await load(selected.id)
+      } catch (error) {
+        setError(
+          'Se guardó, pero no se pudo actualizar la pantalla. ' +
+            errorMessage(error),
+        )
+      }
+    } catch (error) {
+      setError(errorMessage(error))
     } finally {
-      setSavingId(null)
+      setSaving(false)
     }
   }
 
-  return (
-    <main className="titan-page helpdesk-page helpdesk-specialties">
-      <header className="helpdesk-inbox__header">
-        <div>
-          <span className="helpdesk-inbox__eyebrow">
-            <Headphones size={15} />
-            Mesa de ayuda · Administración
-          </span>
+  const create = async () => {
+    if (!newName.trim()) {
+      setError('Escribe el nombre del grupo.')
+      return
+    }
 
-          <h1>Especialidades y cobertura</h1>
+    if (
+      dirty &&
+      !window.confirm(
+        '¿Descartar los cambios pendientes y crear otro grupo?',
+      )
+    ) {
+      return
+    }
+
+    setSaving(true)
+    setError('')
+
+    try {
+      const { data } = await apiClient.post<{ id: string }>(
+        '/helpdesk/group-planning/groups',
+        {
+          name: newName.trim(),
+          description: description.trim() || null,
+        },
+      )
+
+      setShowCreate(false)
+      setNewName('')
+      setDescription('')
+
+      try {
+        await load(data.id)
+        setMessage('Grupo creado. Configura sus tareas, zonas y técnicos.')
+      } catch (error) {
+        setError(
+          'El grupo se creó, pero no se pudo actualizar. ' +
+            errorMessage(error),
+        )
+      }
+    } catch (error) {
+      setError(errorMessage(error))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const refresh = async () => {
+    if (
+      dirty &&
+      !window.confirm(
+        '¿Descartar los cambios sin guardar y actualizar?',
+      )
+    ) {
+      return
+    }
+
+    setError('')
+
+    try {
+      await load(selected?.id)
+    } catch (error) {
+      setError(errorMessage(error))
+    }
+  }
+
+  const busy = loading || saving
+
+  return (
+    <main className="hdgp">
+      <header className="hdgp-header">
+        <div>
+          <span className="hdgp-eyebrow">
+            MESA DE AYUDA · ADMINISTRACIÓN
+          </span>
+          <h1>Grupos, tareas y turnos</h1>
           <p>
-            Define qué atiende cada grupo y comprueba
-            si la asignación automática tiene cobertura.
+            Define qué atiende cada grupo, dónde trabaja y quién recibe
+            el ticket en cada horario.
           </p>
         </div>
 
-        <div className="helpdesk-specialties__header-actions">
-          <button
-            type="button"
-            className="helpdesk-ui-button helpdesk-ui-button--secondary"
-            disabled={loading}
-            onClick={() => void load()}
-          >
-            <RefreshCw size={16} />
+        <div className="hdgp-actions">
+          <Link to="/helpdesk/operations">
+            Ubicaciones y usuarios
+          </Link>
+          <button disabled={busy} onClick={() => void refresh()}>
             Actualizar
           </button>
-
-          <Link
-            className="helpdesk-ui-button helpdesk-ui-button--secondary"
-            to="/helpdesk/operations?workspace=helpdesk"
+          <button
+            className="hdgp-primary"
+            disabled={busy}
+            onClick={() => setShowCreate(!showCreate)}
           >
-            Zonas y agentes
-          </Link>
+            Crear grupo
+          </button>
         </div>
       </header>
 
       {error && (
-        <div className="helpdesk-inbox__error" role="alert">
-          <AlertCircle size={18} />
+        <div className="hdgp-alert hdgp-error" role="alert">
           {error}
         </div>
       )}
 
       {message && (
-        <div
-          className="helpdesk-specialties__success"
-          role="status"
-        >
-          <CheckCircle2 size={18} />
+        <div className="hdgp-alert hdgp-success" role="status">
           {message}
         </div>
       )}
 
-      <section className="helpdesk-specialties__overview">
-        <article>
-          <Users size={20} />
-          <span>Grupos activos</span>
-          <strong>{activeTeams.length}</strong>
-        </article>
+      {showCreate && (
+        <section className="hdgp-panel">
+          <h2>Nuevo grupo</h2>
+          <fieldset disabled={busy} className="hdgp-create">
+            <label>
+              Nombre
+              <input
+                maxLength={120}
+                placeholder="Grupo CEDI"
+                value={newName}
+                onChange={event => setNewName(event.target.value)}
+              />
+            </label>
+            <label>
+              Descripción
+              <input
+                maxLength={500}
+                value={description}
+                onChange={event => setDescription(event.target.value)}
+              />
+            </label>
+            <button
+              className="hdgp-primary"
+              onClick={() => void create()}
+            >
+              Crear
+            </button>
+          </fieldset>
+        </section>
+      )}
 
-        <article>
-          <MapPin size={20} />
-          <span>Zonas activas</span>
-          <strong>{activeZoneIds.size}</strong>
-        </article>
-
-        <article>
-          <ShieldCheck size={20} />
-          <span>Categorías configuradas</span>
-          <strong>
-            {configuredCategories.length}
-          </strong>
-        </article>
-      </section>
-
-      <section className="helpdesk-specialties__readiness">
-        <div>
-          <h2>Preparación para recibir tickets</h2>
-          <p>
-            Esta vista informa sobre la configuración.
-            No activa el buzón ni garantiza una asignación
-            para cada ubicación: eso se comprobará con
-            los datos reales de la empresa.
-          </p>
-        </div>
-
-        <div className="helpdesk-specialties__checks">
-          {readiness.map((item) => (
-            <div key={item.label}>
-              {item.ready ? (
-                <CheckCircle2
-                  size={18}
-                  className="helpdesk-specialties__ready"
-                />
-              ) : (
-                <AlertCircle
-                  size={18}
-                  className="helpdesk-specialties__missing"
-                />
-              )}
-
-              <strong>{item.label}</strong>
-              <span>{item.detail}</span>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      <section className="helpdesk-specialties__directory">
-        <div className="helpdesk-specialties__section-title">
-          <h2>Catálogo de categorías</h2>
-          <p>
-            Utiliza estos mismos nombres al clasificar
-            los tickets.
-          </p>
-        </div>
-
-        <div className="helpdesk-specialties__tags">
-          {configuredCategories.length ? (
-            configuredCategories.map(
-              (category) => (
-                <span key={category}>
-                  {category}
-                </span>
-              ),
-            )
-          ) : (
-            <p>
-              Todavía no se han definido categorías
-              especializadas.
-            </p>
-          )}
-        </div>
-      </section>
-
-      <section className="helpdesk-specialties__teams">
-        <div className="helpdesk-specialties__section-title">
+      <div className="hdgp-layout">
+        <aside className="hdgp-panel hdgp-sidebar">
           <h2>Grupos de trabajo</h2>
-          <p>
-            Las categorías de un grupo especialista
-            tienen prioridad sobre un grupo general.
-            Dejar la lista vacía configura el grupo
-            como respaldo general.
-          </p>
-        </div>
+          <input
+            aria-label="Buscar grupo"
+            placeholder="Buscar grupo…"
+            value={search}
+            onChange={event => setSearch(event.target.value)}
+          />
 
-        {loading && teams.length === 0 && (
-          <p>Cargando grupos…</p>
-        )}
-
-        {!loading && teams.length === 0 && (
-          <p>
-            Todavía no hay grupos. Créalos en
-            «Zonas y agentes».
-          </p>
-        )}
-
-        <div className="helpdesk-specialties__team-grid">
-          {teams.map((team) => {
-            const teamCoverage =
-              catalog.coverage.filter(
-                (item) =>
-                  item.teamId === team.id &&
-                  activeZoneIds.has(item.zoneId),
-              )
-
-            const teamMembers =
-              catalog.members.filter(
-                (member) =>
-                  member.teamId === team.id,
-              )
-
-            const availableMembers =
-              teamMembers.filter(
-                (member) =>
-                  member.isAvailable &&
-                  member.acceptsAutomaticAssignments &&
-                  member.maxOpenTickets > 0 &&
-                  staffById.get(member.userId)
-                    ?.canWorkTickets,
-              )
-
-            const dirty =
-              parseCategories(
-                drafts[team.id] ?? '',
-              ).join('|') !==
-              [...team.categories]
-                .map((item) =>
-                  item.trim().toLowerCase(),
-                )
-                .sort()
-                .join('|')
-
-            return (
-              <article
-                key={team.id}
-                className="helpdesk-specialties__team"
+          {catalog.groups
+            .filter(group =>
+              group.name.toLowerCase().includes(search.toLowerCase()),
+            )
+            .map(group => (
+              <button
+                key={group.id}
+                disabled={busy}
+                className={`hdgp-group ${
+                  selected?.id === group.id ? 'selected' : ''
+                }`}
+                onClick={() => choose(group)}
               >
-                <div className="helpdesk-specialties__team-top">
+                <strong>{group.name}</strong>
+                <span>
+                  {group.tasks.length} tareas ·{' '}
+                  {group.technicians.length} técnicos
+                </span>
+                {!group.isActive && <small>Inactivo</small>}
+              </button>
+            ))}
+
+          {!loading && !catalog.groups.length && (
+            <p>Crea el primer grupo.</p>
+          )}
+        </aside>
+
+        <section className="hdgp-editor">
+          {loading && (
+            <div className="hdgp-panel">Cargando configuración…</div>
+          )}
+
+          {!loading && !selected && (
+            <div className="hdgp-panel">
+              Crea un grupo para comenzar.
+            </div>
+          )}
+
+          {selected && (
+            <fieldset disabled={busy}>
+              <section className="hdgp-panel">
+                <div className="hdgp-title">
                   <div>
-                    <h3>{team.name}</h3>
-                    <span>
-                      {team.isActive
-                        ? 'Grupo activo'
-                        : 'Grupo inactivo'}
-                    </span>
+                    <h2>{selected.name}</h2>
+                    <p>
+                      {selected.description ||
+                        'Grupo de atención de tickets.'}
+                    </p>
+                  </div>
+                  <span className="hdgp-tag">
+                    {selected.isActive ? 'Activo' : 'Inactivo'}
+                  </span>
+                </div>
+
+                <details open>
+                  <summary>1. Tareas y equipos que atiende</summary>
+                  <p>
+                    Agrega las tareas individualmente o separadas por
+                    comas.
+                  </p>
+
+                  <div className="hdgp-inline">
+                    <input
+                      value={task}
+                      placeholder="Telefonía, cableado, RP4, mouse, monitor…"
+                      onChange={event => setTask(event.target.value)}
+                      onKeyDown={event => {
+                        if (event.key === 'Enter') {
+                          event.preventDefault()
+                          addTask()
+                        }
+                      }}
+                    />
+                    <button onClick={addTask}>Agregar tareas</button>
                   </div>
 
-                  <span
-                    className={
-                      team.categories.length
-                        ? 'helpdesk-specialties__kind'
-                        : 'helpdesk-specialties__kind helpdesk-specialties__kind--general'
-                    }
-                  >
-                    {team.categories.length
-                      ? 'Especialista'
-                      : 'Respaldo general'}
-                  </span>
-                </div>
+                  <div className="hdgp-chips">
+                    {selected.tasks.map(value => (
+                      <span key={value}>
+                        {value}
+                        <button
+                          aria-label={`Quitar ${value}`}
+                          onClick={() =>
+                            update({
+                              tasks: selected.tasks.filter(
+                                item => item !== value,
+                              ),
+                            })
+                          }
+                        >
+                          ×
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                </details>
+              </section>
 
-                <div className="helpdesk-specialties__team-stats">
-                  <span>
-                    <MapPin size={15} />
-                    {teamCoverage.length} zonas
-                  </span>
+              <section className="hdgp-panel">
+                <details open>
+                  <summary>2. Zonas de cobertura</summary>
+                  <p>
+                    El grupo puede cubrir varias zonas. La ubicación del
+                    técnico se configura en Ubicaciones y usuarios.
+                  </p>
 
-                  <span>
-                    <Users size={15} />
-                    {availableMembers.length}
-                    /{teamMembers.length} disponibles
-                  </span>
-                </div>
+                  <div className="hdgp-zones">
+                    {catalog.zones.map(zone => (
+                      <label key={zone.id}>
+                        <input
+                          type="checkbox"
+                          checked={selected.zoneIds.includes(zone.id)}
+                          onChange={event =>
+                            update({
+                              zoneIds: event.target.checked
+                                ? [...selected.zoneIds, zone.id]
+                                : selected.zoneIds.filter(
+                                    id => id !== zone.id,
+                                  ),
+                            })
+                          }
+                        />
+                        <span>
+                          {zone.name}
+                          <small>{zone.type}</small>
+                        </span>
+                      </label>
+                    ))}
+                  </div>
 
-                <label
-                  htmlFor={`categories-${team.id}`}
-                >
-                  Categorías que atiende
-                </label>
+                  {!catalog.zones.length && (
+                    <p>
+                      Crea primero las zonas en{' '}
+                      <Link to="/helpdesk/operations">
+                        configuración de ubicaciones
+                      </Link>.
+                    </p>
+                  )}
+                </details>
+              </section>
 
-                <textarea
-                  id={`categories-${team.id}`}
-                  value={drafts[team.id] ?? ''}
-                  disabled={
-                    !team.isActive ||
-                    savingId !== null
-                  }
-                  rows={3}
-                  placeholder="redes, software, equipos"
-                  onChange={(event) =>
-                    setDrafts((previous) => ({
-                      ...previous,
-                      [team.id]:
-                        event.target.value,
-                    }))
-                  }
-                />
+              <section className="hdgp-panel">
+                <details open>
+                  <summary>3. Técnicos, prioridad y relevos</summary>
+                  <p>
+                    Prioridad 1: principal. Prioridad 2: siguiente o
+                    relevo. Se comprueba horario, disponibilidad y
+                    capacidad.
+                  </p>
 
-                <small>
-                  Separa las categorías con comas.
-                  Los nombres se normalizan a
-                  minúsculas.
-                </small>
+                  <div className="hdgp-inline">
+                    <select
+                      aria-label="Técnico para agregar"
+                      value={staffId}
+                      onChange={event => setStaffId(event.target.value)}
+                    >
+                      <option value="">Selecciona un técnico…</option>
+                      {catalog.users
+                        .filter(
+                          user =>
+                            user.eligible &&
+                            !selected.technicians.some(
+                              technician =>
+                                technician.userId === user.id,
+                            ),
+                        )
+                        .map(user => (
+                          <option key={user.id} value={user.id}>
+                            {user.name} · {user.email}
+                          </option>
+                        ))}
+                    </select>
 
+                    <button disabled={!staffId} onClick={addTech}>
+                      Agregar técnico
+                    </button>
+                  </div>
+
+                  <div className="hdgp-technicians">
+                    {selected.technicians.map(technician => {
+                      const user = catalog.users.find(
+                        item => item.id === technician.userId,
+                      )
+
+                      const location =
+                        user?.zoneIds.length === 1
+                          ? catalog.zones.find(
+                              zone => zone.id === user.zoneIds[0],
+                            )?.name
+                          : undefined
+
+                      const updateSlot = (
+                        index: number,
+                        patch: Partial<Slot>,
+                      ) =>
+                        updateTech(technician.userId, {
+                          slots: technician.slots.map((slot, position) =>
+                            position === index
+                              ? { ...slot, ...patch }
+                              : slot,
+                          ),
+                        })
+
+                      return (
+                        <article
+                          className="hdgp-technician"
+                          key={technician.userId}
+                        >
+                          <div className="hdgp-title">
+                            <div>
+                              <h3>
+                                {user?.name ?? 'Cuenta no disponible'}
+                              </h3>
+                              <small>
+                                {location ?? 'Ubicación sin confirmar'} ·{' '}
+                                {user?.email}
+                              </small>
+                            </div>
+
+                            <button
+                              className="hdgp-remove"
+                              onClick={() => {
+                                if (
+                                  window.confirm(
+                                    '¿Quitar este técnico del grupo? ' +
+                                      'Su cuenta no se elimina.',
+                                  )
+                                ) {
+                                  update({
+                                    technicians:
+                                      selected.technicians.filter(
+                                        item =>
+                                          item.userId !==
+                                          technician.userId,
+                                      ),
+                                  })
+                                }
+                              }}
+                            >
+                              Quitar del grupo
+                            </button>
+                          </div>
+
+                          {(!location || !user?.eligible) && (
+                            <p className="hdgp-warning">
+                              Confirma la ubicación y el permiso
+                              tickets.comment de este técnico.
+                            </p>
+                          )}
+
+                          <div className="hdgp-tech-settings">
+                            <label>
+                              Prioridad
+                              <input
+                                type="number"
+                                min={1}
+                                max={100}
+                                value={technician.priority}
+                                onChange={event =>
+                                  updateTech(technician.userId, {
+                                    priority: Number(event.target.value),
+                                  })
+                                }
+                              />
+                            </label>
+
+                            <label>
+                              Máximo de tickets abiertos
+                              <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                value={technician.maxOpenTickets}
+                                onChange={event =>
+                                  updateTech(technician.userId, {
+                                    maxOpenTickets: Number(
+                                      event.target.value,
+                                    ),
+                                  })
+                                }
+                              />
+                            </label>
+
+                            <label>
+                              Zona horaria
+                              <input
+                                value={technician.timeZoneId}
+                                onChange={event =>
+                                  updateTech(technician.userId, {
+                                    timeZoneId: event.target.value,
+                                  })
+                                }
+                              />
+                            </label>
+
+                            <label className="hdgp-check">
+                              <input
+                                type="checkbox"
+                                checked={technician.isAvailable}
+                                onChange={event =>
+                                  updateTech(technician.userId, {
+                                    isAvailable: event.target.checked,
+                                  })
+                                }
+                              />
+                              Disponible para trabajar
+                            </label>
+
+                            <label className="hdgp-check">
+                              <input
+                                type="checkbox"
+                                checked={
+                                  technician.acceptsAutomaticAssignments
+                                }
+                                onChange={event =>
+                                  updateTech(technician.userId, {
+                                    acceptsAutomaticAssignments:
+                                      event.target.checked,
+                                  })
+                                }
+                              />
+                              Recibe asignaciones automáticas
+                            </label>
+                          </div>
+
+                          <h4>Horario semanal</h4>
+                          <p>
+                            La hora final queda excluida. Si termina
+                            antes de empezar, continúa al día siguiente.
+                          </p>
+
+                          <div className="hdgp-slots">
+                            {technician.slots.map((slot, index) => (
+                              <div className="hdgp-slot" key={index}>
+                                <select
+                                  aria-label="Día"
+                                  value={slot.day}
+                                  onChange={event =>
+                                    updateSlot(index, {
+                                      day: Number(event.target.value),
+                                    })
+                                  }
+                                >
+                                  {days.map((day, value) => (
+                                    <option key={day} value={value}>
+                                      {day}
+                                    </option>
+                                  ))}
+                                </select>
+
+                                <label>
+                                  Desde
+                                  <input
+                                    type="time"
+                                    value={slot.start}
+                                    onChange={event =>
+                                      updateSlot(index, {
+                                        start: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </label>
+
+                                <label>
+                                  Hasta
+                                  <input
+                                    type="time"
+                                    value={slot.end}
+                                    onChange={event =>
+                                      updateSlot(index, {
+                                        end: event.target.value,
+                                      })
+                                    }
+                                  />
+                                </label>
+
+                                <button
+                                  aria-label="Quitar franja"
+                                  onClick={() =>
+                                    updateTech(technician.userId, {
+                                      slots: technician.slots.filter(
+                                        (_, position) =>
+                                          position !== index,
+                                      ),
+                                    })
+                                  }
+                                >
+                                  Quitar
+                                </button>
+                              </div>
+                            ))}
+                          </div>
+
+                          <div className="hdgp-actions">
+                            <button
+                              disabled={technician.slots.length >= 28}
+                              onClick={() =>
+                                updateTech(technician.userId, {
+                                  slots: [
+                                    ...technician.slots,
+                                    {
+                                      day: 1,
+                                      start: '08:00',
+                                      end: '17:00',
+                                    },
+                                  ],
+                                })
+                              }
+                            >
+                              Agregar franja
+                            </button>
+
+                            <button
+                              onClick={() => {
+                                if (
+                                  !technician.slots.length ||
+                                  window.confirm(
+                                    '¿Reemplazar el horario por lunes ' +
+                                      'a viernes de 08:00 a 17:00?',
+                                  )
+                                ) {
+                                  updateTech(technician.userId, {
+                                    slots: defaultSlots(),
+                                  })
+                                }
+                              }}
+                            >
+                              Lunes a viernes
+                            </button>
+
+                            <span className="hdgp-tag">
+                              {dirty
+                                ? 'Cambios pendientes'
+                                : technician.onDuty
+                                  ? 'Dentro de horario'
+                                  : 'Fuera de horario o sin configurar'}
+                            </span>
+                          </div>
+                        </article>
+                      )
+                    })}
+                  </div>
+
+                  {!selected.technicians.length && (
+                    <p>Agrega el principal y los relevos necesarios.</p>
+                  )}
+                </details>
+              </section>
+
+              <footer className="hdgp-save">
+                <span>
+                  {dirty
+                    ? 'Cambios pendientes de guardar'
+                    : 'Configuración cargada'}
+                </span>
                 <button
-                  type="button"
-                  className="helpdesk-ui-button helpdesk-ui-button--primary"
-                  disabled={
-                    !team.isActive ||
-                    !dirty ||
-                    savingId !== null
-                  }
-                  onClick={() =>
-                    void save(team.id)
-                  }
+                  className="hdgp-primary"
+                  disabled={!dirty}
+                  onClick={() => void save()}
                 >
-                  <Save size={16} />
-                  {savingId === team.id
+                  {saving
                     ? 'Guardando…'
-                    : 'Guardar grupo'}
+                    : 'Guardar configuración completa'}
                 </button>
-              </article>
-            )
-          })}
-        </div>
-      </section>
+              </footer>
+            </fieldset>
+          )}
+        </section>
+      </div>
     </main>
   )
 }

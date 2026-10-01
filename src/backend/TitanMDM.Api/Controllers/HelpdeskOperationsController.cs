@@ -20,10 +20,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
     }
 
     [HttpGet("catalog")]
-    public async Task<IActionResult> GetCatalog(CancellationToken cancellationToken)
+    public async Task<IActionResult> GetCatalog(
+        CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
         var zones = await _db.HelpdeskZones.AsNoTracking()
             .Where(x => x.OrganizationId == organizationId)
@@ -67,7 +69,23 @@ public sealed class HelpdeskOperationsController : ControllerBase
             })
             .ToListAsync(cancellationToken);
 
-        return Ok(new { zones, teams, coverage, members });
+        var userZones = await _db.HelpdeskUserZones.AsNoTracking()
+            .Where(x => x.OrganizationId == organizationId)
+            .Select(x => new { x.UserId, x.ZoneId })
+            .ToListAsync(cancellationToken);
+
+        var eligibleUserIds = await EligibleAgents(organizationId)
+            .ToListAsync(cancellationToken);
+
+        return Ok(new
+        {
+            zones,
+            teams,
+            coverage,
+            members,
+            userZones,
+            eligibleUserIds
+        });
     }
 
     [HttpPost("zones")]
@@ -76,14 +94,27 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
-        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 120)
-            return BadRequest(new { message = "El nombre de la zona debe tener entre 1 y 120 caracteres." });
+        if (string.IsNullOrWhiteSpace(request.Name) ||
+            request.Name.Length > 120)
+        {
+            return BadRequest(new
+            {
+                message = "El nombre de la zona debe tener entre 1 y 120 caracteres."
+            });
+        }
 
         var type = request.Type?.Trim().ToLowerInvariant();
+
         if (type is not ("locality" or "plant" or "building" or "area"))
-            return BadRequest(new { message = "Tipo válido: locality, plant, building o area." });
+        {
+            return BadRequest(new
+            {
+                message = "Tipo válido: locality, plant, building o area."
+            });
+        }
 
         if (request.ParentZoneId.HasValue)
         {
@@ -94,7 +125,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
                 cancellationToken);
 
             if (!parentExists)
-                return BadRequest(new { message = "La zona superior no existe o está inactiva." });
+            {
+                return BadRequest(new
+                {
+                    message = "La zona superior no existe o está inactiva."
+                });
+            }
         }
 
         var duplicate = await _db.HelpdeskZones.AnyAsync(
@@ -104,7 +140,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
             cancellationToken);
 
         if (duplicate)
-            return Conflict(new { message = "Ya existe una zona con ese nombre en el mismo nivel." });
+        {
+            return Conflict(new
+            {
+                message = "Ya existe una zona con ese nombre en el mismo nivel."
+            });
+        }
 
         var zone = new HelpdeskZone(
             organizationId,
@@ -134,13 +175,25 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
-        if (string.IsNullOrWhiteSpace(request.Name) || request.Name.Length > 120)
-            return BadRequest(new { message = "El nombre del grupo debe tener entre 1 y 120 caracteres." });
+        if (string.IsNullOrWhiteSpace(request.Name) ||
+            request.Name.Length > 120)
+        {
+            return BadRequest(new
+            {
+                message = "El nombre del grupo debe tener entre 1 y 120 caracteres."
+            });
+        }
 
         if (request.Description?.Length > 500)
-            return BadRequest(new { message = "La descripción excede 500 caracteres." });
+        {
+            return BadRequest(new
+            {
+                message = "La descripción excede 500 caracteres."
+            });
+        }
 
         var duplicate = await _db.HelpdeskTeams.AnyAsync(
             x => x.OrganizationId == organizationId &&
@@ -148,7 +201,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
             cancellationToken);
 
         if (duplicate)
-            return Conflict(new { message = "Ya existe un grupo con ese nombre." });
+        {
+            return Conflict(new
+            {
+                message = "Ya existe un grupo con ese nombre."
+            });
+        }
 
         var team = new HelpdeskTeam(
             organizationId,
@@ -171,7 +229,8 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
         var teamExists = await _db.HelpdeskTeams.AnyAsync(
             x => x.Id == teamId &&
@@ -186,7 +245,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
             cancellationToken);
 
         if (!teamExists || !zoneExists)
-            return BadRequest(new { message = "El grupo o la zona no existe en esta organización." });
+        {
+            return BadRequest(new
+            {
+                message = "El grupo o la zona no existe en esta organización."
+            });
+        }
 
         var exists = await _db.HelpdeskTeamZones.AnyAsync(
             x => x.OrganizationId == organizationId &&
@@ -197,7 +261,11 @@ public sealed class HelpdeskOperationsController : ControllerBase
         if (!exists)
         {
             _db.HelpdeskTeamZones.Add(
-                new HelpdeskTeamZone(organizationId, teamId, zoneId));
+                new HelpdeskTeamZone(
+                    organizationId,
+                    teamId,
+                    zoneId));
+
             await _db.SaveChangesAsync(cancellationToken);
         }
 
@@ -211,7 +279,8 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
         var relation = await _db.HelpdeskTeamZones.FirstOrDefaultAsync(
             x => x.OrganizationId == organizationId &&
@@ -223,6 +292,7 @@ public sealed class HelpdeskOperationsController : ControllerBase
 
         _db.HelpdeskTeamZones.Remove(relation);
         await _db.SaveChangesAsync(cancellationToken);
+
         return NoContent();
     }
 
@@ -234,10 +304,16 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
         if (request.MaxOpenTickets is < 1 or > 500)
-            return BadRequest(new { message = "El límite debe estar entre 1 y 500 tickets." });
+        {
+            return BadRequest(new
+            {
+                message = "El límite debe estar entre 1 y 500 tickets."
+            });
+        }
 
         var teamExists = await _db.HelpdeskTeams.AnyAsync(
             x => x.Id == teamId &&
@@ -252,7 +328,23 @@ public sealed class HelpdeskOperationsController : ControllerBase
             cancellationToken);
 
         if (!teamExists || !userExists)
-            return BadRequest(new { message = "El grupo o el usuario no existe en esta organización." });
+        {
+            return BadRequest(new
+            {
+                message = "El grupo o el usuario no existe en esta organización."
+            });
+        }
+
+        if (request.AcceptsAutomaticAssignments &&
+            !await EligibleAgents(organizationId).AnyAsync(
+                x => x == userId,
+                cancellationToken))
+        {
+            return BadRequest(new
+            {
+                message = "El técnico debe tener el permiso tickets.comment para recibir asignaciones automáticas."
+            });
+        }
 
         var member = await _db.HelpdeskTeamMembers.FirstOrDefaultAsync(
             x => x.OrganizationId == organizationId &&
@@ -298,7 +390,8 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
         var member = await _db.HelpdeskTeamMembers.FirstOrDefaultAsync(
             x => x.OrganizationId == organizationId &&
@@ -310,6 +403,7 @@ public sealed class HelpdeskOperationsController : ControllerBase
 
         _db.HelpdeskTeamMembers.Remove(member);
         await _db.SaveChangesAsync(cancellationToken);
+
         return NoContent();
     }
 
@@ -320,7 +414,8 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
-        if (!TryGetOrganization(out var organizationId)) return Unauthorized();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
 
         var userExists = await _db.Users.AnyAsync(
             x => x.Id == userId &&
@@ -335,22 +430,56 @@ public sealed class HelpdeskOperationsController : ControllerBase
             cancellationToken);
 
         if (!userExists || !zoneExists)
-            return BadRequest(new { message = "El usuario o la zona no existe en esta organización." });
+        {
+            return BadRequest(new
+            {
+                message = "El usuario o la zona no existe en esta organización."
+            });
+        }
 
-        // Un usuario tiene una ubicación principal para el enrutamiento.
         var current = await _db.HelpdeskUserZones
-            .Where(x => x.OrganizationId == organizationId && x.UserId == userId)
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.UserId == userId)
             .ToListAsync(cancellationToken);
 
-        if (current.Count == 1 && current[0].ZoneId == request.ZoneId)
+        if (current.Count == 1 &&
+            current[0].ZoneId == request.ZoneId)
+        {
             return Ok(new { userId, request.ZoneId });
+        }
 
         _db.HelpdeskUserZones.RemoveRange(current);
         _db.HelpdeskUserZones.Add(
-            new HelpdeskUserZone(organizationId, userId, request.ZoneId));
+            new HelpdeskUserZone(
+                organizationId,
+                userId,
+                request.ZoneId));
 
         await _db.SaveChangesAsync(cancellationToken);
+
         return Ok(new { userId, request.ZoneId });
+    }
+
+    [HttpDelete("users/{userId:guid}/zone")]
+    public async Task<IActionResult> RemoveUserZone(
+        Guid userId,
+        CancellationToken cancellationToken)
+    {
+        if (!CanManage()) return Forbid();
+        if (!TryGetOrganization(out var organizationId))
+            return Unauthorized();
+
+        var current = await _db.HelpdeskUserZones
+            .Where(x =>
+                x.OrganizationId == organizationId &&
+                x.UserId == userId)
+            .ToListAsync(cancellationToken);
+
+        _db.HelpdeskUserZones.RemoveRange(current);
+        await _db.SaveChangesAsync(cancellationToken);
+
+        return NoContent();
     }
 
     [HttpGet("assistant/me")]
@@ -359,9 +488,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
     {
         if (!TryGetOrganization(out var organizationId) ||
             !TryGetUser(out var userId))
+        {
             return Unauthorized();
+        }
 
-        var enabled = await _db.HelpdeskAssistantAccess.AsNoTracking()
+        var enabled = await _db.HelpdeskAssistantAccess
+            .AsNoTracking()
             .AnyAsync(
                 x => x.OrganizationId == organizationId &&
                      x.UserId == userId &&
@@ -378,9 +510,12 @@ public sealed class HelpdeskOperationsController : ControllerBase
         CancellationToken cancellationToken)
     {
         if (!CanManage()) return Forbid();
+
         if (!TryGetOrganization(out var organizationId) ||
             !TryGetUser(out var administratorId))
+        {
             return Unauthorized();
+        }
 
         var userExists = await _db.Users.AnyAsync(
             x => x.Id == userId &&
@@ -389,11 +524,18 @@ public sealed class HelpdeskOperationsController : ControllerBase
             cancellationToken);
 
         if (!userExists)
-            return NotFound(new { message = "El usuario no existe en esta organización." });
+        {
+            return NotFound(new
+            {
+                message = "El usuario no existe en esta organización."
+            });
+        }
 
-        var access = await _db.HelpdeskAssistantAccess.FirstOrDefaultAsync(
-            x => x.OrganizationId == organizationId && x.UserId == userId,
-            cancellationToken);
+        var access = await _db.HelpdeskAssistantAccess
+            .FirstOrDefaultAsync(
+                x => x.OrganizationId == organizationId &&
+                     x.UserId == userId,
+                cancellationToken);
 
         if (access is null)
         {
@@ -403,6 +545,7 @@ public sealed class HelpdeskOperationsController : ControllerBase
                     organizationId,
                     userId,
                     administratorId);
+
                 _db.HelpdeskAssistantAccess.Add(access);
             }
         }
@@ -416,28 +559,62 @@ public sealed class HelpdeskOperationsController : ControllerBase
         }
 
         await _db.SaveChangesAsync(cancellationToken);
-        return Ok(new { userId, enabled = request.Enabled });
+
+        return Ok(new
+        {
+            userId,
+            enabled = request.Enabled
+        });
     }
+
+    private IQueryable<Guid> EligibleAgents(Guid organizationId) =>
+        (
+            from userRole in _db.UserRoles.AsNoTracking()
+            join rolePermission in _db.RolePermissions.AsNoTracking()
+                on userRole.RoleId equals rolePermission.RoleId
+            join permission in _db.Permissions.AsNoTracking()
+                on rolePermission.PermissionId equals permission.Id
+            join user in _db.Users.AsNoTracking()
+                on userRole.UserId equals user.Id
+            where user.OrganizationId == organizationId &&
+                  user.IsActive &&
+                  permission.IsActive &&
+                  permission.Code == "tickets.comment"
+            select user.Id
+        ).Distinct();
 
     private bool CanManage() =>
         User.Claims.Any(claim =>
             claim.Type == "permission" &&
-            (string.Equals(claim.Value, "helpdesk.manage", StringComparison.OrdinalIgnoreCase) ||
-             string.Equals(claim.Value, "settings.manage", StringComparison.OrdinalIgnoreCase)));
+            (
+                string.Equals(
+                    claim.Value,
+                    "helpdesk.manage",
+                    StringComparison.OrdinalIgnoreCase)
+                ||
+                string.Equals(
+                    claim.Value,
+                    "settings.manage",
+                    StringComparison.OrdinalIgnoreCase)
+            ));
 
     private bool TryGetOrganization(out Guid organizationId)
     {
-        var value = User.FindFirstValue("organization_id") ??
-                    User.FindFirstValue("organizationId");
+        var value =
+            User.FindFirstValue("organization_id") ??
+            User.FindFirstValue("organizationId");
+
         return Guid.TryParse(value, out organizationId);
     }
 
     private bool TryGetUser(out Guid userId)
     {
-        var value = User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-                    User.FindFirstValue("sub") ??
-                    User.FindFirstValue("user_id") ??
-                    User.FindFirstValue("userId");
+        var value =
+            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
+            User.FindFirstValue("sub") ??
+            User.FindFirstValue("user_id") ??
+            User.FindFirstValue("userId");
+
         return Guid.TryParse(value, out userId);
     }
 

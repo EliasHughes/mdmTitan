@@ -1,17 +1,27 @@
-import { useCallback, useEffect, useState } from 'react'
 import {
-  Building2,
+  useCallback,
+  useEffect,
+  useState,
+  type FormEvent,
+} from 'react'
+import axios from 'axios'
+import { Link } from 'react-router-dom'
+import {
   Headphones,
-  MapPin,
   RefreshCw,
-  Sparkles,
-  UserRound,
+  Trash2,
+  Pencil,
+  MapPin,
   Users,
+  UserRound,
+  Building2,
+  Sparkles,
 } from 'lucide-react'
 import apiClient from '../../api/apiClient'
 import './HelpdeskPages.css'
+import './HelpdeskOperationsPage.css'
 
-interface Zone {
+type Zone = {
   id: string
   name: string
   type: string
@@ -19,19 +29,16 @@ interface Zone {
   isActive: boolean
 }
 
-interface Team {
+type Team = {
   id: string
   name: string
   description: string | null
   isActive: boolean
 }
 
-interface Coverage {
-  teamId: string
-  zoneId: string
-}
+type Coverage = { teamId: string; zoneId: string }
 
-interface TeamMember {
+type Member = {
   teamId: string
   userId: string
   isAvailable: boolean
@@ -39,19 +46,32 @@ interface TeamMember {
   maxOpenTickets: number
 }
 
-interface Catalog {
-  zones: Zone[]
-  teams: Team[]
-  coverage: Coverage[]
-  members: TeamMember[]
-}
+type UserZone = { userId: string; zoneId: string }
 
-interface StaffUser {
+type Staff = {
   id: string
   name: string
   email: string
   canWorkTickets: boolean
   assistantEnabled: boolean
+}
+
+type Catalog = {
+  zones: Zone[]
+  teams: Team[]
+  coverage: Coverage[]
+  members: Member[]
+  userZones: UserZone[]
+  eligibleUserIds: string[]
+}
+
+const empty: Catalog = {
+  zones: [],
+  teams: [],
+  coverage: [],
+  members: [],
+  userZones: [],
+  eligibleUserIds: [],
 }
 
 const zoneTypes: Record<string, string> = {
@@ -61,60 +81,100 @@ const zoneTypes: Record<string, string> = {
   area: 'Área',
 }
 
+function errorMessage(error: unknown) {
+  if (axios.isAxiosError(error)) {
+    const data = error.response?.data as {
+      message?: string
+      title?: string
+    } | undefined
+
+    return data?.message ||
+      data?.title ||
+      `No se pudo completar la operación (${error.response?.status || 'sin conexión'}).`
+  }
+
+  return error instanceof Error
+    ? error.message
+    : 'No se pudo completar la operación.'
+}
+
 export function HelpdeskOperationsPage() {
-  const [catalog, setCatalog] = useState<Catalog>({
-    zones: [],
-    teams: [],
-    coverage: [],
-    members: [],
-  })
-  const [users, setUsers] = useState<StaffUser[]>([])
+  const [catalog, setCatalog] = useState<Catalog>(empty)
+  const [users, setUsers] = useState<Staff[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
   const [error, setError] = useState('')
+  const [message, setMessage] = useState('')
+  const [tab, setTab] = useState('zones')
 
   const [zoneName, setZoneName] = useState('')
   const [zoneType, setZoneType] = useState('locality')
   const [parentZoneId, setParentZoneId] = useState('')
+
   const [teamName, setTeamName] = useState('')
-  const [teamDescription, setTeamDescription] = useState('')
-  const [coverageTeamId, setCoverageTeamId] = useState('')
-  const [coverageZoneId, setCoverageZoneId] = useState('')
-  const [memberTeamId, setMemberTeamId] = useState('')
-  const [memberUserId, setMemberUserId] = useState('')
-  const [maxOpenTickets, setMaxOpenTickets] = useState(20)
-  const [userZoneUserId, setUserZoneUserId] = useState('')
-  const [userZoneId, setUserZoneId] = useState('')
-  const [assistantUserId, setAssistantUserId] = useState('')
+  const [description, setDescription] = useState('')
+
+  const [coverageTeam, setCoverageTeam] = useState('')
+  const [coverageZone, setCoverageZone] = useState('')
+
+  const [memberTeam, setMemberTeam] = useState('')
+  const [memberUser, setMemberUser] = useState('')
+  const [available, setAvailable] = useState(true)
+  const [automatic, setAutomatic] = useState(true)
+  const [capacity, setCapacity] = useState(20)
+
+  const [locationUser, setLocationUser] = useState('')
+  const [locationZone, setLocationZone] = useState('')
+  const [userSearch, setUserSearch] = useState('')
+  const [assistantUser, setAssistantUser] = useState('')
+
+  const disabled = loading || saving
 
   const load = useCallback(async () => {
     setLoading(true)
-    setError('')
 
     try {
-      const [catalogResponse, usersResponse] = await Promise.all([
+      const [a, b] = await Promise.all([
         apiClient.get<Catalog>('/helpdesk/operations/catalog'),
-        apiClient.get<StaffUser[]>('/helpdesk/staff/users'),
+        apiClient.get<Staff[]>('/helpdesk/staff/users'),
       ])
-      setCatalog(catalogResponse.data)
-      setUsers(usersResponse.data)
-    } catch {
-      setError('No fue posible cargar la configuración de la mesa.')
+
+      if (
+        !Array.isArray(a.data.userZones) ||
+        !Array.isArray(a.data.eligibleUserIds)
+      ) {
+        throw new Error(
+          'El backend sigue usando el catálogo anterior. ' +
+          'Reinicia el backend después de reemplazar el controlador.',
+        )
+      }
+
+      setCatalog(a.data)
+      setUsers(b.data)
     } finally {
       setLoading(false)
     }
   }, [])
 
-  useEffect(() => {
-    void load()
+  const refresh = useCallback(async () => {
+    setError('')
+    try {
+      await load()
+    } catch (e) {
+      setError(errorMessage(e))
+    }
   }, [load])
+
+  useEffect(() => {
+    void refresh()
+  }, [refresh])
 
   async function save(
     action: () => Promise<unknown>,
-    successMessage: string,
+    success: string,
+    reset?: () => void,
   ) {
-    if (saving) return
+    if (disabled) return
 
     setSaving(true)
     setError('')
@@ -122,437 +182,763 @@ export function HelpdeskOperationsPage() {
 
     try {
       await action()
-      setMessage(successMessage)
-      await load()
-    } catch {
-      setError('No se pudo guardar. Verifica que los datos pertenezcan a esta organización.')
+      setMessage(success)
+      reset?.()
+
+      try {
+        await load()
+      } catch (e) {
+        setError(
+          'El cambio se guardó, pero no se pudo actualizar la pantalla: ' +
+          errorMessage(e),
+        )
+      }
+    } catch (e) {
+      setError(errorMessage(e))
     } finally {
       setSaving(false)
     }
   }
 
-  const selectedAssistant = users.find((item) => item.id === assistantUserId)
+  function remove(
+    action: () => Promise<unknown>,
+    question: string,
+    success: string,
+  ) {
+    if (window.confirm(question)) {
+      void save(action, success)
+    }
+  }
+
+  function selectMember(teamId: string, userId: string) {
+    setMemberTeam(teamId)
+    setMemberUser(userId)
+
+    const member = catalog.members.find(
+      (m) => m.teamId === teamId && m.userId === userId,
+    )
+
+    setAvailable(member?.isAvailable ?? true)
+    setAutomatic(member?.acceptsAutomaticAssignments ?? true)
+    setCapacity(member?.maxOpenTickets ?? 20)
+  }
+
+  function selectLocation(userId: string) {
+    setLocationUser(userId)
+    setLocationZone(
+      catalog.userZones.find((z) => z.userId === userId)?.zoneId ?? '',
+    )
+  }
+
+  const userById = new Map(users.map((u) => [u.id, u]))
+  const eligible = new Set(catalog.eligibleUserIds)
+
+  const zoneLabel = (id: string) =>
+    catalog.zones.find((z) => z.id === id)?.name ??
+    'Zona no disponible'
+
+  const teamLabel = (id: string) =>
+    catalog.teams.find((t) => t.id === id)?.name ??
+    'Grupo no disponible'
+
+  const userLabel = (id: string) =>
+    userById.get(id)?.name ||
+    userById.get(id)?.email ||
+    'Usuario no disponible'
+
+  const activeZones = catalog.zones.filter((z) => z.isActive)
+  const activeTeams = catalog.teams.filter((t) => t.isActive)
+
+  const filteredUsers = users.filter((u) =>
+    `${u.name} ${u.email}`
+      .toLowerCase()
+      .includes(userSearch.trim().toLowerCase()),
+  )
+
+  const assistant = userById.get(assistantUser)
+
+  const submit = (event: FormEvent, action: () => void) => {
+    event.preventDefault()
+    action()
+  }
+
+  const tabs = [
+    ['zones', 'Zonas', MapPin],
+    ['teams', 'Grupos', Users],
+    ['coverage', 'Cobertura', Building2],
+    ['agents', 'Técnicos', UserRound],
+    ['locations', 'Ubicación de usuarios', MapPin],
+    ['assistant', 'Asistente', Sparkles],
+  ] as const
+
+  const button = 'helpdesk-ui-button helpdesk-ui-button--primary'
+  const secondary = 'helpdesk-ui-button helpdesk-ui-button--secondary'
 
   return (
-    <main className="titan-page helpdesk-page helpdesk-operations">
+    <main className="titan-page helpdesk-page hd-operation">
       <header className="helpdesk-inbox__header">
         <div>
           <span className="helpdesk-inbox__eyebrow">
             <Headphones size={15} />
             Administración de soporte
           </span>
-          <h1>Operación de la mesa</h1>
-          <p>Configura cobertura, grupos, técnicos y acceso al asistente.</p>
+          <h1>Configuración de asignaciones</h1>
+          <p>
+            Define quién atiende cada ubicación y controla
+            su disponibilidad y capacidad.
+          </p>
         </div>
+
         <button
-          className="helpdesk-ui-button helpdesk-ui-button--secondary"
           type="button"
-          onClick={() => void load()}
-          disabled={loading}
+          className={secondary}
+          disabled={disabled}
+          onClick={() => void refresh()}
         >
           <RefreshCw size={16} /> Actualizar
         </button>
       </header>
 
-      {error && <div className="helpdesk-inbox__error" role="alert">{error}</div>}
-      {message && <div className="helpdesk-operations__success" role="status">{message}</div>}
+      {error && (
+        <div role="alert" className="helpdesk-inbox__error">
+          {error}
+        </div>
+      )}
 
-      <div className="helpdesk-operations__grid">
-        <section className="helpdesk-operations__card">
-          <div className="helpdesk-operations__title">
-            <MapPin size={19} />
-            <div>
-              <h2>Zonas</h2>
-              <p>Localidad, planta, nave y área del solicitante.</p>
-            </div>
+      {message && (
+        <div role="status" className="hd-operation__success">
+          {message}
+        </div>
+      )}
+
+      <div className="hd-operation__metrics">
+        {[
+          ['Zonas activas', activeZones.length],
+          ['Grupos activos', activeTeams.length],
+          [
+            'Técnicos habilitados',
+            new Set(
+              catalog.members
+                .filter((m) =>
+                  m.isAvailable &&
+                  m.acceptsAutomaticAssignments &&
+                  eligible.has(m.userId) &&
+                  activeTeams.some((t) => t.id === m.teamId),
+                )
+                .map((m) => m.userId),
+            ).size,
+          ],
+          [
+            'Usuarios con ubicación',
+            new Set(catalog.userZones.map((z) => z.userId)).size,
+          ],
+        ].map(([label, value]) => (
+          <div key={String(label)}>
+            <span>{label}</span>
+            <strong>{value}</strong>
           </div>
+        ))}
+      </div>
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!zoneName.trim()) return
-              void save(
+      <div className="hd-operation__actions">
+        <Link
+          className={secondary}
+          to="/helpdesk/especialidades"
+        >
+          Categorías y especialidades
+        </Link>
+        <Link
+          className={secondary}
+          to="/helpdesk/cobertura"
+        >
+          Verificar cobertura y capacidad
+        </Link>
+      </div>
+
+      <nav
+        className="hd-operation__tabs"
+        aria-label="Configuración de mesa de ayuda"
+      >
+        {tabs.map(([key, title, Icon]) => (
+          <button
+            key={key}
+            type="button"
+            aria-pressed={tab === key}
+            onClick={() => setTab(key)}
+          >
+            <Icon size={16} />
+            {title}
+          </button>
+        ))}
+      </nav>
+
+      {loading && <p role="status">Cargando configuración…</p>}
+
+      <p className="hd-operation__hint">
+        Habilitado indica disponibilidad, permiso y aceptación automática.
+        La capacidad restante se verifica en Cobertura antes de cada asignación.
+      </p>
+
+      <fieldset
+        disabled={disabled}
+        className="hd-operation__fieldset"
+      >
+        {tab === 'zones' && (
+          <section className="hd-operation__card">
+            <h2>Zonas y jerarquía</h2>
+            <p>
+              Organiza localidades, plantas, naves y áreas.
+              La cobertura puede heredarse de una zona superior.
+            </p>
+
+            <form
+              onSubmit={(e) => submit(e, () => void save(
                 () => apiClient.post('/helpdesk/operations/zones', {
                   name: zoneName.trim(),
                   type: zoneType,
                   parentZoneId: parentZoneId || null,
                 }),
                 'Zona creada.',
-              ).then(() => setZoneName(''))
-            }}
-          >
-            <label>
-              Nombre
-              <input
-                required
-                maxLength={120}
-                value={zoneName}
-                onChange={(event) => setZoneName(event.target.value)}
-                placeholder="Ej.: Nave B"
-              />
-            </label>
-            <label>
-              Tipo
-              <select value={zoneType} onChange={(event) => setZoneType(event.target.value)}>
-                {Object.entries(zoneTypes).map(([value, label]) => (
-                  <option key={value} value={value}>{label}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Zona superior
-              <select
-                value={parentZoneId}
-                onChange={(event) => setParentZoneId(event.target.value)}
-              >
-                <option value="">Sin zona superior</option>
-                {catalog.zones.filter((item) => item.isActive).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} · {zoneTypes[item.type] ?? item.type}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <button className="helpdesk-ui-button helpdesk-ui-button--primary" disabled={saving}>
-              Crear zona
-            </button>
-          </form>
+                () => setZoneName(''),
+              ))}
+            >
+              <label>
+                Nombre
+                <input
+                  required
+                  maxLength={120}
+                  value={zoneName}
+                  onChange={(e) => setZoneName(e.target.value)}
+                />
+              </label>
 
-          <div className="helpdesk-operations__list">
-            {catalog.zones.map((item) => (
-              <span key={item.id}>
-                {item.name}
-                <small>{zoneTypes[item.type] ?? item.type}</small>
-              </span>
-            ))}
-          </div>
-        </section>
+              <label>
+                Tipo
+                <select
+                  value={zoneType}
+                  onChange={(e) => setZoneType(e.target.value)}
+                >
+                  {Object.entries(zoneTypes).map(([key, value]) => (
+                    <option key={key} value={key}>{value}</option>
+                  ))}
+                </select>
+              </label>
 
-        <section className="helpdesk-operations__card">
-          <div className="helpdesk-operations__title">
-            <Users size={19} />
-            <div>
-              <h2>Grupos TIC</h2>
-              <p>Equipos responsables de atender zonas.</p>
+              <label>
+                Zona superior
+                <select
+                  value={parentZoneId}
+                  onChange={(e) => setParentZoneId(e.target.value)}
+                >
+                  <option value="">Sin zona superior</option>
+                  {activeZones.map((z) => (
+                    <option key={z.id} value={z.id}>{z.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <button className={button}>Crear zona</button>
+            </form>
+
+            <div className="hd-operation__table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Zona</th><th>Tipo</th>
+                    <th>Zona superior</th><th>Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.zones.map((z) => (
+                    <tr key={z.id}>
+                      <td>{z.name}</td>
+                      <td>{zoneTypes[z.type] || z.type}</td>
+                      <td>
+                        {z.parentZoneId
+                          ? zoneLabel(z.parentZoneId)
+                          : 'Principal'}
+                      </td>
+                      <td>{z.isActive ? 'Activa' : 'Inactiva'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </section>
+        )}
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!teamName.trim()) return
-              void save(
+        {tab === 'teams' && (
+          <section className="hd-operation__card">
+            <h2>Grupos de trabajo</h2>
+            <p>
+              Las categorías de cada grupo se administran
+              en la pantalla de especialidades.
+            </p>
+
+            <form
+              onSubmit={(e) => submit(e, () => void save(
                 () => apiClient.post('/helpdesk/operations/teams', {
                   name: teamName.trim(),
-                  description: teamDescription.trim() || null,
+                  description: description.trim() || null,
                 }),
                 'Grupo creado.',
-              ).then(() => {
-                setTeamName('')
-                setTeamDescription('')
-              })
-            }}
-          >
-            <label>
-              Nombre del grupo
-              <input
-                required
-                maxLength={120}
-                value={teamName}
-                onChange={(event) => setTeamName(event.target.value)}
-                placeholder="Ej.: Soporte Zona Norte"
-              />
-            </label>
-            <label>
-              Descripción
-              <input
-                maxLength={500}
-                value={teamDescription}
-                onChange={(event) => setTeamDescription(event.target.value)}
-                placeholder="Responsabilidad del grupo"
-              />
-            </label>
-            <button className="helpdesk-ui-button helpdesk-ui-button--primary" disabled={saving}>
-              Crear grupo
-            </button>
-          </form>
+                () => {
+                  setTeamName('')
+                  setDescription('')
+                },
+              ))}
+            >
+              <label>
+                Nombre
+                <input
+                  required
+                  maxLength={120}
+                  value={teamName}
+                  onChange={(e) => setTeamName(e.target.value)}
+                />
+              </label>
+              <label>
+                Descripción
+                <input
+                  maxLength={500}
+                  value={description}
+                  onChange={(e) => setDescription(e.target.value)}
+                />
+              </label>
+              <button className={button}>Crear grupo</button>
+            </form>
 
-          <div className="helpdesk-operations__list">
-            {catalog.teams.map((item) => (
-              <span key={item.id}>
-                {item.name}
-                <small>{item.description || 'Sin descripción'}</small>
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="helpdesk-operations__card">
-          <div className="helpdesk-operations__title">
-            <Building2 size={19} />
-            <div>
-              <h2>Cobertura</h2>
-              <p>Qué grupo atiende cada zona.</p>
+            <div className="hd-operation__table">
+              <table>
+                <thead>
+                  <tr><th>Grupo</th><th>Descripción</th><th>Estado</th></tr>
+                </thead>
+                <tbody>
+                  {catalog.teams.map((t) => (
+                    <tr key={t.id}>
+                      <td>{t.name}</td>
+                      <td>{t.description || 'Sin descripción'}</td>
+                      <td>{t.isActive ? 'Activo' : 'Inactivo'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </section>
+        )}
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!coverageTeamId || !coverageZoneId) return
-              void save(
+        {tab === 'coverage' && (
+          <section className="hd-operation__card">
+            <h2>Cobertura geográfica</h2>
+            <p>
+              Relaciona cada grupo con las zonas que atiende.
+              Retirar cobertura afecta futuras asignaciones;
+              no mueve tickets existentes.
+            </p>
+
+            <form
+              onSubmit={(e) => submit(e, () => void save(
                 () => apiClient.post(
-                  `/helpdesk/operations/teams/${coverageTeamId}/zones/${coverageZoneId}`,
+                  `/helpdesk/operations/teams/${coverageTeam}/zones/${coverageZone}`,
                 ),
-                'Cobertura agregada.',
-              )
-            }}
-          >
-            <label>
-              Grupo
-              <select
-                required
-                value={coverageTeamId}
-                onChange={(event) => setCoverageTeamId(event.target.value)}
-              >
-                <option value="">Selecciona grupo</option>
-                {catalog.teams.filter((item) => item.isActive).map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Zona
-              <select
-                required
-                value={coverageZoneId}
-                onChange={(event) => setCoverageZoneId(event.target.value)}
-              >
-                <option value="">Selecciona zona</option>
-                {catalog.zones.filter((item) => item.isActive).map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-            </label>
-            <button className="helpdesk-ui-button helpdesk-ui-button--primary" disabled={saving}>
-              Agregar cobertura
-            </button>
-          </form>
+                'Cobertura guardada.',
+              ))}
+            >
+              <label>
+                Grupo
+                <select
+                  required
+                  value={coverageTeam}
+                  onChange={(e) => setCoverageTeam(e.target.value)}
+                >
+                  <option value="">Selecciona grupo</option>
+                  {activeTeams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </label>
+              <label>
+                Zona
+                <select
+                  required
+                  value={coverageZone}
+                  onChange={(e) => setCoverageZone(e.target.value)}
+                >
+                  <option value="">Selecciona zona</option>
+                  {activeZones.map((z) => (
+                    <option key={z.id} value={z.id}>{z.name}</option>
+                  ))}
+                </select>
+              </label>
+              <button className={button}>Agregar cobertura</button>
+            </form>
 
-          <div className="helpdesk-operations__list">
-            {catalog.coverage.map((item) => (
-              <span key={`${item.teamId}-${item.zoneId}`}>
-                {catalog.teams.find((team) => team.id === item.teamId)?.name ?? 'Grupo'}
-                <small>
-                  {catalog.zones.find((zone) => zone.id === item.zoneId)?.name ?? 'Zona'}
-                </small>
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="helpdesk-operations__card">
-          <div className="helpdesk-operations__title">
-            <UserRound size={19} />
-            <div>
-              <h2>Técnicos</h2>
-              <p>Disponibilidad y capacidad de asignación automática.</p>
+            <div className="hd-operation__table">
+              <table>
+                <thead>
+                  <tr><th>Grupo</th><th>Zona</th><th>Acción</th></tr>
+                </thead>
+                <tbody>
+                  {catalog.coverage.map((c) => (
+                    <tr key={`${c.teamId}-${c.zoneId}`}>
+                      <td>{teamLabel(c.teamId)}</td>
+                      <td>{zoneLabel(c.zoneId)}</td>
+                      <td>
+                        <button
+                          type="button"
+                          className={secondary}
+                          onClick={() => remove(
+                            () => apiClient.delete(
+                              `/helpdesk/operations/teams/${c.teamId}/zones/${c.zoneId}`,
+                            ),
+                            '¿Retirar esta cobertura para futuras asignaciones?',
+                            'Cobertura retirada.',
+                          )}
+                        >
+                          <Trash2 size={15} /> Retirar
+                        </button>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
-          </div>
+          </section>
+        )}
 
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!memberTeamId || !memberUserId) return
-              void save(
+        {tab === 'agents' && (
+          <section className="hd-operation__card">
+            <h2>Técnicos, disponibilidad y capacidad</h2>
+            <p>
+              La capacidad se aplica a tickets activos del técnico.
+              Desactivar disponibilidad no retira sus tickets actuales.
+            </p>
+
+            <form
+              onSubmit={(e) => submit(e, () => void save(
                 () => apiClient.put(
-                  `/helpdesk/operations/teams/${memberTeamId}/members/${memberUserId}`,
+                  `/helpdesk/operations/teams/${memberTeam}/members/${memberUser}`,
                   {
-                    acceptsAutomaticAssignments: true,
-                    isAvailable: true,
-                    maxOpenTickets,
+                    acceptsAutomaticAssignments: automatic,
+                    isAvailable: available,
+                    maxOpenTickets: capacity,
                   },
                 ),
-                'Técnico asignado al grupo.',
-              )
-            }}
-          >
+                'Configuración del técnico guardada.',
+              ))}
+            >
+              <label>
+                Grupo
+                <select
+                  required
+                  value={memberTeam}
+                  onChange={(e) =>
+                    selectMember(e.target.value, memberUser)}
+                >
+                  <option value="">Selecciona grupo</option>
+                  {activeTeams.map((t) => (
+                    <option key={t.id} value={t.id}>{t.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <label>
+                Técnico
+                <select
+                  required
+                  value={memberUser}
+                  onChange={(e) =>
+                    selectMember(memberTeam, e.target.value)}
+                >
+                  <option value="">Selecciona técnico</option>
+                  {users
+                    .filter((u) =>
+                      eligible.has(u.id) ||
+                      catalog.members.some((m) => m.userId === u.id))
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} · {u.email}
+                        {eligible.has(u.id)
+                          ? ''
+                          : ' · sin permiso de atención'}
+                      </option>
+                    ))}
+                </select>
+              </label>
+
+              <label>
+                Máximo de tickets activos
+                <input
+                  type="number"
+                  required
+                  min={1}
+                  max={500}
+                  value={capacity}
+                  onChange={(e) => setCapacity(Number(e.target.value))}
+                />
+              </label>
+
+              <label className="hd-operation__check">
+                <input
+                  type="checkbox"
+                  checked={available}
+                  onChange={(e) => setAvailable(e.target.checked)}
+                />
+                Disponible
+              </label>
+
+              <label className="hd-operation__check">
+                <input
+                  type="checkbox"
+                  checked={automatic}
+                  onChange={(e) => setAutomatic(e.target.checked)}
+                />
+                Recibe asignaciones automáticas
+              </label>
+
+              <button className={button}>Guardar técnico</button>
+            </form>
+
+            <div className="hd-operation__table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Técnico</th><th>Grupo</th>
+                    <th>Disponible</th><th>Automático</th>
+                    <th>Capacidad</th><th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.members.map((m) => (
+                    <tr key={`${m.teamId}-${m.userId}`}>
+                      <td>
+                        {userLabel(m.userId)}
+                        {!eligible.has(m.userId) && (
+                          <small>Sin permiso de atención</small>
+                        )}
+                      </td>
+                      <td>{teamLabel(m.teamId)}</td>
+                      <td>{m.isAvailable ? 'Sí' : 'No'}</td>
+                      <td>
+                        {m.acceptsAutomaticAssignments ? 'Sí' : 'No'}
+                      </td>
+                      <td>{m.maxOpenTickets}</td>
+                      <td>
+                        <div className="hd-operation__actions">
+                          <button
+                            type="button"
+                            className={secondary}
+                            onClick={() =>
+                              selectMember(m.teamId, m.userId)}
+                          >
+                            <Pencil size={15} /> Editar
+                          </button>
+                          <button
+                            type="button"
+                            className={secondary}
+                            onClick={() => remove(
+                              () => apiClient.delete(
+                                `/helpdesk/operations/teams/${m.teamId}/members/${m.userId}`,
+                              ),
+                              '¿Retirar al técnico de este grupo? Sus tickets actuales conservarán su asignación.',
+                              'Técnico retirado del grupo.',
+                            )}
+                          >
+                            <Trash2 size={15} /> Retirar
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
+        {tab === 'locations' && (
+          <section className="hd-operation__card">
+            <h2>Ubicación principal de los usuarios</h2>
+            <p>
+              Esta ubicación determina qué cobertura se utiliza
+              al crear su ticket.
+            </p>
+
             <label>
-              Grupo
-              <select
-                required
-                value={memberTeamId}
-                onChange={(event) => setMemberTeamId(event.target.value)}
-              >
-                <option value="">Selecciona grupo</option>
-                {catalog.teams.filter((item) => item.isActive).map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Técnico
-              <select
-                required
-                value={memberUserId}
-                onChange={(event) => setMemberUserId(event.target.value)}
-              >
-                <option value="">Selecciona técnico</option>
-                {users.filter((item) => item.canWorkTickets).map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} · {item.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Máximo de tickets abiertos
+              Buscar usuario
               <input
-                type="number"
-                min={1}
-                max={500}
-                value={maxOpenTickets}
-                onChange={(event) => setMaxOpenTickets(Number(event.target.value))}
+                value={userSearch}
+                onChange={(e) => setUserSearch(e.target.value)}
+                placeholder="Nombre o correo"
               />
             </label>
-            <button className="helpdesk-ui-button helpdesk-ui-button--primary" disabled={saving}>
-              Guardar técnico
-            </button>
-          </form>
 
-          <div className="helpdesk-operations__list">
-            {catalog.members.map((item) => (
-              <span key={`${item.teamId}-${item.userId}`}>
-                {users.find((user) => user.id === item.userId)?.name ?? 'Técnico'}
-                <small>
-                  {catalog.teams.find((team) => team.id === item.teamId)?.name ?? 'Grupo'}
-                  {' · '}Máximo {item.maxOpenTickets}
-                </small>
-              </span>
-            ))}
-          </div>
-        </section>
-
-        <section className="helpdesk-operations__card">
-          <div className="helpdesk-operations__title">
-            <MapPin size={19} />
-            <div>
-              <h2>Ubicación del solicitante</h2>
-              <p>Zona principal usada al crear su ticket.</p>
-            </div>
-          </div>
-
-          <form
-            onSubmit={(event) => {
-              event.preventDefault()
-              if (!userZoneUserId || !userZoneId) return
-              void save(
+            <form
+              onSubmit={(e) => submit(e, () => void save(
                 () => apiClient.put(
-                  `/helpdesk/operations/users/${userZoneUserId}/zone`,
-                  { zoneId: userZoneId },
+                  `/helpdesk/operations/users/${locationUser}/zone`,
+                  { zoneId: locationZone },
                 ),
-                'Ubicación del usuario guardada.',
-              )
-            }}
-          >
-            <label>
-              Usuario
-              <select
-                required
-                value={userZoneUserId}
-                onChange={(event) => setUserZoneUserId(event.target.value)}
-              >
-                <option value="">Selecciona usuario</option>
-                {users.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} · {item.email}
-                  </option>
-                ))}
-              </select>
-            </label>
-            <label>
-              Zona principal
-              <select
-                required
-                value={userZoneId}
-                onChange={(event) => setUserZoneId(event.target.value)}
-              >
-                <option value="">Selecciona zona</option>
-                {catalog.zones.filter((item) => item.isActive).map((item) => (
-                  <option key={item.id} value={item.id}>{item.name}</option>
-                ))}
-              </select>
-            </label>
-            <button className="helpdesk-ui-button helpdesk-ui-button--primary" disabled={saving}>
-              Guardar ubicación
-            </button>
-          </form>
-        </section>
+                'Ubicación principal guardada.',
+              ))}
+            >
+              <label>
+                Usuario
+                <select
+                  required
+                  value={locationUser}
+                  onChange={(e) => selectLocation(e.target.value)}
+                >
+                  <option value="">Selecciona usuario</option>
+                  {users
+                    .filter((u) =>
+                      filteredUsers.some((f) => f.id === u.id) ||
+                      u.id === locationUser)
+                    .map((u) => (
+                      <option key={u.id} value={u.id}>
+                        {u.name} · {u.email}
+                      </option>
+                    ))}
+                </select>
+              </label>
 
-        <section className="helpdesk-operations__card">
-          <div className="helpdesk-operations__title">
-            <Sparkles size={19} />
-            <div>
-              <h2>Asistente virtual</h2>
-              <p>Autoriza individualmente quién podrá usarlo cuando Ollama esté integrado.</p>
+              <label>
+                Zona
+                <select
+                  required
+                  value={locationZone}
+                  onChange={(e) => setLocationZone(e.target.value)}
+                >
+                  <option value="">Selecciona zona</option>
+                  {activeZones.map((z) => (
+                    <option key={z.id} value={z.id}>{z.name}</option>
+                  ))}
+                </select>
+              </label>
+
+              <button className={button}>Guardar ubicación</button>
+            </form>
+
+            <div className="hd-operation__table">
+              <table>
+                <thead>
+                  <tr>
+                    <th>Usuario</th><th>Zona principal</th><th>Acciones</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {catalog.userZones
+                    .filter((z) =>
+                      filteredUsers.some((u) => u.id === z.userId))
+                    .slice(0, 100)
+                    .map((z) => (
+                      <tr key={`${z.userId}-${z.zoneId}`}>
+                        <td>{userLabel(z.userId)}</td>
+                        <td>{zoneLabel(z.zoneId)}</td>
+                        <td>
+                          <div className="hd-operation__actions">
+                            <button
+                              type="button"
+                              className={secondary}
+                              onClick={() => selectLocation(z.userId)}
+                            >
+                              <Pencil size={15} /> Editar
+                            </button>
+                            <button
+                              type="button"
+                              className={secondary}
+                              onClick={() => remove(
+                                () => apiClient.delete(
+                                  `/helpdesk/operations/users/${z.userId}/zone`,
+                                ),
+                                '¿Retirar la ubicación? Los nuevos tickets pueden quedar pendientes de asignación.',
+                                'Ubicación retirada.',
+                              )}
+                            >
+                              <Trash2 size={15} /> Retirar
+                            </button>
+                          </div>
+                        </td>
+                      </tr>
+                    ))}
+                </tbody>
+              </table>
             </div>
-          </div>
 
-          <div className="helpdesk-operations__form">
+            <p>
+              Se muestran hasta 100 ubicaciones coincidentes.
+              Usa la búsqueda para localizar un usuario.
+            </p>
+          </section>
+        )}
+
+        {tab === 'assistant' && (
+          <section className="hd-operation__card">
+            <h2>Acceso individual al asistente</h2>
+            <p>
+              Autoriza su uso. Esto no concede permisos adicionales
+              ni activa la integración con Ollama.
+            </p>
+
             <label>
               Usuario
               <select
-                value={assistantUserId}
-                onChange={(event) => setAssistantUserId(event.target.value)}
+                value={assistantUser}
+                onChange={(e) => setAssistantUser(e.target.value)}
               >
                 <option value="">Selecciona usuario</option>
-                {users.map((item) => (
-                  <option key={item.id} value={item.id}>
-                    {item.name} · {item.email}
+                {users.map((u) => (
+                  <option key={u.id} value={u.id}>
+                    {u.name} · {u.email}
                   </option>
                 ))}
               </select>
             </label>
 
-            {selectedAssistant && (
-              <p className="helpdesk-operations__access">
-                Acceso: {selectedAssistant.assistantEnabled ? 'autorizado' : 'sin autorización'}
+            {assistant && (
+              <p>
+                Acceso:{' '}
+                <strong>
+                  {assistant.assistantEnabled
+                    ? 'Autorizado'
+                    : 'Sin autorización'}
+                </strong>
               </p>
             )}
 
-            <div className="helpdesk-operations__actions">
+            <div className="hd-operation__actions">
               <button
                 type="button"
-                className="helpdesk-ui-button helpdesk-ui-button--primary"
-                disabled={!assistantUserId || saving}
+                className={button}
+                disabled={!assistantUser}
                 onClick={() => void save(
                   () => apiClient.put(
-                    `/helpdesk/operations/assistant/users/${assistantUserId}`,
+                    `/helpdesk/operations/assistant/users/${assistantUser}`,
                     { enabled: true },
                   ),
-                  'Acceso al asistente autorizado.',
+                  'Acceso autorizado.',
                 )}
               >
                 Autorizar
               </button>
               <button
                 type="button"
-                className="helpdesk-ui-button helpdesk-ui-button--secondary"
-                disabled={!assistantUserId || saving}
+                className={secondary}
+                disabled={!assistantUser}
                 onClick={() => void save(
                   () => apiClient.put(
-                    `/helpdesk/operations/assistant/users/${assistantUserId}`,
+                    `/helpdesk/operations/assistant/users/${assistantUser}`,
                     { enabled: false },
                   ),
-                  'Acceso al asistente retirado.',
+                  'Acceso retirado.',
                 )}
               >
                 Retirar acceso
               </button>
             </div>
-          </div>
-        </section>
-      </div>
+          </section>
+        )}
+      </fieldset>
     </main>
   )
 }
