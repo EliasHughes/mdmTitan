@@ -5,19 +5,19 @@ namespace TitanMDM.Infrastructure.Helpdesk;
 
 public sealed partial class HelpdeskService
 {
-    private IQueryable<Guid> EligibleTechnicians(Guid organizationId) =>
-        (from userRole in _db.UserRoles.AsNoTracking()
-         join rolePermission in _db.RolePermissions.AsNoTracking()
-             on userRole.RoleId equals rolePermission.RoleId
-         join permission in _db.Permissions.AsNoTracking()
-             on rolePermission.PermissionId equals permission.Id
-         join user in _db.Users.AsNoTracking()
-             on userRole.UserId equals user.Id
-         where user.OrganizationId == organizationId &&
-               user.IsActive &&
-               permission.IsActive &&
-               permission.Code == "tickets.comment"
-         select user.Id).Distinct();
+    private IQueryable<Guid> EligibleTechnicians(Guid org) =>
+        (from ur in _db.UserRoles.AsNoTracking()
+         join rp in _db.RolePermissions.AsNoTracking()
+             on ur.RoleId equals rp.RoleId
+         join p in _db.Permissions.AsNoTracking()
+             on rp.PermissionId equals p.Id
+         join u in _db.Users.AsNoTracking()
+             on ur.UserId equals u.Id
+         where u.OrganizationId == org &&
+               u.IsActive &&
+               p.IsActive &&
+               p.Code == "tickets.comment"
+         select u.Id).Distinct();
 
     public async Task<RoutingPreview> PreviewRoutingAsync(
         Guid organizationId,
@@ -25,93 +25,83 @@ public sealed partial class HelpdeskService
         string category,
         CancellationToken cancellationToken = default)
     {
-        var evaluation = await EvaluateRoutingAsync(
+        var result = await EvaluateRoutingAsync(
             organizationId,
             requesterId,
             category,
             cancellationToken);
 
-        var selected = evaluation.Candidate;
+        var x = result.Candidate;
 
-        return new RoutingPreview(
-            selected is not null,
-            evaluation.Reason,
-            evaluation.RequesterZone,
-            selected?.UserId,
-            selected?.UserName,
-            selected?.TeamName,
-            selected?.ZoneName,
-            selected?.TechnicianZone,
-            selected?.OpenTickets,
-            selected?.Capacity);
+        return new(
+            x is not null,
+            result.Reason,
+            result.RequesterZone,
+            x?.UserId,
+            x?.UserName,
+            x?.TeamName,
+            x?.ZoneName,
+            x?.TechnicianZone,
+            x?.OpenTickets,
+            x?.Capacity);
     }
 
     private async Task<RoutingCandidate?> FindAutomaticAssigneeAsync(
         Guid organizationId,
         Guid requesterId,
         string category,
-        CancellationToken cancellationToken)
-    {
-        var evaluation = await EvaluateRoutingAsync(
+        CancellationToken cancellationToken) =>
+        (await EvaluateRoutingAsync(
             organizationId,
             requesterId,
             category,
-            cancellationToken);
-
-        return evaluation.Candidate;
-    }
+            cancellationToken)).Candidate;
 
     private async Task<RoutingEvaluation> EvaluateRoutingAsync(
-        Guid organizationId,
+        Guid org,
         Guid requesterId,
         string category,
-        CancellationToken cancellationToken)
+        CancellationToken ct,
+        Guid? requestedTeamId = null)
     {
         if (!await _db.Users.AsNoTracking().AnyAsync(
-                x => x.Id == requesterId &&
-                     x.OrganizationId == organizationId &&
-                     x.IsActive,
-                cancellationToken))
+            x => x.Id == requesterId &&
+                 x.OrganizationId == org &&
+                 x.IsActive,
+            ct))
         {
             return new(
-                null,
-                null,
+                null, null,
                 "El solicitante no está activo en esta organización.");
         }
 
-        var zones = await _db.HelpdeskZones
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.IsActive)
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        var zones = await _db.HelpdeskZones.AsNoTracking()
+            .Where(x => x.OrganizationId == org && x.IsActive)
+            .ToDictionaryAsync(x => x.Id, ct);
 
-        var requesterZones = await _db.HelpdeskUserZones
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.UserId == requesterId)
+        var requesterZones = await _db.HelpdeskUserZones.AsNoTracking()
+            .Where(x => x.OrganizationId == org &&
+                        x.UserId == requesterId)
             .Select(x => x.ZoneId)
             .Distinct()
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
 
         if (requesterZones.Count != 1 ||
             !zones.ContainsKey(requesterZones[0]))
         {
             return new(
-                null,
-                null,
+                null, null,
                 "Asigna al solicitante una única ubicación activa.");
         }
 
         List<Guid> Chain(Guid id)
         {
-            var result = new List<Guid>();
+            var chain = new List<Guid>();
 
             while (zones.TryGetValue(id, out var zone) &&
-                   !result.Contains(id))
+                   !chain.Contains(id))
             {
-                result.Add(id);
+                chain.Add(id);
 
                 if (!zone.ParentZoneId.HasValue)
                     break;
@@ -119,159 +109,136 @@ public sealed partial class HelpdeskService
                 id = zone.ParentZoneId.Value;
             }
 
-            return result;
+            return chain;
         }
 
         var chain = Chain(requesterZones[0]);
         var requesterZone = zones[requesterZones[0]].Name;
 
-        var normalizedCategory =
-            (category ?? "general").Trim().ToLowerInvariant();
+        var normalized = string.IsNullOrWhiteSpace(category)
+            ? "general"
+            : category.Trim().ToLowerInvariant();
 
-        if (normalizedCategory.Length == 0)
-            normalizedCategory = "general";
-
-        var allTeams = await _db.HelpdeskTeams
-            .AsNoTracking()
+        var allTeams = await _db.HelpdeskTeams.AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
-                x.IsActive)
-            .ToListAsync(cancellationToken);
+                x.OrganizationId == org &&
+                x.IsActive &&
+                (!requestedTeamId.HasValue ||
+                 x.Id == requestedTeamId.Value))
+            .ToListAsync(ct);
 
         var teams = allTeams
             .Where(x =>
-                x.HandlesCategory(normalizedCategory) ||
-                (normalizedCategory == "general" &&
+                x.HandlesCategory(normalized) ||
+                (normalized == "general" &&
                  string.IsNullOrWhiteSpace(x.Categories)))
             .ToDictionary(x => x.Id);
 
         if (teams.Count == 0)
         {
             return new(
-                null,
-                requesterZone,
-                "No hay una especialidad configurada para esta categoría.");
+                null, requesterZone,
+                "El grupo no está activo o no atiende esta categoría.");
         }
 
         var teamIds = teams.Keys.ToArray();
 
-        var coverage = await _db.HelpdeskTeamZones
-            .AsNoTracking()
+        var coverage = await _db.HelpdeskTeamZones.AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
+                x.OrganizationId == org &&
                 teamIds.Contains(x.TeamId) &&
                 chain.Contains(x.ZoneId))
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
 
-        var coveredTeamIds = coverage
+        var covered = coverage
             .Select(x => x.TeamId)
             .Distinct()
             .ToArray();
 
-        if (coveredTeamIds.Length == 0)
+        if (covered.Length == 0)
         {
             return new(
-                null,
-                requesterZone,
+                null, requesterZone,
                 "La especialidad no tiene cobertura en esta ubicación.");
         }
 
-        var eligible = await EligibleTechnicians(organizationId)
-            .ToListAsync(cancellationToken);
+        var eligible = await EligibleTechnicians(org).ToListAsync(ct);
 
-        var members = await _db.HelpdeskTeamMembers
-            .AsNoTracking()
+        var members = await _db.HelpdeskTeamMembers.AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
-                coveredTeamIds.Contains(x.TeamId) &&
+                x.OrganizationId == org &&
+                covered.Contains(x.TeamId) &&
                 eligible.Contains(x.UserId) &&
                 x.IsAvailable &&
                 x.AcceptsAutomaticAssignments &&
                 x.MaxOpenTickets > 0)
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
 
         var schedules = await _db.Set<HelpdeskTechnicianSchedule>()
             .AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
-                coveredTeamIds.Contains(x.TeamId))
-            .ToListAsync(cancellationToken);
-
-        var now = DateTime.UtcNow;
+                x.OrganizationId == org &&
+                covered.Contains(x.TeamId))
+            .ToListAsync(ct);
 
         var onDuty = schedules
-            .Where(x => x.IsOnDuty(now))
+            .Where(x => x.IsOnDuty(DateTime.UtcNow))
             .ToDictionary(x => (x.TeamId, x.UserId));
 
         members = members
             .Where(x => onDuty.ContainsKey((x.TeamId, x.UserId)))
             .ToList();
 
-        var userIds = members
-            .Select(x => x.UserId)
-            .Distinct()
-            .ToArray();
+        var ids = members.Select(x => x.UserId).Distinct().ToArray();
 
-        if (userIds.Length == 0)
+        if (ids.Length == 0)
         {
             return new(
-                null,
-                requesterZone,
-                "No hay técnicos disponibles dentro de su horario " +
-                "en esta especialidad.");
+                null, requesterZone,
+                "No hay técnicos disponibles dentro de su horario en esta especialidad.");
         }
 
-        var users = await _db.Users
-            .AsNoTracking()
+        var users = await _db.Users.AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
+                x.OrganizationId == org &&
                 x.IsActive &&
-                userIds.Contains(x.Id))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+                ids.Contains(x.Id))
+            .ToDictionaryAsync(x => x.Id, ct);
 
-        var locations = await _db.HelpdeskUserZones
-            .AsNoTracking()
+        var locations = await _db.HelpdeskUserZones.AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
-                userIds.Contains(x.UserId))
+                x.OrganizationId == org &&
+                ids.Contains(x.UserId))
             .Select(x => new { x.UserId, x.ZoneId })
-            .ToListAsync(cancellationToken);
+            .ToListAsync(ct);
 
         var technicianZones = locations
             .GroupBy(x => x.UserId)
-            .Where(group =>
-                group.Select(x => x.ZoneId).Distinct().Count() == 1)
-            .ToDictionary(
-                group => group.Key,
-                group => group.First().ZoneId);
+            .Where(x => x.Select(v => v.ZoneId).Distinct().Count() == 1)
+            .ToDictionary(x => x.Key, x => x.First().ZoneId);
 
-        var loads = await _db.HelpdeskTickets
-            .AsNoTracking()
+        var loads = await _db.HelpdeskTickets.AsNoTracking()
             .Where(x =>
-                x.OrganizationId == organizationId &&
+                x.OrganizationId == org &&
                 x.AssigneeUserId.HasValue &&
-                userIds.Contains(x.AssigneeUserId.Value) &&
+                ids.Contains(x.AssigneeUserId.Value) &&
                 x.Status != "resolved" &&
                 x.Status != "closed")
             .GroupBy(x => x.AssigneeUserId!.Value)
-            .Select(group => new
+            .Select(x => new
             {
-                UserId = group.Key,
-                Count = group.Count()
+                UserId = x.Key,
+                Count = x.Count()
             })
-            .ToDictionaryAsync(
-                x => x.UserId,
-                x => x.Count,
-                cancellationToken);
+            .ToDictionaryAsync(x => x.UserId, x => x.Count, ct);
 
         var candidates = new List<RankedCandidate>();
 
         foreach (var member in members)
         {
             if (!users.TryGetValue(member.UserId, out var user) ||
-                !technicianZones.TryGetValue(
-                    member.UserId, out var homeZoneId) ||
-                !zones.TryGetValue(homeZoneId, out var homeZone))
+                !technicianZones.TryGetValue(member.UserId, out var homeId) ||
+                !zones.TryGetValue(homeId, out var home))
             {
                 continue;
             }
@@ -281,33 +248,31 @@ public sealed partial class HelpdeskService
             if (load >= member.MaxOpenTickets)
                 continue;
 
-            var homeChain = Chain(homeZoneId);
+            var homeChain = Chain(homeId);
             var distance = chain.FindIndex(homeChain.Contains);
 
             if (distance < 0)
                 distance = int.MaxValue;
 
-            var coverageZone = coverage
+            var coverageId = coverage
                 .Where(x => x.TeamId == member.TeamId)
                 .OrderBy(x => chain.IndexOf(x.ZoneId))
                 .First()
                 .ZoneId;
 
-            candidates.Add(new RankedCandidate(
-                new RoutingCandidate(
+            candidates.Add(new(
+                new(
                     member.UserId,
                     user.FullName,
                     teams[member.TeamId].Name,
-                    zones[coverageZone].Name,
-                    homeZone.Name,
+                    zones[coverageId].Name,
+                    home.Name,
                     load,
                     member.MaxOpenTickets),
                 distance,
-                chain.IndexOf(coverageZone),
+                chain.IndexOf(coverageId),
                 (double)load / member.MaxOpenTickets,
-                teams[member.TeamId].HandlesCategory(normalizedCategory)
-                    ? 0
-                    : 1,
+                teams[member.TeamId].HandlesCategory(normalized) ? 0 : 1,
                 onDuty[(member.TeamId, member.UserId)].Priority));
         }
 
@@ -325,10 +290,8 @@ public sealed partial class HelpdeskService
         if (chosen is null)
         {
             return new(
-                null,
-                requesterZone,
-                "Los técnicos están al límite de capacidad " +
-                "o no tienen una ubicación válida.");
+                null, requesterZone,
+                "Los técnicos están al límite de capacidad o no tienen una ubicación válida.");
         }
 
         var selected = chosen.Candidate;
@@ -336,13 +299,10 @@ public sealed partial class HelpdeskService
         return new(
             selected,
             requesterZone,
-            $"Especialidad {selected.TeamName}; " +
-            $"solicitante en {requesterZone}; " +
-            $"técnico en {selected.TechnicianZone}; " +
-            $"cobertura {selected.ZoneName}; " +
+            $"Especialidad {selected.TeamName}; solicitante en {requesterZone}; " +
+            $"técnico en {selected.TechnicianZone}; cobertura {selected.ZoneName}; " +
             $"carga {selected.OpenTickets}/{selected.Capacity}. " +
-            "Se verificó el horario y se priorizó ubicación, " +
-            "orden del técnico y capacidad.");
+            "Se verificó horario, ubicación, prioridad y capacidad.");
     }
 
     public async Task<bool> RetryAutomaticAssignmentAsync(
@@ -354,38 +314,34 @@ public sealed partial class HelpdeskService
 
         return await strategy.ExecuteAsync(async () =>
         {
-            await using var transaction =
-                await _db.Database.BeginTransactionAsync(
-                    System.Data.IsolationLevel.Serializable,
-                    cancellationToken);
+            await using var tx = await _db.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable,
+                cancellationToken);
 
-            var ticket = await _db.HelpdeskTickets
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.OrganizationId == organizationId &&
-                         x.Id == ticketId &&
-                         x.AssigneeUserId == null &&
-                         x.Status != "resolved" &&
-                         x.Status != "closed",
+            var ticket = await _db.HelpdeskTickets.AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.OrganizationId == organizationId &&
+                    x.Id == ticketId &&
+                    x.AssigneeUserId == null &&
+                    x.Status != "resolved" &&
+                    x.Status != "closed",
                     cancellationToken);
 
             if (ticket is null ||
                 (ticket.Source == "email" &&
-                 !string.IsNullOrWhiteSpace(
-                     ticket.ExternalRequesterEmail)))
+                 !string.IsNullOrWhiteSpace(ticket.ExternalRequesterEmail)))
             {
                 return false;
             }
 
-            var evaluation = await EvaluateRoutingAsync(
+            var result = await EvaluateRoutingAsync(
                 organizationId,
                 ticket.RequesterUserId,
                 ticket.Category,
-                cancellationToken);
+                cancellationToken,
+                ticket.RequestedTeamId);
 
-            var routing = evaluation.Candidate;
-
-            if (routing is null)
+            if (result.Candidate is not { } routing)
                 return false;
 
             var now = DateTime.UtcNow;
@@ -397,17 +353,11 @@ public sealed partial class HelpdeskService
                     x.AssigneeUserId == null &&
                     x.Status != "resolved" &&
                     x.Status != "closed")
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(
-                            x => x.AssigneeUserId,
-                            (Guid?)routing.UserId)
-                        .SetProperty(
-                            x => x.Status,
-                            x => x.Status == "new" ? "open" : x.Status)
-                        .SetProperty(
-                            x => x.UpdatedAtUtc,
-                            now),
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.AssigneeUserId, (Guid?)routing.UserId)
+                    .SetProperty(x => x.Status,
+                        x => x.Status == "new" ? "open" : x.Status)
+                    .SetProperty(x => x.UpdatedAtUtc, now),
                     cancellationToken);
 
             if (changed != 1)
@@ -418,15 +368,14 @@ public sealed partial class HelpdeskService
                 ticketId,
                 null,
                 "auto_assigned",
-                "Reintento automático: " + evaluation.Reason);
+                "Reintento automático: " + result.Reason);
 
             _db.HelpdeskTicketEvents.Add(audit);
 
             try
             {
                 await _db.SaveChangesAsync(cancellationToken);
-                await transaction.CommitAsync(cancellationToken);
-
+                await tx.CommitAsync(cancellationToken);
                 return true;
             }
             finally

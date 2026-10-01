@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TitanMDM.Infrastructure.Persistence;
 namespace TitanMDM.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TitanMdmDbContext))]
-    partial class TitanMdmDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261001122447_AddHelpdeskClosingAutomation")]
+    partial class AddHelpdeskClosingAutomation
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1917,9 +1920,6 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid?>("RemoteSessionId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("RequestedTeamId")
                         .HasColumnType("uniqueidentifier");
 
                     b.Property<Guid>("RequesterUserId")

@@ -52,49 +52,38 @@ type Catalog = {
 }
 
 const days = [
-  'Domingo',
-  'Lunes',
-  'Martes',
-  'Miércoles',
-  'Jueves',
-  'Viernes',
-  'Sábado',
+  'Domingo', 'Lunes', 'Martes', 'Miércoles',
+  'Jueves', 'Viernes', 'Sábado',
 ]
 
-const defaultSlots = (): Slot[] =>
+const defaults = (): Slot[] =>
   [1, 2, 3, 4, 5].map(day => ({
     day,
     start: '08:00',
     end: '17:00',
   }))
 
-const clone = (group: Group): Group => ({
-  ...group,
-  tasks: [...group.tasks],
-  zoneIds: [...group.zoneIds],
-  technicians: group.technicians.map(technician => ({
-    ...technician,
-    slots: technician.slots.map(slot => ({ ...slot })),
+const clone = (x: Group): Group => ({
+  ...x,
+  tasks: [...x.tasks],
+  zoneIds: [...x.zoneIds],
+  technicians: x.technicians.map(t => ({
+    ...t,
+    slots: t.slots.map(s => ({ ...s })),
   })),
 })
 
-function errorMessage(error: unknown) {
-  if (
-    axios.isAxiosError<{
-      message?: string
-      detail?: string
-    }>(error)
-  ) {
-    return (
-      error.response?.data?.message ??
-      error.response?.data?.detail ??
-      'No se pudo completar la operación. Revisa el backend y la migración.'
-    )
-  }
-
-  return error instanceof Error
-    ? error.message
-    : 'No se pudo completar la operación.'
+function message(ex: unknown) {
+  return axios.isAxiosError<{
+    message?: string
+    detail?: string
+  }>(ex)
+    ? ex.response?.data?.message ??
+      ex.response?.data?.detail ??
+      'No se pudo completar la operación.'
+    : ex instanceof Error
+      ? ex.message
+      : 'No se pudo completar la operación.'
 }
 
 export function HelpdeskSpecialtiesPage() {
@@ -108,16 +97,18 @@ export function HelpdeskSpecialtiesPage() {
   const [dirty, setDirty] = useState(false)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
-  const [message, setMessage] = useState('')
+  const [success, setSuccess] = useState('')
   const [error, setError] = useState('')
   const [task, setTask] = useState('')
   const [staffId, setStaffId] = useState('')
   const [search, setSearch] = useState('')
-  const [newName, setNewName] = useState('')
+  const [name, setName] = useState('')
   const [description, setDescription] = useState('')
   const [showCreate, setShowCreate] = useState(false)
 
-  const load = useCallback(async (preferredId?: string) => {
+  const busy = loading || saving
+
+  const load = useCallback(async (id?: string) => {
     setLoading(true)
 
     try {
@@ -125,11 +116,11 @@ export function HelpdeskSpecialtiesPage() {
         '/helpdesk/group-planning',
       )
 
+      data.groups = data.groups.filter(x => x.isActive)
       setCatalog(data)
 
       const group =
-        data.groups.find(item => item.id === preferredId) ??
-        data.groups[0]
+        data.groups.find(x => x.id === id) ?? data.groups[0]
 
       setSelected(group ? clone(group) : null)
       setDirty(false)
@@ -139,43 +130,36 @@ export function HelpdeskSpecialtiesPage() {
   }, [])
 
   useEffect(() => {
-    void load().catch(error => setError(errorMessage(error)))
+    void load().catch(ex => setError(message(ex)))
   }, [load])
 
   const update = (patch: Partial<Group>) => {
-    setSelected(group => (group ? { ...group, ...patch } : null))
+    setSelected(x => x ? { ...x, ...patch } : null)
     setDirty(true)
-    setMessage('')
+    setSuccess('')
     setError('')
   }
 
-  const updateTech = (
-    userId: string,
-    patch: Partial<Technician>,
-  ) => {
-    if (!selected) return
-
-    update({
-      technicians: selected.technicians.map(technician =>
-        technician.userId === userId
-          ? { ...technician, ...patch }
-          : technician,
-      ),
-    })
+  const tech = (id: string, patch: Partial<Technician>) => {
+    if (selected) {
+      update({
+        technicians: selected.technicians.map(x =>
+          x.userId === id ? { ...x, ...patch } : x,
+        ),
+      })
+    }
   }
 
   const choose = (group: Group) => {
     if (
       dirty &&
       !window.confirm('¿Descartar los cambios sin guardar?')
-    ) {
-      return
-    }
+    ) return
 
     setSelected(clone(group))
     setDirty(false)
     setError('')
-    setMessage('')
+    setSuccess('')
     setTask('')
     setStaffId('')
   }
@@ -183,23 +167,19 @@ export function HelpdeskSpecialtiesPage() {
   const addTask = () => {
     if (!selected) return
 
-    const tasks = [
-      ...new Set([
-        ...selected.tasks,
-        ...task
-          .split(/[,;\n]/)
-          .map(value => value.trim().toLowerCase())
-          .filter(Boolean),
-      ]),
-    ]
+    const tasks = [...new Set([
+      ...selected.tasks,
+      ...task
+        .split(/[,;\n]/)
+        .map(x => x.trim().toLowerCase())
+        .filter(Boolean),
+    ])]
 
     if (
       tasks.length > 15 ||
-      tasks.some(value => value.length > 50 || value.includes('|'))
+      tasks.some(x => x.length > 50 || x.includes('|'))
     ) {
-      setError(
-        'Admite hasta 15 tareas por grupo, de hasta 50 caracteres.',
-      )
+      setError('Admite hasta 15 tareas, de hasta 50 caracteres.')
       return
     }
 
@@ -208,7 +188,11 @@ export function HelpdeskSpecialtiesPage() {
   }
 
   const addTech = () => {
-    if (!selected || !staffId) return
+    if (
+      !selected ||
+      !staffId ||
+      selected.technicians.some(x => x.userId === staffId)
+    ) return
 
     update({
       technicians: [
@@ -222,11 +206,11 @@ export function HelpdeskSpecialtiesPage() {
             100,
             Math.max(
               0,
-              ...selected.technicians.map(item => item.priority),
+              ...selected.technicians.map(x => x.priority),
             ) + 1,
           ),
           timeZoneId: 'America/Santo_Domingo',
-          slots: defaultSlots(),
+          slots: defaults(),
         },
       ],
     })
@@ -234,28 +218,24 @@ export function HelpdeskSpecialtiesPage() {
     setStaffId('')
   }
 
-  const save = async () => {
-    if (!selected) return
+  async function save() {
+    if (!selected || saving) return
 
     if (!selected.tasks.length || !selected.zoneIds.length) {
       setError('Agrega al menos una tarea y una zona de cobertura.')
       return
     }
 
-    if (
-      selected.technicians.some(
-        technician =>
-          technician.acceptsAutomaticAssignments &&
-          !technician.slots.length,
-      )
-    ) {
+    if (selected.technicians.some(x =>
+      x.acceptsAutomaticAssignments && !x.slots.length,
+    )) {
       setError('Cada técnico automático necesita un horario.')
       return
     }
 
     setSaving(true)
     setError('')
-    setMessage('')
+    setSuccess('')
 
     try {
       await apiClient.put(
@@ -268,27 +248,27 @@ export function HelpdeskSpecialtiesPage() {
       )
 
       setDirty(false)
-      setMessage(
+      setSuccess(
         'Grupo, tareas, cobertura, técnicos y horarios guardados.',
       )
 
       try {
         await load(selected.id)
-      } catch (error) {
+      } catch (ex) {
         setError(
           'Se guardó, pero no se pudo actualizar la pantalla. ' +
-            errorMessage(error),
+          message(ex),
         )
       }
-    } catch (error) {
-      setError(errorMessage(error))
+    } catch (ex) {
+      setError(message(ex))
     } finally {
       setSaving(false)
     }
   }
 
-  const create = async () => {
-    if (!newName.trim()) {
+  async function create() {
+    if (!name.trim() || saving) {
       setError('Escribe el nombre del grupo.')
       return
     }
@@ -298,9 +278,7 @@ export function HelpdeskSpecialtiesPage() {
       !window.confirm(
         '¿Descartar los cambios pendientes y crear otro grupo?',
       )
-    ) {
-      return
-    }
+    ) return
 
     setSaving(true)
     setError('')
@@ -309,51 +287,88 @@ export function HelpdeskSpecialtiesPage() {
       const { data } = await apiClient.post<{ id: string }>(
         '/helpdesk/group-planning/groups',
         {
-          name: newName.trim(),
+          name: name.trim(),
           description: description.trim() || null,
         },
       )
 
       setShowCreate(false)
-      setNewName('')
+      setName('')
       setDescription('')
 
       try {
         await load(data.id)
-        setMessage('Grupo creado. Configura sus tareas, zonas y técnicos.')
-      } catch (error) {
+        setSuccess(
+          'Grupo creado. Configura sus tareas, zonas y técnicos.',
+        )
+      } catch (ex) {
         setError(
           'El grupo se creó, pero no se pudo actualizar. ' +
-            errorMessage(error),
+          message(ex),
         )
       }
-    } catch (error) {
-      setError(errorMessage(error))
+    } catch (ex) {
+      setError(message(ex))
     } finally {
       setSaving(false)
     }
   }
 
-  const refresh = async () => {
+  async function remove() {
+    if (
+      !selected ||
+      saving ||
+      !window.confirm(
+        `¿Eliminar el grupo "${selected.name}"? ` +
+        'Se conservará el historial. ' +
+        'Los cambios sin guardar se descartarán.',
+      )
+    ) return
+
+    setSaving(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const { data } = await apiClient.delete<{ message: string }>(
+        `/my/helpdesk/request-form/groups/${selected.id}`,
+      )
+
+      setSelected(null)
+      setDirty(false)
+
+      try {
+        await load()
+        setSuccess(data.message)
+      } catch (ex) {
+        setError(
+          'Se eliminó el grupo. Actualiza la pantalla. ' +
+          message(ex),
+        )
+      }
+    } catch (ex) {
+      setError(message(ex))
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  async function refresh() {
     if (
       dirty &&
       !window.confirm(
         '¿Descartar los cambios sin guardar y actualizar?',
       )
-    ) {
-      return
-    }
+    ) return
 
     setError('')
 
     try {
       await load(selected?.id)
-    } catch (error) {
-      setError(errorMessage(error))
+    } catch (ex) {
+      setError(message(ex))
     }
   }
-
-  const busy = loading || saving
 
   return (
     <main className="hdgp">
@@ -364,8 +379,8 @@ export function HelpdeskSpecialtiesPage() {
           </span>
           <h1>Grupos, tareas y turnos</h1>
           <p>
-            Define qué atiende cada grupo, dónde trabaja y quién recibe
-            el ticket en cada horario.
+            Define qué atiende cada grupo, dónde trabaja y quién
+            recibe el ticket en cada horario.
           </p>
         </div>
 
@@ -392,33 +407,36 @@ export function HelpdeskSpecialtiesPage() {
         </div>
       )}
 
-      {message && (
+      {success && (
         <div className="hdgp-alert hdgp-success" role="status">
-          {message}
+          {success}
         </div>
       )}
 
       {showCreate && (
         <section className="hdgp-panel">
           <h2>Nuevo grupo</h2>
+
           <fieldset disabled={busy} className="hdgp-create">
             <label>
               Nombre
               <input
                 maxLength={120}
+                value={name}
+                onChange={e => setName(e.target.value)}
                 placeholder="Grupo CEDI"
-                value={newName}
-                onChange={event => setNewName(event.target.value)}
               />
             </label>
+
             <label>
               Descripción
               <input
                 maxLength={500}
                 value={description}
-                onChange={event => setDescription(event.target.value)}
+                onChange={e => setDescription(e.target.value)}
               />
             </label>
+
             <button
               className="hdgp-primary"
               onClick={() => void create()}
@@ -432,24 +450,25 @@ export function HelpdeskSpecialtiesPage() {
       <div className="hdgp-layout">
         <aside className="hdgp-panel hdgp-sidebar">
           <h2>Grupos de trabajo</h2>
+
           <input
             aria-label="Buscar grupo"
             placeholder="Buscar grupo…"
             value={search}
-            onChange={event => setSearch(event.target.value)}
+            onChange={e => setSearch(e.target.value)}
           />
 
           {catalog.groups
-            .filter(group =>
-              group.name.toLowerCase().includes(search.toLowerCase()),
+            .filter(x =>
+              x.name.toLowerCase().includes(search.toLowerCase()),
             )
             .map(group => (
               <button
                 key={group.id}
                 disabled={busy}
-                className={`hdgp-group ${
-                  selected?.id === group.id ? 'selected' : ''
-                }`}
+                className={
+                  `hdgp-group ${selected?.id === group.id ? 'selected' : ''}`
+                }
                 onClick={() => choose(group)}
               >
                 <strong>{group.name}</strong>
@@ -457,7 +476,6 @@ export function HelpdeskSpecialtiesPage() {
                   {group.tasks.length} tareas ·{' '}
                   {group.technicians.length} técnicos
                 </span>
-                {!group.isActive && <small>Inactivo</small>}
               </button>
             ))}
 
@@ -468,7 +486,9 @@ export function HelpdeskSpecialtiesPage() {
 
         <section className="hdgp-editor">
           {loading && (
-            <div className="hdgp-panel">Cargando configuración…</div>
+            <div className="hdgp-panel">
+              Cargando configuración…
+            </div>
           )}
 
           {!loading && !selected && (
@@ -488,31 +508,42 @@ export function HelpdeskSpecialtiesPage() {
                         'Grupo de atención de tickets.'}
                     </p>
                   </div>
-                  <span className="hdgp-tag">
-                    {selected.isActive ? 'Activo' : 'Inactivo'}
-                  </span>
+
+                  <div className="hdgp-actions">
+                    <span className="hdgp-tag">Activo</span>
+                    <button
+                      className="hdgp-remove"
+                      onClick={() => void remove()}
+                    >
+                      Eliminar grupo
+                    </button>
+                  </div>
                 </div>
 
                 <details open>
-                  <summary>1. Tareas y equipos que atiende</summary>
+                  <summary>
+                    1. Tareas y equipos que atiende
+                  </summary>
                   <p>
-                    Agrega las tareas individualmente o separadas por
-                    comas.
+                    Agrega las tareas individualmente
+                    o separadas por comas.
                   </p>
 
                   <div className="hdgp-inline">
                     <input
                       value={task}
                       placeholder="Telefonía, cableado, RP4, mouse, monitor…"
-                      onChange={event => setTask(event.target.value)}
-                      onKeyDown={event => {
-                        if (event.key === 'Enter') {
-                          event.preventDefault()
+                      onChange={e => setTask(e.target.value)}
+                      onKeyDown={e => {
+                        if (e.key === 'Enter') {
+                          e.preventDefault()
                           addTask()
                         }
                       }}
                     />
-                    <button onClick={addTask}>Agregar tareas</button>
+                    <button onClick={addTask}>
+                      Agregar tareas
+                    </button>
                   </div>
 
                   <div className="hdgp-chips">
@@ -521,13 +552,11 @@ export function HelpdeskSpecialtiesPage() {
                         {value}
                         <button
                           aria-label={`Quitar ${value}`}
-                          onClick={() =>
-                            update({
-                              tasks: selected.tasks.filter(
-                                item => item !== value,
-                              ),
-                            })
-                          }
+                          onClick={() => update({
+                            tasks: selected.tasks.filter(
+                              x => x !== value,
+                            ),
+                          })}
                         >
                           ×
                         </button>
@@ -541,8 +570,8 @@ export function HelpdeskSpecialtiesPage() {
                 <details open>
                   <summary>2. Zonas de cobertura</summary>
                   <p>
-                    El grupo puede cubrir varias zonas. La ubicación del
-                    técnico se configura en Ubicaciones y usuarios.
+                    La ubicación del técnico se configura
+                    en Ubicaciones y usuarios.
                   </p>
 
                   <div className="hdgp-zones">
@@ -551,16 +580,15 @@ export function HelpdeskSpecialtiesPage() {
                         <input
                           type="checkbox"
                           checked={selected.zoneIds.includes(zone.id)}
-                          onChange={event =>
-                            update({
-                              zoneIds: event.target.checked
-                                ? [...selected.zoneIds, zone.id]
-                                : selected.zoneIds.filter(
-                                    id => id !== zone.id,
-                                  ),
-                            })
-                          }
+                          onChange={e => update({
+                            zoneIds: e.target.checked
+                              ? [...selected.zoneIds, zone.id]
+                              : selected.zoneIds.filter(
+                                  id => id !== zone.id,
+                                ),
+                          })}
                         />
+
                         <span>
                           {zone.name}
                           <small>{zone.type}</small>
@@ -582,78 +610,82 @@ export function HelpdeskSpecialtiesPage() {
 
               <section className="hdgp-panel">
                 <details open>
-                  <summary>3. Técnicos, prioridad y relevos</summary>
+                  <summary>
+                    3. Técnicos, prioridad y relevos
+                  </summary>
                   <p>
-                    Prioridad 1: principal. Prioridad 2: siguiente o
-                    relevo. Se comprueba horario, disponibilidad y
-                    capacidad.
+                    Prioridad 1: principal. Prioridad 2: relevo.
+                    Se comprueba horario, disponibilidad y capacidad.
                   </p>
 
                   <div className="hdgp-inline">
                     <select
                       aria-label="Técnico para agregar"
                       value={staffId}
-                      onChange={event => setStaffId(event.target.value)}
+                      onChange={e => setStaffId(e.target.value)}
                     >
-                      <option value="">Selecciona un técnico…</option>
+                      <option value="">
+                        Selecciona un técnico…
+                      </option>
+
                       {catalog.users
-                        .filter(
-                          user =>
-                            user.eligible &&
-                            !selected.technicians.some(
-                              technician =>
-                                technician.userId === user.id,
-                            ),
+                        .filter(u =>
+                          u.eligible &&
+                          !selected.technicians.some(
+                            x => x.userId === u.id,
+                          ),
                         )
-                        .map(user => (
-                          <option key={user.id} value={user.id}>
-                            {user.name} · {user.email}
+                        .map(u => (
+                          <option key={u.id} value={u.id}>
+                            {u.name} · {u.email}
                           </option>
                         ))}
                     </select>
 
-                    <button disabled={!staffId} onClick={addTech}>
+                    <button
+                      disabled={!staffId}
+                      onClick={addTech}
+                    >
                       Agregar técnico
                     </button>
                   </div>
 
                   <div className="hdgp-technicians">
-                    {selected.technicians.map(technician => {
+                    {selected.technicians.map(t => {
                       const user = catalog.users.find(
-                        item => item.id === technician.userId,
+                        x => x.id === t.userId,
                       )
 
                       const location =
                         user?.zoneIds.length === 1
                           ? catalog.zones.find(
-                              zone => zone.id === user.zoneIds[0],
+                              x => x.id === user.zoneIds[0],
                             )?.name
                           : undefined
 
-                      const updateSlot = (
+                      const slot = (
                         index: number,
                         patch: Partial<Slot>,
-                      ) =>
-                        updateTech(technician.userId, {
-                          slots: technician.slots.map((slot, position) =>
-                            position === index
-                              ? { ...slot, ...patch }
-                              : slot,
-                          ),
-                        })
+                      ) => tech(t.userId, {
+                        slots: t.slots.map((x, i) =>
+                          i === index ? { ...x, ...patch } : x,
+                        ),
+                      })
 
                       return (
                         <article
                           className="hdgp-technician"
-                          key={technician.userId}
+                          key={t.userId}
                         >
                           <div className="hdgp-title">
                             <div>
                               <h3>
-                                {user?.name ?? 'Cuenta no disponible'}
+                                {user?.name ??
+                                  'Cuenta no disponible'}
                               </h3>
                               <small>
-                                {location ?? 'Ubicación sin confirmar'} ·{' '}
+                                {location ??
+                                  'Ubicación sin confirmar'} ·{' '}
                                 {user?.email}
                               </small>
                             </div>
@@ -661,18 +693,14 @@ export function HelpdeskSpecialtiesPage() {
                             <button
                               className="hdgp-remove"
                               onClick={() => {
-                                if (
-                                  window.confirm(
-                                    '¿Quitar este técnico del grupo? ' +
-                                      'Su cuenta no se elimina.',
-                                  )
-                                ) {
+                                if (window.confirm(
+                                  '¿Quitar este técnico del grupo? ' +
+                                  'Su cuenta no se elimina.',
+                                )) {
                                   update({
                                     technicians:
                                       selected.technicians.filter(
-                                        item =>
-                                          item.userId !==
-                                          technician.userId,
+                                        x => x.userId !== t.userId,
                                       ),
                                   })
                                 }
@@ -696,12 +724,10 @@ export function HelpdeskSpecialtiesPage() {
                                 type="number"
                                 min={1}
                                 max={100}
-                                value={technician.priority}
-                                onChange={event =>
-                                  updateTech(technician.userId, {
-                                    priority: Number(event.target.value),
-                                  })
-                                }
+                                value={t.priority}
+                                onChange={e => tech(t.userId, {
+                                  priority: Number(e.target.value),
+                                })}
                               />
                             </label>
 
@@ -711,38 +737,31 @@ export function HelpdeskSpecialtiesPage() {
                                 type="number"
                                 min={1}
                                 max={500}
-                                value={technician.maxOpenTickets}
-                                onChange={event =>
-                                  updateTech(technician.userId, {
-                                    maxOpenTickets: Number(
-                                      event.target.value,
-                                    ),
-                                  })
-                                }
+                                value={t.maxOpenTickets}
+                                onChange={e => tech(t.userId, {
+                                  maxOpenTickets:
+                                    Number(e.target.value),
+                                })}
                               />
                             </label>
 
                             <label>
                               Zona horaria
                               <input
-                                value={technician.timeZoneId}
-                                onChange={event =>
-                                  updateTech(technician.userId, {
-                                    timeZoneId: event.target.value,
-                                  })
-                                }
+                                value={t.timeZoneId}
+                                onChange={e => tech(t.userId, {
+                                  timeZoneId: e.target.value,
+                                })}
                               />
                             </label>
 
                             <label className="hdgp-check">
                               <input
                                 type="checkbox"
-                                checked={technician.isAvailable}
-                                onChange={event =>
-                                  updateTech(technician.userId, {
-                                    isAvailable: event.target.checked,
-                                  })
-                                }
+                                checked={t.isAvailable}
+                                onChange={e => tech(t.userId, {
+                                  isAvailable: e.target.checked,
+                                })}
                               />
                               Disponible para trabajar
                             </label>
@@ -751,14 +770,12 @@ export function HelpdeskSpecialtiesPage() {
                               <input
                                 type="checkbox"
                                 checked={
-                                  technician.acceptsAutomaticAssignments
+                                  t.acceptsAutomaticAssignments
                                 }
-                                onChange={event =>
-                                  updateTech(technician.userId, {
-                                    acceptsAutomaticAssignments:
-                                      event.target.checked,
-                                  })
-                                }
+                                onChange={e => tech(t.userId, {
+                                  acceptsAutomaticAssignments:
+                                    e.target.checked,
+                                })}
                               />
                               Recibe asignaciones automáticas
                             </label>
@@ -766,25 +783,27 @@ export function HelpdeskSpecialtiesPage() {
 
                           <h4>Horario semanal</h4>
                           <p>
-                            La hora final queda excluida. Si termina
-                            antes de empezar, continúa al día siguiente.
+                            La hora final queda excluida.
+                            Si termina antes de empezar,
+                            continúa al día siguiente.
                           </p>
 
                           <div className="hdgp-slots">
-                            {technician.slots.map((slot, index) => (
-                              <div className="hdgp-slot" key={index}>
+                            {t.slots.map((s, index) => (
+                              <div
+                                className="hdgp-slot"
+                                key={index}
+                              >
                                 <select
                                   aria-label="Día"
-                                  value={slot.day}
-                                  onChange={event =>
-                                    updateSlot(index, {
-                                      day: Number(event.target.value),
-                                    })
-                                  }
+                                  value={s.day}
+                                  onChange={e => slot(index, {
+                                    day: Number(e.target.value),
+                                  })}
                                 >
-                                  {days.map((day, value) => (
-                                    <option key={day} value={value}>
-                                      {day}
+                                  {days.map((d, value) => (
+                                    <option key={d} value={value}>
+                                      {d}
                                     </option>
                                   ))}
                                 </select>
@@ -793,12 +812,10 @@ export function HelpdeskSpecialtiesPage() {
                                   Desde
                                   <input
                                     type="time"
-                                    value={slot.start}
-                                    onChange={event =>
-                                      updateSlot(index, {
-                                        start: event.target.value,
-                                      })
-                                    }
+                                    value={s.start}
+                                    onChange={e => slot(index, {
+                                      start: e.target.value,
+                                    })}
                                   />
                                 </label>
 
@@ -806,25 +823,20 @@ export function HelpdeskSpecialtiesPage() {
                                   Hasta
                                   <input
                                     type="time"
-                                    value={slot.end}
-                                    onChange={event =>
-                                      updateSlot(index, {
-                                        end: event.target.value,
-                                      })
-                                    }
+                                    value={s.end}
+                                    onChange={e => slot(index, {
+                                      end: e.target.value,
+                                    })}
                                   />
                                 </label>
 
                                 <button
                                   aria-label="Quitar franja"
-                                  onClick={() =>
-                                    updateTech(technician.userId, {
-                                      slots: technician.slots.filter(
-                                        (_, position) =>
-                                          position !== index,
-                                      ),
-                                    })
-                                  }
+                                  onClick={() => tech(t.userId, {
+                                    slots: t.slots.filter(
+                                      (_, i) => i !== index,
+                                    ),
+                                  })}
                                 >
                                   Quitar
                                 </button>
@@ -834,19 +846,17 @@ export function HelpdeskSpecialtiesPage() {
 
                           <div className="hdgp-actions">
                             <button
-                              disabled={technician.slots.length >= 28}
-                              onClick={() =>
-                                updateTech(technician.userId, {
-                                  slots: [
-                                    ...technician.slots,
-                                    {
-                                      day: 1,
-                                      start: '08:00',
-                                      end: '17:00',
-                                    },
-                                  ],
-                                })
-                              }
+                              disabled={t.slots.length >= 28}
+                              onClick={() => tech(t.userId, {
+                                slots: [
+                                  ...t.slots,
+                                  {
+                                    day: 1,
+                                    start: '08:00',
+                                    end: '17:00',
+                                  },
+                                ],
+                              })}
                             >
                               Agregar franja
                             </button>
@@ -854,14 +864,14 @@ export function HelpdeskSpecialtiesPage() {
                             <button
                               onClick={() => {
                                 if (
-                                  !technician.slots.length ||
+                                  !t.slots.length ||
                                   window.confirm(
                                     '¿Reemplazar el horario por lunes ' +
-                                      'a viernes de 08:00 a 17:00?',
+                                    'a viernes de 08:00 a 17:00?',
                                   )
                                 ) {
-                                  updateTech(technician.userId, {
-                                    slots: defaultSlots(),
+                                  tech(t.userId, {
+                                    slots: defaults(),
                                   })
                                 }
                               }}
@@ -872,7 +882,7 @@ export function HelpdeskSpecialtiesPage() {
                             <span className="hdgp-tag">
                               {dirty
                                 ? 'Cambios pendientes'
-                                : technician.onDuty
+                                : t.onDuty
                                   ? 'Dentro de horario'
                                   : 'Fuera de horario o sin configurar'}
                             </span>
@@ -883,7 +893,9 @@ export function HelpdeskSpecialtiesPage() {
                   </div>
 
                   {!selected.technicians.length && (
-                    <p>Agrega el principal y los relevos necesarios.</p>
+                    <p>
+                      Agrega el principal y los relevos necesarios.
+                    </p>
                   )}
                 </details>
               </section>
@@ -894,6 +906,7 @@ export function HelpdeskSpecialtiesPage() {
                     ? 'Cambios pendientes de guardar'
                     : 'Configuración cargada'}
                 </span>
+
                 <button
                   className="hdgp-primary"
                   disabled={!dirty}

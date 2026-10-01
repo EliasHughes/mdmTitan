@@ -1,9 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useState,
-  type FormEvent,
-} from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import {
   ArrowRight,
@@ -12,23 +7,16 @@ import {
   RefreshCw,
   Search,
   Users,
-  X,
 } from 'lucide-react'
 import apiClient from '../../api/apiClient'
-import { helpdeskApi } from '../../api/helpdeskApi'
 import { useAuth } from '../../auth/AuthContext'
-import {
-  HelpdeskCategorySelect,
-} from './HelpdeskCategorySelect'
+import { HelpdeskCreateRequest } from './HelpdeskCreateRequest'
 import './HelpdeskPages.css'
 import './HelpdeskWorkPage.css'
 
-type View =
-  | 'mine'
-  | 'unassigned'
-  | 'all'
+type View = 'mine' | 'unassigned' | 'all'
 
-interface WorkTicket {
+type Ticket = {
   id: string
   number: string
   subject: string
@@ -41,35 +29,29 @@ interface WorkTicket {
   slaBreached: boolean
 }
 
-interface WorkResult {
-  items: WorkTicket[]
+type Result = {
+  items: Ticket[]
   total: number
-  page: number
-  pageSize: number
 }
 
-interface AgentLoad {
-  userId: string
-  name: string
-  openTickets: number
-  isAvailable: boolean
-  capacity: number
-}
-
-interface Workload {
+type Workload = {
   assignedToMe: number
   unassigned: number
   active: number
-  agents: AgentLoad[]
+  agents: {
+    userId: string
+    name: string
+    openTickets: number
+    isAvailable: boolean
+    capacity: number
+  }[]
 }
-
-const PAGE_SIZE = 25
 
 const STATUS: Record<string, string> = {
   new: 'Nuevo',
-  open: 'En proceso',
-  pendinguser:
-    'En espera del usuario',
+  open: 'Abierto',
+  inprogress: 'En proceso',
+  pendinguser: 'En espera del usuario',
   resolved: 'Resuelto',
   closed: 'Cerrado',
 }
@@ -81,236 +63,105 @@ const PRIORITY: Record<string, string> = {
   urgent: 'Urgente',
 }
 
-function formatDate(value: string) {
-  const date = new Date(value)
+function date(value: string) {
+  const parsed = new Date(
+    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : value + 'Z',
+  )
 
-  return Number.isNaN(date.getTime())
+  return Number.isNaN(parsed.getTime())
     ? '—'
-    : new Intl.DateTimeFormat(
-        'es-DO',
-        {
-          dateStyle: 'short',
-          timeStyle: 'short',
-        },
-      ).format(date)
+    : new Intl.DateTimeFormat('es-DO', {
+        dateStyle: 'short',
+        timeStyle: 'short',
+      }).format(parsed)
 }
 
 export function HelpdeskInboxPage() {
   const navigate = useNavigate()
   const { user } = useAuth()
 
-  const [view, setView] =
-    useState<View>('mine')
-  const [tickets, setTickets] =
-    useState<WorkTicket[]>([])
-  const [workload, setWorkload] =
-    useState<Workload | null>(null)
-  const [total, setTotal] =
-    useState(0)
-  const [page, setPage] =
-    useState(1)
-  const [
-    searchInput,
-    setSearchInput,
-  ] = useState('')
-  const [search, setSearch] =
-    useState('')
-  const [status, setStatus] =
-    useState('')
-  const [
-    priorityFilter,
-    setPriorityFilter,
-  ] = useState('')
-  const [loading, setLoading] =
-    useState(true)
-  const [
-    workloadError,
-    setWorkloadError,
-  ] = useState(false)
-  const [error, setError] =
-    useState('')
-  const [
-    showCreate,
-    setShowCreate,
-  ] = useState(false)
-  const [creating, setCreating] =
-    useState(false)
-  const [subject, setSubject] =
-    useState('')
-  const [
-    description,
-    setDescription,
-  ] = useState('')
-  const [type, setType] =
-    useState('incident')
-  const [priority, setPriority] =
-    useState('medium')
-  const [category, setCategory] =
-    useState('general')
+  const [view, setView] = useState<View>('mine')
+  const [tickets, setTickets] = useState<Ticket[]>([])
+  const [workload, setWorkload] = useState<Workload | null>(null)
+  const [total, setTotal] = useState(0)
+  const [page, setPage] = useState(1)
+  const [input, setInput] = useState('')
+  const [search, setSearch] = useState('')
+  const [status, setStatus] = useState('')
+  const [priority, setPriority] = useState('')
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState('')
+  const [workloadError, setWorkloadError] = useState(false)
+  const [showCreate, setShowCreate] = useState(false)
 
   const canCreate =
-    user?.permissions?.includes(
-      'tickets.create',
-    ) ?? false
+    user?.permissions?.includes('tickets.create') ?? false
 
-  const pageCount = Math.max(
-    1,
-    Math.ceil(total / PAGE_SIZE),
-  )
+  const pages = Math.max(1, Math.ceil(total / 25))
 
-  const openTicket = (id: string) =>
-    navigate(
-      `/helpdesk/tickets/${id}?workspace=helpdesk`,
-    )
+  const open = (id: string) =>
+    navigate(`/helpdesk/tickets/${id}?workspace=helpdesk`)
 
-  const loadTickets =
-    useCallback(async () => {
-      setLoading(true)
-      setError('')
+  const load = useCallback(async () => {
+    setLoading(true)
+    setError('')
 
-      try {
-        const response =
-          await apiClient.get<WorkResult>(
-            '/helpdesk/workload/tickets',
-            {
-              params: {
-                view,
-                search:
-                  search ||
-                  undefined,
-                status:
-                  status ||
-                  undefined,
-                priority:
-                  priorityFilter ||
-                  undefined,
-                page,
-                pageSize:
-                  PAGE_SIZE,
-              },
-            },
-          )
+    try {
+      const { data } = await apiClient.get<Result>(
+        '/helpdesk/workload/tickets',
+        {
+          params: {
+            view,
+            search: search || undefined,
+            status: status || undefined,
+            priority: priority || undefined,
+            page,
+            pageSize: 25,
+          },
+        },
+      )
 
-        setTickets(
-          response.data.items,
-        )
-        setTotal(
-          response.data.total,
-        )
-      } catch {
-        setTickets([])
-        setTotal(0)
-        setError(
-          'No se pudieron cargar las solicitudes.',
-        )
-      } finally {
-        setLoading(false)
-      }
-    }, [
-      view,
-      search,
-      status,
-      priorityFilter,
-      page,
-    ])
+      setTickets(data.items)
+      setTotal(data.total)
+    } catch {
+      setTickets([])
+      setTotal(0)
+      setError('No se pudieron cargar las solicitudes.')
+    } finally {
+      setLoading(false)
+    }
+  }, [view, search, status, priority, page])
 
-  const loadWorkload =
-    useCallback(async () => {
-      try {
-        const response =
-          await apiClient.get<Workload>(
-            '/helpdesk/workload',
-          )
+  const loadWorkload = useCallback(async () => {
+    try {
+      const { data } = await apiClient.get<Workload>(
+        '/helpdesk/workload',
+      )
 
-        setWorkload(
-          response.data,
-        )
-        setWorkloadError(
-          false,
-        )
-      } catch {
-        setWorkload(null)
-        setWorkloadError(
-          true,
-        )
-      }
-    }, [])
+      setWorkload(data)
+      setWorkloadError(false)
+    } catch {
+      setWorkload(null)
+      setWorkloadError(true)
+    }
+  }, [])
 
   useEffect(() => {
-    void loadTickets()
-  }, [loadTickets])
+    void load()
+  }, [load])
 
   useEffect(() => {
     void loadWorkload()
   }, [loadWorkload])
 
-  function refresh() {
-    void loadTickets()
+  const refresh = () => {
+    void load()
     void loadWorkload()
   }
 
-  function changeView(
-    next: View,
-  ) {
-    setView(next)
+  const apply = () => {
+    setSearch(input.trim())
     setPage(1)
-  }
-
-  function applySearch() {
-    setPage(1)
-    setSearch(
-      searchInput.trim(),
-    )
-  }
-
-  function clearFilters() {
-    setSearchInput('')
-    setSearch('')
-    setStatus('')
-    setPriorityFilter('')
-    setPage(1)
-  }
-
-  async function createTicket(
-    event: FormEvent<HTMLFormElement>,
-  ) {
-    event.preventDefault()
-
-    if (
-      !canCreate ||
-      !subject.trim() ||
-      !description.trim() ||
-      creating
-    ) {
-      return
-    }
-
-    setCreating(true)
-    setError('')
-
-    try {
-      const ticket =
-        await helpdeskApi.createTicket({
-          subject:
-            subject.trim(),
-          description:
-            description.trim(),
-          type,
-          priority,
-          category,
-          source:
-            'console',
-        })
-
-      setShowCreate(false)
-      openTicket(ticket.id)
-    } catch {
-      setError(
-        'No se pudo crear el ticket. Revisa los datos.',
-      )
-    } finally {
-      setCreating(false)
-    }
   }
 
   return (
@@ -318,86 +169,60 @@ export function HelpdeskInboxPage() {
       <header className="helpdesk-inbox__header">
         <div>
           <span className="helpdesk-inbox__eyebrow">
-            <ClipboardList size={15} />
-            Operación TIC
+            <ClipboardList size={15} /> Operación TIC
           </span>
-
-          <h1>
-            Mesa de ayuda
-          </h1>
-
-          <p>
-            Atiende solicitudes
-            y revisa los casos
-            sin asignar.
-          </p>
+          <h1>Mesa de ayuda</h1>
+          <p>Atiende solicitudes y revisa los casos sin asignar.</p>
         </div>
 
         <div className="helpdesk-inbox__header-actions">
           <button
-            type="button"
             className="helpdesk-ui-button helpdesk-ui-button--secondary"
             onClick={() =>
-              navigate(
-                '/helpdesk/reportes?workspace=helpdesk',
-              )
+              navigate('/helpdesk/centro/kpis?workspace=helpdesk')
             }
           >
-            Gráficos y KPI
+            KPI
           </button>
 
           <button
-            type="button"
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
+            onClick={() =>
+              navigate('/helpdesk/centro/graficos?workspace=helpdesk')
+            }
+          >
+            Gráficos
+          </button>
+
+          <button
             className="helpdesk-ui-button helpdesk-ui-button--secondary"
             disabled={loading}
             onClick={refresh}
           >
-            <RefreshCw
-              size={16}
-            />
-            Actualizar
+            <RefreshCw size={16} /> Actualizar
           </button>
 
           {canCreate && (
             <button
-              type="button"
               className="helpdesk-ui-button helpdesk-ui-button--primary"
-              onClick={() =>
-                setShowCreate(
-                  true,
-                )
-              }
+              onClick={() => setShowCreate(true)}
             >
-              <Plus size={16} />
-              Nuevo ticket
+              <Plus size={16} /> Nuevo ticket
             </button>
           )}
         </div>
       </header>
 
       {error && (
-        <div
-          className="helpdesk-inbox__error"
-          role="alert"
-        >
+        <div className="helpdesk-inbox__error" role="alert">
           {error}
-
-          <button
-            type="button"
-            onClick={refresh}
-          >
-            Reintentar
-          </button>
+          <button onClick={refresh}>Reintentar</button>
         </div>
       )}
 
       {workloadError && (
-        <div
-          className="helpdesk-inbox__error"
-          role="alert"
-        >
-          La carga del equipo
-          no está disponible.
+        <div className="helpdesk-inbox__error" role="alert">
+          La carga del equipo no está disponible.
         </div>
       )}
 
@@ -405,61 +230,24 @@ export function HelpdeskInboxPage() {
         className="helpdesk-work__tabs"
         aria-label="Bandejas de tickets"
       >
-        {(
-          [
-            [
-              'mine',
-              'Mi trabajo',
-              workload
-                ?.assignedToMe,
-            ],
-            [
-              'unassigned',
-              'Sin asignar',
-              workload
-                ?.unassigned,
-            ],
-            [
-              'all',
-              'Todas',
-              workload
-                ?.active,
-            ],
-          ] as const
-        ).map(
-          ([
-            key,
-            label,
-            count,
-          ]) => (
-            <button
-              type="button"
-              key={key}
-              className={
-                view === key
-                  ? 'is-active'
-                  : ''
-              }
-              aria-pressed={
-                view === key
-              }
-              onClick={() =>
-                changeView(
-                  key,
-                )
-              }
-            >
-              {label}
-
-              {count !==
-                undefined && (
-                <strong>
-                  {count}
-                </strong>
-              )}
-            </button>
-          ),
-        )}
+        {([
+          ['mine', 'Mi trabajo', workload?.assignedToMe],
+          ['unassigned', 'Sin asignar', workload?.unassigned],
+          ['all', 'Todas', workload?.active],
+        ] as const).map(([key, label, count]) => (
+          <button
+            key={key}
+            className={view === key ? 'is-active' : ''}
+            aria-pressed={view === key}
+            onClick={() => {
+              setView(key)
+              setPage(1)
+            }}
+          >
+            {label}
+            {count !== undefined && <strong>{count}</strong>}
+          </button>
+        ))}
       </nav>
 
       <div className="helpdesk-work__layout">
@@ -470,178 +258,81 @@ export function HelpdeskInboxPage() {
           <div className="helpdesk-inbox__panel-heading">
             <div>
               <h2>
-                {view ===
-                'mine'
+                {view === 'mine'
                   ? 'Asignadas a mí'
-                  : view ===
-                      'unassigned'
+                  : view === 'unassigned'
                     ? 'Sin asignar'
                     : 'Todas las solicitudes'}
               </h2>
-
-              <p>
-                Abre un caso
-                para atenderlo
-                y consultar su
-                historial.
-              </p>
+              <p>Abre un caso para atenderlo y consultar su historial.</p>
             </div>
-
             <span className="helpdesk-inbox__total">
-              {total}{' '}
-              resultados
+              {total} resultados
             </span>
           </div>
 
           <div className="helpdesk-inbox__filters">
             <label className="helpdesk-inbox__search">
-              <Search
-                size={17}
-              />
-
-              <span className="sr-only">
-                Buscar
-              </span>
-
+              <Search size={17} />
+              <span className="sr-only">Buscar</span>
               <input
-                value={
-                  searchInput
-                }
-                onChange={(
-                  event,
-                ) =>
-                  setSearchInput(
-                    event.target.value,
-                  )
-                }
-                onKeyDown={(
-                  event,
-                ) => {
-                  if (
-                    event.key ===
-                    'Enter'
-                  ) {
-                    applySearch()
-                  }
+                value={input}
+                onChange={e => setInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') apply()
                 }}
                 placeholder="Número, asunto o categoría"
               />
             </label>
 
             <label>
-              <span className="sr-only">
-                Estado
-              </span>
-
+              <span className="sr-only">Estado</span>
               <select
-                value={
-                  status
-                }
-                onChange={(
-                  event,
-                ) => {
-                  setStatus(
-                    event.target.value,
-                  )
-                  setPage(
-                    1,
-                  )
+                value={status}
+                onChange={e => {
+                  setStatus(e.target.value)
+                  setPage(1)
                 }}
               >
-                <option value="">
-                  Todos los
-                  estados
-                </option>
-
-                {Object.entries(
-                  STATUS,
-                ).map(
-                  ([
-                    value,
-                    label,
-                  ]) => (
-                    <option
-                      key={
-                        value
-                      }
-                      value={
-                        value
-                      }
-                    >
-                      {
-                        label
-                      }
-                    </option>
-                  ),
-                )}
+                <option value="">Todos los estados</option>
+                {Object.entries(STATUS).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
               </select>
             </label>
 
             <label>
-              <span className="sr-only">
-                Prioridad
-              </span>
-
+              <span className="sr-only">Prioridad</span>
               <select
-                value={
-                  priorityFilter
-                }
-                onChange={(
-                  event,
-                ) => {
-                  setPriorityFilter(
-                    event.target.value,
-                  )
-                  setPage(
-                    1,
-                  )
+                value={priority}
+                onChange={e => {
+                  setPriority(e.target.value)
+                  setPage(1)
                 }}
               >
-                <option value="">
-                  Todas las
-                  prioridades
-                </option>
-
-                {Object.entries(
-                  PRIORITY,
-                ).map(
-                  ([
-                    value,
-                    label,
-                  ]) => (
-                    <option
-                      key={
-                        value
-                      }
-                      value={
-                        value
-                      }
-                    >
-                      {
-                        label
-                      }
-                    </option>
-                  ),
-                )}
+                <option value="">Todas las prioridades</option>
+                {Object.entries(PRIORITY).map(([key, label]) => (
+                  <option key={key} value={key}>{label}</option>
+                ))}
               </select>
             </label>
 
             <button
-              type="button"
               className="helpdesk-ui-button helpdesk-ui-button--secondary"
-              onClick={
-                applySearch
-              }
+              onClick={apply}
             >
               Buscar
             </button>
 
             <button
-              type="button"
               className="helpdesk-inbox__clear"
-              onClick={
-                clearFilters
-              }
+              onClick={() => {
+                setInput('')
+                setSearch('')
+                setStatus('')
+                setPriority('')
+                setPage(1)
+              }}
             >
               Limpiar
             </button>
@@ -651,222 +342,88 @@ export function HelpdeskInboxPage() {
             <table className="helpdesk-inbox__table">
               <thead>
                 <tr>
-                  <th>
-                    Solicitud
-                  </th>
-                  <th>
-                    Estado
-                  </th>
-                  <th>
-                    Prioridad
-                  </th>
-                  <th>
-                    Solicitante
-                  </th>
-                  <th>
-                    Asignado
-                  </th>
-                  <th>
-                    Actualizado
-                  </th>
-                  <th>
-                    <span className="sr-only">
-                      Abrir
-                    </span>
-                  </th>
+                  <th>Solicitud</th>
+                  <th>Estado</th>
+                  <th>Prioridad</th>
+                  <th>Solicitante</th>
+                  <th>Asignado</th>
+                  <th>Actualizado</th>
+                  <th><span className="sr-only">Abrir</span></th>
                 </tr>
               </thead>
 
               <tbody>
                 {loading ? (
                   <tr>
-                    <td
-                      colSpan={
-                        7
-                      }
-                      className="helpdesk-inbox__empty"
-                    >
+                    <td colSpan={7} className="helpdesk-inbox__empty">
                       Cargando…
                     </td>
                   </tr>
-                ) : tickets
-                    .length ===
-                  0 ? (
+                ) : !tickets.length ? (
                   <tr>
-                    <td
-                      colSpan={
-                        7
-                      }
-                      className="helpdesk-inbox__empty"
-                    >
-                      <ClipboardList
-                        size={
-                          27
-                        }
-                      />
-
-                      <strong>
-                        Sin
-                        solicitudes
-                        en esta
-                        vista
-                      </strong>
-
-                      <span>
-                        Prueba
-                        otros
-                        filtros.
-                      </span>
+                    <td colSpan={7} className="helpdesk-inbox__empty">
+                      <ClipboardList size={27} />
+                      <strong>Sin solicitudes en esta vista</strong>
+                      <span>Prueba otros filtros.</span>
                     </td>
                   </tr>
-                ) : (
-                  tickets.map(
-                    (
-                      item,
-                    ) => (
-                      <tr
-                        key={
-                          item.id
+                ) : tickets.map(item => (
+                  <tr key={item.id}>
+                    <td>
+                      <button
+                        className="helpdesk-inbox__ticket-link"
+                        onClick={() => open(item.id)}
+                      >
+                        <span>{item.number}</span>
+                        <strong>{item.subject}</strong>
+                        {item.slaBreached && <small>SLA vencido</small>}
+                      </button>
+                    </td>
+                    <td>
+                      <span
+                        className={
+                          `helpdesk-inbox__badge ` +
+                          `helpdesk-inbox__badge--${item.status}`
                         }
                       >
-                        <td>
-                          <button
-                            type="button"
-                            className="helpdesk-inbox__ticket-link"
-                            onClick={() =>
-                              openTicket(
-                                item.id,
-                              )
-                            }
-                          >
-                            <span>
-                              {
-                                item.number
-                              }
-                            </span>
-
-                            <strong>
-                              {
-                                item.subject
-                              }
-                            </strong>
-
-                            {item.slaBreached && (
-                              <small>
-                                SLA
-                                vencido
-                              </small>
-                            )}
-                          </button>
-                        </td>
-
-                        <td>
-                          <span
-                            className={
-                              `helpdesk-inbox__badge ` +
-                              `helpdesk-inbox__badge--${item.status}`
-                            }
-                          >
-                            {STATUS[
-                              item.status
-                            ] ??
-                              item.status}
-                          </span>
-                        </td>
-
-                        <td>
-                          {PRIORITY[
-                            item.priority
-                          ] ??
-                            item.priority}
-                        </td>
-
-                        <td>
-                          {
-                            item.requesterName
-                          }
-                        </td>
-
-                        <td>
-                          {item.assigneeName ??
-                            'Sin asignar'}
-                        </td>
-
-                        <td>
-                          {formatDate(
-                            item.updatedAtUtc,
-                          )}
-                        </td>
-
-                        <td>
-                          <button
-                            type="button"
-                            className="helpdesk-inbox__open"
-                            aria-label={
-                              `Abrir ` +
-                              item.number
-                            }
-                            onClick={() =>
-                              openTicket(
-                                item.id,
-                              )
-                            }
-                          >
-                            <ArrowRight
-                              size={
-                                17
-                              }
-                            />
-                          </button>
-                        </td>
-                      </tr>
-                    ),
-                  )
-                )}
+                        {STATUS[item.status] ?? item.status}
+                      </span>
+                    </td>
+                    <td>{PRIORITY[item.priority] ?? item.priority}</td>
+                    <td>{item.requesterName}</td>
+                    <td>{item.assigneeName ?? 'Sin asignar'}</td>
+                    <td>{date(item.updatedAtUtc)}</td>
+                    <td>
+                      <button
+                        className="helpdesk-inbox__open"
+                        aria-label={`Abrir ${item.number}`}
+                        onClick={() => open(item.id)}
+                      >
+                        <ArrowRight size={17} />
+                      </button>
+                    </td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </div>
 
           <footer className="helpdesk-inbox__footer">
-            <span>
-              Página {page}
-              {' '}de{' '}
-              {pageCount}
-            </span>
+            <span>Página {page} de {pages}</span>
 
-            <div>
-              <button
-                type="button"
-                disabled={
-                  page <=
-                    1 ||
-                  loading
-                }
-                onClick={() =>
-                  setPage(
-                    page - 1,
-                  )
-                }
-              >
-                Anterior
-              </button>
+            <button
+              disabled={loading || page <= 1}
+              onClick={() => setPage(x => x - 1)}
+            >
+              Anterior
+            </button>
 
-              <button
-                type="button"
-                disabled={
-                  page >=
-                    pageCount ||
-                  loading
-                }
-                onClick={() =>
-                  setPage(
-                    page + 1,
-                  )
-                }
-              >
-                Siguiente
-              </button>
-            </div>
+            <button
+              disabled={loading || page >= pages}
+              onClick={() => setPage(x => x + 1)}
+            >
+              Siguiente
+            </button>
           </footer>
         </section>
 
@@ -875,19 +432,10 @@ export function HelpdeskInboxPage() {
           aria-label="Carga del equipo"
         >
           <div>
-            <Users
-              size={19}
-            />
-
+            <Users size={19} />
             <div>
-              <h2>
-                Equipo TIC
-              </h2>
-
-              <p>
-                Casos activos
-                por agente
-              </p>
+              <h2>Equipo TIC</h2>
+              <p>Casos activos por agente</p>
             </div>
           </div>
 
@@ -897,291 +445,44 @@ export function HelpdeskInboxPage() {
                 ? 'Carga no disponible.'
                 : 'Cargando equipo…'}
             </p>
-          ) : workload
-              .agents
-              .length ===
-            0 ? (
-            <p>
-              Todavía no
-              hay agentes
-              configurados.
-            </p>
-          ) : (
-            workload.agents.map(
-              (
-                agent,
-              ) => (
-                <article
-                  key={
-                    agent.userId
-                  }
+          ) : !workload.agents.length ? (
+            <p>Todavía no hay agentes configurados.</p>
+          ) : workload.agents.map(agent => (
+            <article key={agent.userId}>
+              <div>
+                <strong>{agent.name}</strong>
+                <span
+                  className={agent.isAvailable ? 'is-available' : ''}
                 >
-                  <div>
-                    <strong>
-                      {
-                        agent.name
-                      }
-                    </strong>
-
-                    <span
-                      className={
-                        agent.isAvailable
-                          ? 'is-available'
-                          : ''
-                      }
-                    >
-                      {agent.isAvailable
-                        ? 'Disponible'
-                        : 'No disponible'}
-                    </span>
-                  </div>
-
-                  <p>
-                    {
-                      agent.openTickets
-                    }{' '}
-                    activos ·
-                    capacidad{' '}
-                    {
-                      agent.capacity
-                    }
-                  </p>
-                </article>
-              ),
-            )
-          )}
+                  {agent.isAvailable ? 'Disponible' : 'No disponible'}
+                </span>
+              </div>
+              <p>
+                {agent.openTickets} activos · capacidad {agent.capacity}
+              </p>
+            </article>
+          ))}
 
           <button
-            type="button"
             className="helpdesk-ui-button helpdesk-ui-button--secondary"
             onClick={() =>
-              navigate(
-                '/helpdesk/operations?workspace=helpdesk',
-              )
+              navigate('/helpdesk/operations?workspace=helpdesk')
             }
           >
-            Configurar
-            equipo
+            Configurar equipo
           </button>
         </aside>
       </div>
 
-      {showCreate &&
-        canCreate && (
-        <div
-          className="helpdesk-inbox__overlay"
-          onMouseDown={() =>
-            setShowCreate(
-              false,
-            )
-          }
-        >
-          <section
-            className="helpdesk-inbox__dialog"
-            role="dialog"
-            aria-modal="true"
-            aria-labelledby="new-ticket-title"
-            onMouseDown={(
-              event,
-            ) =>
-              event.stopPropagation()
-            }
-          >
-            <header>
-              <div>
-                <h2 id="new-ticket-title">
-                  Nuevo
-                  ticket
-                </h2>
-
-                <p>
-                  Registra
-                  el caso
-                  para su
-                  asignación.
-                </p>
-              </div>
-
-              <button
-                type="button"
-                aria-label="Cerrar"
-                onClick={() =>
-                  setShowCreate(
-                    false,
-                  )
-                }
-              >
-                <X
-                  size={
-                    18
-                  }
-                />
-              </button>
-            </header>
-
-            <form
-              onSubmit={(
-                event,
-              ) =>
-                void createTicket(
-                  event,
-                )
-              }
-            >
-              <label>
-                Asunto
-                <input
-                  required
-                  maxLength={
-                    250
-                  }
-                  value={
-                    subject
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setSubject(
-                      event.target.value,
-                    )
-                  }
-                />
-              </label>
-
-              <label>
-                Descripción
-                <textarea
-                  required
-                  maxLength={
-                    4000
-                  }
-                  rows={
-                    5
-                  }
-                  value={
-                    description
-                  }
-                  onChange={(
-                    event,
-                  ) =>
-                    setDescription(
-                      event.target.value,
-                    )
-                  }
-                />
-              </label>
-
-              <div className="helpdesk-inbox__form-grid">
-                <label>
-                  Tipo
-                  <select
-                    value={
-                      type
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setType(
-                        event.target.value,
-                      )
-                    }
-                  >
-                    <option value="incident">
-                      Incidente
-                    </option>
-
-                    <option value="request">
-                      Solicitud
-                    </option>
-                  </select>
-                </label>
-
-                <label>
-                  Prioridad
-                  <select
-                    value={
-                      priority
-                    }
-                    onChange={(
-                      event,
-                    ) =>
-                      setPriority(
-                        event.target.value,
-                      )
-                    }
-                  >
-                    {Object.entries(
-                      PRIORITY,
-                    ).map(
-                      ([
-                        value,
-                        label,
-                      ]) => (
-                        <option
-                          key={
-                            value
-                          }
-                          value={
-                            value
-                          }
-                        >
-                          {
-                            label
-                          }
-                        </option>
-                      ),
-                    )}
-                  </select>
-                </label>
-              </div>
-
-              <HelpdeskCategorySelect
-                id="tic-ticket-category"
-                value={
-                  category
-                }
-                onChange={
-                  setCategory
-                }
-                disabled={
-                  creating
-                }
-              />
-
-              <div className="helpdesk-inbox__dialog-actions">
-                <button
-                  type="button"
-                  className="helpdesk-ui-button helpdesk-ui-button--secondary"
-                  onClick={() =>
-                    setShowCreate(
-                      false,
-                    )
-                  }
-                >
-                  Cancelar
-                </button>
-
-                <button
-                  type="submit"
-                  className="helpdesk-ui-button helpdesk-ui-button--primary"
-                  disabled={
-                    creating
-                  }
-                >
-                  <Plus
-                    size={
-                      16
-                    }
-                  />
-
-                  {creating
-                    ? 'Creando…'
-                    : 'Crear ticket'}
-                </button>
-              </div>
-            </form>
-          </section>
-        </div>
+      {showCreate && canCreate && (
+        <HelpdeskCreateRequest
+          console
+          onCancel={() => setShowCreate(false)}
+          onCreated={id => {
+            setShowCreate(false)
+            open(id)
+          }}
+        />
       )}
     </main>
   )

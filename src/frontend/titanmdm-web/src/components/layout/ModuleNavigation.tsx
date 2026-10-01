@@ -16,16 +16,10 @@ import {
   Users,
   type LucideIcon,
 } from 'lucide-react'
-
-import {
-  NavLink,
-  useLocation,
-} from 'react-router-dom'
-
+import { NavLink, useLocation } from 'react-router-dom'
 import { useAuth } from '../../auth/AuthContext'
 import { canUseHelpdeskConsole } from '../../auth/helpdeskAccess'
 import { useWorkspace } from '../../workspace/WorkspaceContext'
-
 import './ModuleNavigation.css'
 
 interface ModuleLink {
@@ -35,207 +29,62 @@ interface ModuleLink {
   permissions?: string[]
 }
 
-function link(
+const link = (
   label: string,
   path: string,
   icon: LucideIcon,
   ...permissions: string[]
-): ModuleLink {
-  return {
-    label,
-    path,
-    icon,
-    permissions,
-  }
-}
+): ModuleLink => ({
+  label,
+  path,
+  icon,
+  permissions,
+})
 
 const windowsLinks: ModuleLink[] = [
-  link(
-    'Resumen',
-    '/dashboard?workspace=windows',
-    Monitor,
-    'dashboard.view',
-  ),
-  link(
-    'Dispositivos',
-    '/devices?workspace=windows',
-    Monitor,
-    'devices.view',
-  ),
-  link(
-    'Grupos',
-    '/groups?workspace=windows',
-    Users,
-    'devices.view',
-  ),
-  link(
-    'Inscripción',
-    '/enrollment?workspace=windows',
-    Smartphone,
-    'enrollment.view',
-  ),
-  link(
-    'Políticas',
-    '/policies?workspace=windows',
-    ClipboardList,
-    'policies.view',
-  ),
-  link(
-    'Aplicaciones',
-    '/apps?workspace=windows',
-    Package,
-    'apps.view',
-  ),
-  link(
-    'Seguridad',
-    '/security?workspace=windows',
-    Shield,
-    'security.view',
-  ),
-  link(
-    'Soporte remoto',
-    '/remote?workspace=windows',
-    Headphones,
-    'remote.view',
-  ),
-  link(
-    'Reportes',
-    '/reports?workspace=windows',
-    FileBarChart,
-    'reports.view',
-  ),
+  link('Resumen', '/dashboard?workspace=windows', Monitor, 'dashboard.view'),
+  link('Dispositivos', '/devices?workspace=windows', Monitor, 'devices.view'),
+  link('Grupos', '/groups?workspace=windows', Users, 'devices.view'),
+  link('Inscripción', '/enrollment?workspace=windows', Smartphone, 'enrollment.view'),
+  link('Políticas', '/policies?workspace=windows', ClipboardList, 'policies.view'),
+  link('Aplicaciones', '/apps?workspace=windows', Package, 'apps.view'),
+  link('Seguridad', '/security?workspace=windows', Shield, 'security.view'),
+  link('Soporte remoto', '/remote?workspace=windows', Headphones, 'remote.view'),
+  link('Reportes', '/reports?workspace=windows', FileBarChart, 'reports.view'),
 ]
 
 const androidLinks: ModuleLink[] = [
-  link(
-    'Resumen',
-    '/dashboard?workspace=android',
-    BarChart3,
-    'dashboard.view',
-  ),
-  link(
-    'Dispositivos',
-    '/devices?workspace=android',
-    Smartphone,
-    'devices.view',
-  ),
-  link(
-    'Inscripción',
-    '/enrollment?workspace=android',
-    Smartphone,
-    'enrollment.view',
-  ),
-  link(
-    'Políticas',
-    '/policies?workspace=android',
-    ClipboardList,
-    'policies.view',
-  ),
-  link(
-    'Aplicaciones',
-    '/apps?workspace=android',
-    Package,
-    'apps.view',
-  ),
-  link(
-    'Kiosk',
-    '/kiosk?workspace=android',
-    Cog,
-    'kiosk.view',
-  ),
-  link(
-    'Geofencing',
-    '/geofencing?workspace=android',
-    MapPin,
-    'geofencing.view',
-  ),
+  link('Resumen', '/dashboard?workspace=android', BarChart3, 'dashboard.view'),
+  link('Dispositivos', '/devices?workspace=android', Smartphone, 'devices.view'),
+  link('Inscripción', '/enrollment?workspace=android', Smartphone, 'enrollment.view'),
+  link('Políticas', '/policies?workspace=android', ClipboardList, 'policies.view'),
+  link('Aplicaciones', '/apps?workspace=android', Package, 'apps.view'),
+  link('Kiosk', '/kiosk?workspace=android', Cog, 'kiosk.view'),
+  link('Geofencing', '/geofencing?workspace=android', MapPin, 'geofencing.view'),
 ]
 
 const helpdeskLinks: ModuleLink[] = [
-  link(
-    'Bandeja TIC',
-    '/helpdesk?workspace=helpdesk',
-    ClipboardList,
-    'helpdesk.view',
-    'tickets.view',
-  ),
-  link(
-    'Mis solicitudes',
-    '/my-support?workspace=helpdesk',
-    UserRound,
-  ),
-  link(
-    'Seguimiento SLA',
-    '/helpdesk/seguimiento?workspace=helpdesk',
-    Headphones,
-    'tickets.comment',
-    'tickets.assign',
-    'helpdesk.manage',
-    'settings.manage',
-  ),
-  link(
-    'Gráficos y KPI',
-    '/helpdesk/reportes?workspace=helpdesk',
-    BarChart3,
-    'helpdesk.view',
-    'tickets.view',
-  ),
-  link(
-    'Zonas y agentes',
-    '/helpdesk/operations?workspace=helpdesk',
-    Users,
-    'helpdesk.manage',
-    'settings.manage',
-  ),
-  link(
-    'Grupos, tareas y turnos',
-    '/helpdesk/especialidades?workspace=helpdesk',
-    Sparkles,
-    'helpdesk.manage',
-    'settings.manage',
-  ),
+  link('Bandeja TIC', '/helpdesk?workspace=helpdesk', ClipboardList, 'helpdesk.view', 'tickets.view'),
+  link('Mis solicitudes', '/my-support?workspace=helpdesk', UserRound),
+  link('Seguimiento SLA', '/helpdesk/seguimiento?workspace=helpdesk', Headphones, 'tickets.comment', 'tickets.assign', 'helpdesk.manage', 'settings.manage'),
+  link('KPI', '/helpdesk/centro/kpis?workspace=helpdesk', BarChart3, 'helpdesk.view', 'helpdesk.manage', 'settings.manage'),
+  link('Gráficos', '/helpdesk/centro/graficos?workspace=helpdesk', BarChart3, 'helpdesk.view', 'tickets.view'),
+  link('Automatización', '/helpdesk/centro/alertas?workspace=helpdesk', Sparkles, 'helpdesk.view', 'helpdesk.manage', 'settings.manage'),
+  link('Configuración Helpdesk', '/helpdesk/centro/configuracion?workspace=helpdesk', Settings, 'helpdesk.manage', 'settings.manage'),
+  link('Zonas y agentes', '/helpdesk/operations?workspace=helpdesk', Users, 'helpdesk.manage', 'settings.manage'),
+  link('Grupos, tareas y turnos', '/helpdesk/especialidades?workspace=helpdesk', Sparkles, 'helpdesk.manage', 'settings.manage'),
 ]
 
 const requesterLinks: ModuleLink[] = [
-  link(
-    'Mis solicitudes',
-    '/my-support?workspace=helpdesk',
-    UserRound,
-  ),
+  link('Mis solicitudes', '/my-support?workspace=helpdesk', UserRound),
 ]
 
 const adminLinks: ModuleLink[] = [
-  link(
-    'General',
-    '/settings?workspace=administration',
-    Settings,
-    'settings.view',
-  ),
-  link(
-    'Usuarios',
-    '/users?workspace=administration',
-    Users,
-    'users.view',
-  ),
-  link(
-    'Roles',
-    '/roles?workspace=administration',
-    Shield,
-    'roles.view',
-  ),
-  link(
-    'Auditoría',
-    '/audit?workspace=administration',
-    ScrollText,
-    'audit.view',
-  ),
-  link(
-    'Entra ID',
-    '/helpdesk/entra?workspace=administration',
-    UserRound,
-    'helpdesk.manage',
-    'settings.manage',
-  ),
+  link('General', '/settings?workspace=administration', Settings, 'settings.view'),
+  link('Usuarios', '/users?workspace=administration', Users, 'users.view'),
+  link('Roles', '/roles?workspace=administration', Shield, 'roles.view'),
+  link('Auditoría', '/audit?workspace=administration', ScrollText, 'audit.view'),
+  link('Entra ID', '/helpdesk/entra?workspace=administration', UserRound, 'helpdesk.manage', 'settings.manage'),
 ]
 
 export function ModuleNavigation() {
@@ -246,9 +95,7 @@ export function ModuleNavigation() {
   if (
     location.pathname === '/ponches' ||
     location.pathname.startsWith('/ponches/')
-  ) {
-    return null
-  }
+  ) return null
 
   const staff = canUseHelpdeskConsole(hasPermission)
 
@@ -262,15 +109,9 @@ export function ModuleNavigation() {
 
   const config =
     workspace === 'windows'
-      ? {
-          title: 'Windows',
-          links: windowsLinks,
-        }
+      ? { title: 'Windows', links: windowsLinks }
       : workspace === 'android'
-        ? {
-            title: 'Android',
-            links: androidLinks,
-          }
+        ? { title: 'Android', links: androidLinks }
         : workspace === 'helpdesk'
           ? {
               title: staff

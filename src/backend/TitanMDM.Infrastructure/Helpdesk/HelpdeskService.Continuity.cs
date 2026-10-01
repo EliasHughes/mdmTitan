@@ -10,259 +10,175 @@ public sealed partial class HelpdeskService
         Guid ticketId,
         CancellationToken cancellationToken = default)
     {
-        var strategy =
-            _db.Database.CreateExecutionStrategy();
-
-        return await strategy.ExecuteAsync(async () =>
+        return await _db.Database.CreateExecutionStrategy()
+            .ExecuteAsync(async () =>
         {
-            await using var transaction =
-                await _db.Database.BeginTransactionAsync(
-                    System.Data.IsolationLevel.Serializable,
+            await using var tx = await _db.Database.BeginTransactionAsync(
+                System.Data.IsolationLevel.Serializable,
+                cancellationToken);
+
+            var ticket = await _db.HelpdeskTickets.AsNoTracking()
+                .FirstOrDefaultAsync(x =>
+                    x.OrganizationId == organizationId &&
+                    x.Id == ticketId &&
+                    x.AssigneeUserId != null &&
+                    x.FirstRespondedAtUtc == null &&
+                    (x.Status == "new" || x.Status == "open"),
                     cancellationToken);
 
-            var ticket = await _db.HelpdeskTickets
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x =>
-                        x.OrganizationId == organizationId &&
-                        x.Id == ticketId &&
-                        x.AssigneeUserId != null &&
-                        x.FirstRespondedAtUtc == null &&
-                        (
-                            x.Status == "new" ||
-                            x.Status == "open"
-                        ),
-                    cancellationToken);
-
-            if (ticket is null)
-                return false;
-
-            // No se utiliza la identidad de un usuario interno
-            // para enrutar solicitudes de remitentes externos.
-            if (!string.IsNullOrWhiteSpace(
-                    ticket.ExternalRequesterEmail))
+            if (ticket is null ||
+                !string.IsNullOrWhiteSpace(ticket.ExternalRequesterEmail))
             {
                 return false;
             }
 
-            var lastAssignment =
-                await _db.HelpdeskTicketEvents
-                    .AsNoTracking()
-                    .Where(
-                        x =>
-                            x.OrganizationId ==
-                                organizationId &&
-                            x.TicketId == ticketId &&
-                            (
-                                x.EventType == "assigned" ||
-                                x.EventType == "auto_assigned" ||
-                                x.EventType == "auto_handover"
-                            ))
-                    .OrderByDescending(
-                        x => x.CreatedAtUtc)
-                    .FirstOrDefaultAsync(
-                        cancellationToken);
+            var last = await _db.HelpdeskTicketEvents.AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == organizationId &&
+                    x.TicketId == ticketId &&
+                    (x.EventType == "assigned" ||
+                     x.EventType == "auto_assigned" ||
+                     x.EventType == "auto_handover"))
+                .OrderByDescending(x => x.CreatedAtUtc)
+                .FirstOrDefaultAsync(cancellationToken);
 
             var now = DateTime.UtcNow;
 
-            if (lastAssignment is null)
-                return false;
-
-            // Una decisión manual del coordinador se conserva.
-            if (lastAssignment.EventType == "assigned")
-                return false;
-
-            // Evita cambios consecutivos de responsable.
-            if (lastAssignment.CreatedAtUtc >
-                now.AddMinutes(-15))
+            if (last is null ||
+                last.EventType == "assigned" ||
+                last.CreatedAtUtc > now.AddMinutes(-15))
             {
                 return false;
             }
 
-            var previousUserId =
-                ticket.AssigneeUserId!.Value;
+            var previousId = ticket.AssigneeUserId!.Value;
 
-            var currentTechnicianAvailable =
-                await TechnicianHasActiveShiftAsync(
-                    organizationId,
-                    previousUserId,
-                    ticket.Category,
-                    now,
-                    cancellationToken);
-
-            if (currentTechnicianAvailable)
-                return false;
-
-            // Reutiliza la misma evaluación de especialidad,
-            // ubicación, cobertura, horario y capacidad.
-            var evaluation =
-                await EvaluateRoutingAsync(
-                    organizationId,
-                    ticket.RequesterUserId,
-                    ticket.Category,
-                    cancellationToken);
-
-            var nextTechnician =
-                evaluation.Candidate;
-
-            if (nextTechnician is null ||
-                nextTechnician.UserId == previousUserId)
+            if (await TechnicianHasActiveShiftAsync(
+                organizationId,
+                previousId,
+                ticket.Category,
+                now,
+                cancellationToken,
+                ticket.RequestedTeamId))
             {
-                // Si no hay relevo apto, conserva al responsable.
-                // Nunca asigna a una persona arbitrariamente.
                 return false;
             }
 
-            // Comprueba que nadie respondió, reasignó o cambió
-            // el ticket mientras se calculaba el relevo.
+            var result = await EvaluateRoutingAsync(
+                organizationId,
+                ticket.RequesterUserId,
+                ticket.Category,
+                cancellationToken,
+                ticket.RequestedTeamId);
+
+            if (result.Candidate is not { } next ||
+                next.UserId == previousId)
+            {
+                return false;
+            }
+
             var changed = await _db.HelpdeskTickets
-                .Where(
-                    x =>
-                        x.OrganizationId == organizationId &&
-                        x.Id == ticketId &&
-                        x.AssigneeUserId == previousUserId &&
-                        x.UpdatedAtUtc == ticket.UpdatedAtUtc &&
-                        x.FirstRespondedAtUtc == null &&
-                        (
-                            x.Status == "new" ||
-                            x.Status == "open"
-                        ))
-                .ExecuteUpdateAsync(
-                    setters => setters
-                        .SetProperty(
-                            x => x.AssigneeUserId,
-                            (Guid?)nextTechnician.UserId)
-                        .SetProperty(
-                            x => x.Status,
-                            "open")
-                        .SetProperty(
-                            x => x.UpdatedAtUtc,
-                            now),
+                .Where(x =>
+                    x.OrganizationId == organizationId &&
+                    x.Id == ticketId &&
+                    x.AssigneeUserId == previousId &&
+                    x.UpdatedAtUtc == ticket.UpdatedAtUtc &&
+                    x.FirstRespondedAtUtc == null &&
+                    (x.Status == "new" || x.Status == "open"))
+                .ExecuteUpdateAsync(s => s
+                    .SetProperty(x => x.AssigneeUserId, (Guid?)next.UserId)
+                    .SetProperty(x => x.Status, "open")
+                    .SetProperty(x => x.UpdatedAtUtc, now),
                     cancellationToken);
 
             if (changed != 1)
                 return false;
 
-            var previousName = await _db.Users
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId == organizationId &&
-                        x.Id == previousUserId)
-                .Select(
-                    x => x.FirstName + " " + x.LastName)
-                .FirstOrDefaultAsync(
-                    cancellationToken);
+            var previousName = await _db.Users.AsNoTracking()
+                .Where(x =>
+                    x.OrganizationId == organizationId &&
+                    x.Id == previousId)
+                .Select(x => x.FirstName + " " + x.LastName)
+                .FirstOrDefaultAsync(cancellationToken);
 
             var summary =
-                $"Relevo automático de " +
-                $"{previousName ?? previousUserId.ToString()} " +
-                $"a {nextTechnician.UserName}: " +
-                "el responsable anterior no tiene un turno " +
-                "habilitado disponible. " +
-                evaluation.Reason;
-
-            if (summary.Length > 500)
-                summary = summary[..500];
+                $"Relevo automático de {previousName ?? previousId.ToString()} " +
+                $"a {next.UserName}: el responsable anterior no tiene turno " +
+                "habilitado disponible. " + result.Reason;
 
             var audit = new HelpdeskTicketEvent(
                 organizationId,
                 ticketId,
                 null,
                 "auto_handover",
-                summary);
+                summary[..Math.Min(500, summary.Length)]);
 
             _db.HelpdeskTicketEvents.Add(audit);
 
             try
             {
-                await _db.SaveChangesAsync(
-                    cancellationToken);
-
-                await transaction.CommitAsync(
-                    cancellationToken);
-
+                await _db.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
                 return true;
             }
             finally
             {
-                // Evita conservar el evento en el seguimiento
-                // de EF si la estrategia debe reintentar.
-                _db.Entry(audit).State =
-                    EntityState.Detached;
+                _db.Entry(audit).State = EntityState.Detached;
             }
         });
     }
 
     private async Task<bool> TechnicianHasActiveShiftAsync(
-        Guid organizationId,
+        Guid org,
         Guid userId,
         string category,
         DateTime now,
-        CancellationToken cancellationToken)
+        CancellationToken ct,
+        Guid? requestedTeamId = null)
     {
-        var eligible = await EligibleTechnicians(
-                organizationId)
-            .AnyAsync(
-                id => id == userId,
-                cancellationToken);
-
-        if (!eligible)
+        if (!await EligibleTechnicians(org).AnyAsync(id => id == userId, ct))
             return false;
 
-        var teams = await _db.HelpdeskTeams
-            .AsNoTracking()
-            .Where(
-                x =>
-                    x.OrganizationId == organizationId &&
-                    x.IsActive)
-            .ToListAsync(
-                cancellationToken);
+        var teams = await _db.HelpdeskTeams.AsNoTracking()
+            .Where(x =>
+                x.OrganizationId == org &&
+                x.IsActive &&
+                (!requestedTeamId.HasValue ||
+                 x.Id == requestedTeamId.Value))
+            .ToListAsync(ct);
 
-        var matchingTeamIds = teams
-            .Where(
-                x =>
-                    x.HandlesCategory(category) ||
-                    (
-                        category == "general" &&
-                        string.IsNullOrWhiteSpace(
-                            x.Categories)
-                    ))
+        var matching = teams
+            .Where(x =>
+                x.HandlesCategory(category) ||
+                (category == "general" &&
+                 string.IsNullOrWhiteSpace(x.Categories)))
             .Select(x => x.Id)
             .ToArray();
 
-        if (matchingTeamIds.Length == 0)
+        if (matching.Length == 0)
             return false;
 
-        var availableTeamIds =
-            await _db.HelpdeskTeamMembers
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId == organizationId &&
-                        x.UserId == userId &&
-                        matchingTeamIds.Contains(x.TeamId) &&
-                        x.IsAvailable &&
-                        x.AcceptsAutomaticAssignments)
-                .Select(x => x.TeamId)
-                .ToArrayAsync(
-                    cancellationToken);
+        var available = await _db.HelpdeskTeamMembers.AsNoTracking()
+            .Where(x =>
+                x.OrganizationId == org &&
+                x.UserId == userId &&
+                matching.Contains(x.TeamId) &&
+                x.IsAvailable &&
+                x.AcceptsAutomaticAssignments)
+            .Select(x => x.TeamId)
+            .ToArrayAsync(ct);
 
-        if (availableTeamIds.Length == 0)
+        if (available.Length == 0)
             return false;
 
-        var schedules =
-            await _db.Set<HelpdeskTechnicianSchedule>()
-                .AsNoTracking()
-                .Where(
-                    x =>
-                        x.OrganizationId == organizationId &&
-                        x.UserId == userId &&
-                        availableTeamIds.Contains(x.TeamId))
-                .ToListAsync(
-                    cancellationToken);
+        var schedules = await _db.Set<HelpdeskTechnicianSchedule>()
+            .AsNoTracking()
+            .Where(x =>
+                x.OrganizationId == org &&
+                x.UserId == userId &&
+                available.Contains(x.TeamId))
+            .ToListAsync(ct);
 
-        return schedules.Any(
-            schedule => schedule.IsOnDuty(now));
+        return schedules.Any(x => x.IsOnDuty(now));
     }
 }
