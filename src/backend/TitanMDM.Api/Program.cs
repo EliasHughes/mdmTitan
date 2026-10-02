@@ -1,16 +1,45 @@
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Api.Hubs;
 using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Security;
 using TitanMDM.Api.Services;
+
 using TitanMDM.Infrastructure.DependencyInjection;
+using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Seed;
 
 var builder = WebApplication.CreateBuilder(args);
 
+// ================================================================
+// ENVIRONMENT / CONFIGURATION
+// ================================================================
+
+var environment = builder.Environment;
+var configuration = builder.Configuration;
+
+var isDevelopment = environment.IsDevelopment();
+
+var applicationName =
+    configuration["Application:Name"]
+    ?? "TitanMDM";
+
+var applicationVersion =
+    configuration["Application:Version"]
+    ?? "1.0.0";
+
+var frontendUrl =
+    configuration["Application:FrontendUrl"];
+
+// ================================================================
+// DATA PROTECTION
+// ================================================================
+
 var keyRingPath =
-    builder.Configuration["DataProtection:KeyRingPath"];
+    configuration["DataProtection:KeyRingPath"];
 
 if (string.IsNullOrWhiteSpace(keyRingPath))
 {
@@ -29,88 +58,113 @@ builder.Services
     .PersistKeysToFileSystem(
         new DirectoryInfo(keyRingPath));
 
+// ================================================================
+// MVC / API
+// ================================================================
+
 builder.Services.AddControllers(
     options =>
     {
         options.Filters.Add<HelpdeskAudienceFilter>();
     });
 
-builder.Services.AddOpenApi();
+if (isDevelopment)
+{
+    builder.Services.AddOpenApi();
+}
+
+// ================================================================
+// SIGNALR
+// ================================================================
 
 builder.Services.AddSignalR(
     options =>
     {
         options.MaximumReceiveMessageSize =
-            8 * 1024 * 1024;
+            configuration.GetValue<long?>(
+                "SignalR:MaximumReceiveMessageSizeBytes")
+            ?? 8L * 1024L * 1024L;
 
-        options.EnableDetailedErrors = true;
+        // Nunca exponer excepciones internas en producción.
+        options.EnableDetailedErrors =
+            isDevelopment &&
+            configuration.GetValue<bool>(
+                "SignalR:EnableDetailedErrors");
 
         options.KeepAliveInterval =
-            TimeSpan.FromSeconds(10);
+            TimeSpan.FromSeconds(
+                configuration.GetValue<int?>(
+                    "SignalR:KeepAliveSeconds")
+                ?? 10);
 
         options.ClientTimeoutInterval =
-            TimeSpan.FromSeconds(30);
+            TimeSpan.FromSeconds(
+                configuration.GetValue<int?>(
+                    "SignalR:ClientTimeoutSeconds")
+                ?? 30);
     });
 
-builder.Services
-    .AddSingleton<RemoteSupportNotifier>();
+// ================================================================
+// TITAN SERVICES
+// ================================================================
 
-builder.Services
-    .AddSingleton<RemoteHostTokenService>();
+builder.Services.AddSingleton<RemoteSupportNotifier>();
 
-builder.Services
-    .Configure<WindowsAgentDistributionOptions>(
-        builder.Configuration.GetSection(
-            WindowsAgentDistributionOptions.SectionName));
+builder.Services.AddSingleton<RemoteHostTokenService>();
 
-builder.Services
-    .AddSingleton<
-        IWindowsAgentDistributionService,
-        WindowsAgentDistributionService>();
+builder.Services.Configure<WindowsAgentDistributionOptions>(
+    configuration.GetSection(
+        WindowsAgentDistributionOptions.SectionName));
 
-builder.Services
-    .AddScoped<SessionSecurityService>();
+builder.Services.AddSingleton<
+    IWindowsAgentDistributionService,
+    WindowsAgentDistributionService>();
 
-builder.Services
-    .AddSingleton<RemoteSupportConnectionRegistry>();
+builder.Services.AddScoped<SessionSecurityService>();
 
-builder.Services
-    .AddScoped<RemoteSupportParticipantService>();
+builder.Services.AddSingleton<
+    RemoteSupportConnectionRegistry>();
 
-builder.Services
-    .AddScoped<RemoteControlLeaseService>();
+builder.Services.AddScoped<
+    RemoteSupportParticipantService>();
 
-builder.Services
-    .AddHostedService<HelpdeskMonitoringService>();
+builder.Services.AddScoped<
+    RemoteControlLeaseService>();
 
-builder.Services
-    .AddHostedService<HelpdeskRoutingWorker>();
+builder.Services.AddHostedService<
+    HelpdeskMonitoringService>();
 
-builder.Services
-    .AddHostedService<HelpdeskMailWorker>();
+builder.Services.AddHostedService<
+    HelpdeskRoutingWorker>();
 
-builder.Services
-    .AddTitanMdmInfrastructure(builder.Configuration);
+builder.Services.AddHostedService<
+    HelpdeskMailWorker>();
 
-if (builder.Configuration.GetValue<bool>(
+builder.Services.AddTitanMdmInfrastructure(configuration);
+
+// ================================================================
+// ENTRA ID
+// ================================================================
+
+if (configuration.GetValue<bool>(
         "EntraLogin:Enabled"))
 {
     var tenantId =
-        builder.Configuration["EntraLogin:TenantId"];
+        configuration["EntraLogin:TenantId"];
 
     var clientId =
-        builder.Configuration["EntraLogin:ClientId"];
+        configuration["EntraLogin:ClientId"];
 
     var clientSecret =
-        builder.Configuration["EntraLogin:ClientSecret"];
+        configuration["EntraLogin:ClientSecret"];
 
     if (!Guid.TryParse(tenantId, out _) ||
         !Guid.TryParse(clientId, out _) ||
         string.IsNullOrWhiteSpace(clientSecret))
     {
         throw new InvalidOperationException(
-            "EntraLogin requiere TenantId, ClientId " +
-            "y ClientSecret válidos.");
+            "EntraLogin está habilitado pero TenantId, ClientId " +
+            "o ClientSecret no tienen una configuración válida.");
     }
 
     builder.Services
@@ -131,7 +185,9 @@ if (builder.Configuration.GetValue<bool>(
                     "/api/auth/entra";
 
                 options.Cookie.SecurePolicy =
-                    CookieSecurePolicy.SameAsRequest;
+                    isDevelopment
+                        ? CookieSecurePolicy.SameAsRequest
+                        : CookieSecurePolicy.Always;
 
                 options.ExpireTimeSpan =
                     TimeSpan.FromMinutes(2);
@@ -145,8 +201,11 @@ if (builder.Configuration.GetValue<bool>(
                 options.Authority =
                     $"https://login.microsoftonline.com/{tenantId}/v2.0";
 
-                options.ClientId = clientId;
-                options.ClientSecret = clientSecret;
+                options.ClientId =
+                    clientId;
+
+                options.ClientSecret =
+                    clientSecret;
 
                 options.SignInScheme =
                     "TitanEntraTemp";
@@ -154,12 +213,20 @@ if (builder.Configuration.GetValue<bool>(
                 options.CallbackPath =
                     "/signin-entra";
 
-                options.ResponseType = "code";
-                options.RequireHttpsMetadata = true;
-                options.SaveTokens = false;
-                options.MapInboundClaims = false;
+                options.ResponseType =
+                    "code";
+
+                options.RequireHttpsMetadata =
+                    true;
+
+                options.SaveTokens =
+                    false;
+
+                options.MapInboundClaims =
+                    false;
 
                 options.Scope.Clear();
+
                 options.Scope.Add("openid");
                 options.Scope.Add("profile");
                 options.Scope.Add("email");
@@ -175,6 +242,16 @@ if (builder.Configuration.GetValue<bool>(
             });
 }
 
+// ================================================================
+// CORS
+// ================================================================
+
+var allowedOrigins =
+    configuration
+        .GetSection("Cors:AllowedOrigins")
+        .Get<string[]>()
+    ?? Array.Empty<string>();
+
 builder.Services.AddCors(
     options =>
     {
@@ -182,24 +259,82 @@ builder.Services.AddCors(
             "TitanMdmFrontend",
             policy =>
             {
+                if (allowedOrigins.Length == 0)
+                {
+                    if (!isDevelopment)
+                    {
+                        throw new InvalidOperationException(
+                            "Cors:AllowedOrigins debe contener al menos " +
+                            "un origen en ambientes no Development.");
+                    }
+
+                    allowedOrigins =
+                    [
+                        "http://localhost:3020"
+                    ];
+                }
+
                 policy
-                    .WithOrigins(
-                        "http://localhost:3020",
-                        "http://172.21.20.14:3020")
+                    .WithOrigins(allowedOrigins)
                     .AllowAnyHeader()
                     .AllowAnyMethod()
                     .AllowCredentials();
             });
     });
 
+// ================================================================
+// FORWARDED HEADERS - IIS / REVERSE PROXY
+// ================================================================
+
+builder.Services.Configure<ForwardedHeadersOptions>(
+    options =>
+    {
+        options.ForwardedHeaders =
+            ForwardedHeaders.XForwardedFor |
+            ForwardedHeaders.XForwardedProto;
+
+        /*
+         * En IIS OutOfProcess normalmente el proxy local es confiable.
+         * La configuración detallada de proxies/redes confiables
+         * se cerrará en la fase de despliegue on-premise.
+         */
+    });
+
+// ================================================================
+// BUILD
+// ================================================================
+
 var app = builder.Build();
+
+// ================================================================
+// DATABASE MIGRATION / SEED
+// ================================================================
 
 using (var scope = app.Services.CreateScope())
 {
-    var seeder = scope.ServiceProvider
-        .GetRequiredService<TitanMdmSeeder>();
+    var seeder =
+        scope.ServiceProvider
+            .GetRequiredService<TitanMdmSeeder>();
 
     await seeder.SeedAsync();
+}
+
+// ================================================================
+// HTTP PIPELINE
+// ================================================================
+
+app.UseForwardedHeaders();
+
+if (!app.Environment.IsDevelopment())
+{
+    app.UseHsts();
+
+    if (configuration.GetValue(
+            "Security:RequireHttps",
+            true))
+    {
+        app.UseHttpsRedirection();
+    }
 }
 
 if (app.Environment.IsDevelopment())
@@ -210,60 +345,245 @@ if (app.Environment.IsDevelopment())
 app.UseCors("TitanMdmFrontend");
 
 app.UseAuthentication();
+
 app.UseAuthorization();
 
+// ================================================================
+// API
+// ================================================================
+
 app.MapControllers();
+
+// ================================================================
+// SIGNALR
+// ================================================================
 
 app.MapHub<RemoteSupportHub>(
     RemoteSupportHub.Route);
 
+// ================================================================
+// ROOT INFORMATION ENDPOINT
+// ================================================================
+
 app.MapGet(
     "/",
-    () => Results.Ok(
-        new
+    () =>
+    {
+        return Results.Ok(
+            new
+            {
+                application =
+                    applicationName,
+
+                service =
+                    "TitanMDM.Api",
+
+                version =
+                    applicationVersion,
+
+                environment =
+                    environment.EnvironmentName,
+
+                status =
+                    "Running",
+
+                frontend =
+                    frontendUrl,
+
+                health =
+                    "/api/health",
+
+                readiness =
+                    "/api/health/ready",
+
+                liveness =
+                    "/api/health/live",
+
+                windowsAgentPackage =
+                    "/api/enrollment/windows/package",
+
+                windowsInstaller =
+                    "/api/enrollment/windows/installer",
+
+                remoteSupportHub =
+                    RemoteSupportHub.Route,
+
+                utc =
+                    DateTime.UtcNow
+            });
+    });
+
+// ================================================================
+// LIVENESS
+// El proceso está ejecutándose. No comprueba dependencias.
+// ================================================================
+
+app.MapGet(
+    "/api/health/live",
+    () =>
+    {
+        return Results.Ok(
+            new
+            {
+                service =
+                    "TitanMDM.Api",
+
+                status =
+                    "Alive",
+
+                utc =
+                    DateTime.UtcNow
+            });
+    });
+
+// ================================================================
+// READINESS
+// Comprueba que SQL Server realmente sea accesible.
+// ================================================================
+
+app.MapGet(
+    "/api/health/ready",
+    async (
+        TitanMdmDbContext dbContext,
+        CancellationToken cancellationToken) =>
+    {
+        try
         {
-            application = "TitanMDM",
-            service = "TitanMDM.Api",
-            version = "1.0.0",
-            status = "Running",
+            var databaseAvailable =
+                await dbContext.Database
+                    .CanConnectAsync(
+                        cancellationToken);
 
-            frontend =
-                "http://172.21.20.14:3020",
+            if (!databaseAvailable)
+            {
+                return Results.Json(
+                    new
+                    {
+                        service =
+                            "TitanMDM.Api",
 
-            health = "/api/health",
+                        status =
+                            "Unhealthy",
 
-            windowsAgentPackage =
-                "/api/enrollment/windows/package",
+                        database =
+                            "Unavailable",
 
-            windowsInstaller =
-                "/api/enrollment/windows/installer",
+                        utc =
+                            DateTime.UtcNow
+                    },
+                    statusCode:
+                        StatusCodes
+                            .Status503ServiceUnavailable);
+            }
 
-            remoteSupportHub =
-                RemoteSupportHub.Route,
+            return Results.Ok(
+                new
+                {
+                    service =
+                        "TitanMDM.Api",
 
-            remoteFrameMaxMessageBytes =
-                8 * 1024 * 1024,
+                    status =
+                        "Ready",
 
-            utc = DateTime.UtcNow
-        }));
+                    database =
+                        "Available",
+
+                    utc =
+                        DateTime.UtcNow
+                });
+        }
+        catch
+        {
+            /*
+             * No exponer detalles de excepción,
+             * connection strings ni información SQL.
+             */
+
+            return Results.Json(
+                new
+                {
+                    service =
+                        "TitanMDM.Api",
+
+                    status =
+                        "Unhealthy",
+
+                    database =
+                        "Unavailable",
+
+                    utc =
+                        DateTime.UtcNow
+                },
+                statusCode:
+                    StatusCodes
+                        .Status503ServiceUnavailable);
+        }
+    });
+
+// ================================================================
+// COMPATIBILITY HEALTH ENDPOINT
+// ================================================================
 
 app.MapGet(
     "/api/health",
-    () => Results.Ok(
-        new
+    async (
+        TitanMdmDbContext dbContext,
+        CancellationToken cancellationToken) =>
+    {
+        bool databaseAvailable;
+
+        try
         {
-            service = "TitanMDM.Api",
-            status = "Healthy",
-            database = "TitanMDM",
-            signalR = "Enabled",
-            remoteSupport = "Enabled",
-            windowsAgentDistribution = "Enabled",
+            databaseAvailable =
+                await dbContext.Database
+                    .CanConnectAsync(
+                        cancellationToken);
+        }
+        catch
+        {
+            databaseAvailable =
+                false;
+        }
 
-            remoteFrameMaxMessageBytes =
-                8 * 1024 * 1024,
+        var status =
+            databaseAvailable
+                ? "Healthy"
+                : "Unhealthy";
 
-            utc = DateTime.UtcNow
-        }));
+        var response =
+            new
+            {
+                service =
+                    "TitanMDM.Api",
+
+                status,
+
+                database =
+                    databaseAvailable
+                        ? "Available"
+                        : "Unavailable",
+
+                signalR =
+                    "Enabled",
+
+                remoteSupport =
+                    "Enabled",
+
+                windowsAgentDistribution =
+                    "Enabled",
+
+                utc =
+                    DateTime.UtcNow
+            };
+
+        return databaseAvailable
+            ? Results.Ok(response)
+            : Results.Json(
+                response,
+                statusCode:
+                    StatusCodes
+                        .Status503ServiceUnavailable);
+    });
 
 app.Run();
 
