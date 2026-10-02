@@ -139,6 +139,60 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.ToTable("AutomationRules", (string)null);
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.AdministrativeAuditEvent", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Action")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid?>("ActorUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("CorrelationId")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("IpAddress")
+                        .HasMaxLength(64)
+                        .HasColumnType("nvarchar(64)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Result")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("TargetId")
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("TargetType")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ActorUserId");
+
+                    b.HasIndex("CorrelationId");
+
+                    b.HasIndex("OrganizationId", "CreatedAtUtc");
+
+                    b.ToTable("AdministrativeAuditEvents", (string)null);
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Entities.AndroidDevice", b =>
                 {
                     b.Property<Guid>("Id")
@@ -645,6 +699,12 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(200)
                         .HasColumnType("nvarchar(200)");
 
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SiteLocationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasMaxLength(30)
@@ -659,10 +719,18 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("LastSeenAtUtc");
 
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("SiteLocationId");
+
                     b.HasIndex("Status");
 
                     b.HasIndex("OrganizationId", "SerialNumber")
                         .IsUnique();
+
+                    b.HasIndex("OrganizationId", "SiteId");
+
+                    b.HasIndex("OrganizationId", "SiteLocationId");
 
                     b.ToTable("Devices", (string)null);
                 });
@@ -1697,6 +1765,59 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.ToTable("HelpdeskRequestTemplates", (string)null);
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskSiteCoverage", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Category")
+                        .HasMaxLength(80)
+                        .HasColumnType("nvarchar(80)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("Priority")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SiteLocationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("TeamId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("SiteLocationId");
+
+                    b.HasIndex("TeamId");
+
+                    b.HasIndex("OrganizationId", "TeamId");
+
+                    b.HasIndex("OrganizationId", "SiteId", "SiteLocationId", "Category");
+
+                    b.HasIndex("OrganizationId", "TeamId", "SiteId", "SiteLocationId", "Category")
+                        .IsUnique()
+                        .HasFilter("[SiteLocationId] IS NOT NULL AND [Category] IS NOT NULL");
+
+                    b.ToTable("HelpdeskSiteCoverages", (string)null);
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskTeam", b =>
                 {
                     b.Property<Guid>("Id")
@@ -1931,6 +2052,12 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.Property<DateTime?>("ResolvedAtUtc")
                         .HasColumnType("datetime2");
 
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SiteLocationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime?>("SlaPausedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -1972,8 +2099,16 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("RequesterUserId");
 
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("SiteLocationId");
+
                     b.HasIndex("OrganizationId", "Number")
                         .IsUnique();
+
+                    b.HasIndex("OrganizationId", "SiteId");
+
+                    b.HasIndex("OrganizationId", "SiteLocationId");
 
                     b.HasIndex("OrganizationId", "Status");
 
@@ -2728,6 +2863,110 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.ToTable("RolePermissions", (string)null);
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.Site", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Address")
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<string>("City")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("Code")
+                        .IsRequired()
+                        .HasMaxLength(50)
+                        .HasColumnType("nvarchar(50)");
+
+                    b.Property<string>("Country")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<string>("Province")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<string>("TimeZoneId")
+                        .HasMaxLength(150)
+                        .HasColumnType("nvarchar(150)");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "Code")
+                        .IsUnique();
+
+                    b.HasIndex("OrganizationId", "IsActive");
+
+                    b.HasIndex("OrganizationId", "Name");
+
+                    b.ToTable("Sites", (string)null);
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.SiteLocation", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<string>("Description")
+                        .HasMaxLength(1000)
+                        .HasColumnType("nvarchar(1000)");
+
+                    b.Property<bool>("IsActive")
+                        .HasColumnType("bit");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("UpdatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("OrganizationId", "IsActive");
+
+                    b.HasIndex("SiteId", "Name")
+                        .IsUnique();
+
+                    b.ToTable("SiteLocations", (string)null);
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Entities.SoftwareDeployment", b =>
                 {
                     b.Property<Guid>("Id")
@@ -2861,6 +3100,9 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(320)
                         .HasColumnType("nvarchar(320)");
 
+                    b.Property<int>("FailedLoginAttempts")
+                        .HasColumnType("int");
+
                     b.Property<string>("FirstName")
                         .IsRequired()
                         .HasMaxLength(100)
@@ -2881,6 +3123,9 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<DateTime?>("LockedUntilUtc")
+                        .HasColumnType("datetime2");
+
                     b.Property<bool>("MfaEnabled")
                         .HasColumnType("bit");
 
@@ -2891,6 +3136,15 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<int>("SecurityVersion")
+                        .HasColumnType("int");
+
+                    b.Property<Guid?>("SiteId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid?>("SiteLocationId")
+                        .HasColumnType("uniqueidentifier");
+
                     b.Property<DateTime>("UpdatedAtUtc")
                         .HasColumnType("datetime2");
 
@@ -2898,8 +3152,16 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
 
                     b.HasIndex("DepartmentId");
 
+                    b.HasIndex("SiteId");
+
+                    b.HasIndex("SiteLocationId");
+
                     b.HasIndex("OrganizationId", "Email")
                         .IsUnique();
+
+                    b.HasIndex("OrganizationId", "SiteId");
+
+                    b.HasIndex("OrganizationId", "SiteLocationId");
 
                     b.ToTable("Users", (string)null);
                 });
@@ -2927,6 +3189,42 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.ToTable("UserRoles", (string)null);
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.UserScopeGrant", b =>
+                {
+                    b.Property<Guid>("Id")
+                        .ValueGeneratedOnAdd()
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<DateTime>("CreatedAtUtc")
+                        .HasColumnType("datetime2");
+
+                    b.Property<Guid?>("GrantedByUserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("OrganizationId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<Guid>("ScopeId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.Property<int>("ScopeType")
+                        .HasColumnType("int");
+
+                    b.Property<Guid>("UserId")
+                        .HasColumnType("uniqueidentifier");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("GrantedByUserId");
+
+                    b.HasIndex("OrganizationId", "ScopeType", "ScopeId");
+
+                    b.HasIndex("UserId", "ScopeType", "ScopeId")
+                        .IsUnique();
+
+                    b.ToTable("UserScopeGrants", (string)null);
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Automation.AutomationExecution", b =>
                 {
                     b.HasOne("TitanMDM.Domain.Automation.AutomationRule", null)
@@ -2939,6 +3237,20 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("DeviceId")
                         .OnDelete(DeleteBehavior.NoAction);
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.AdministrativeAuditEvent", b =>
+                {
+                    b.HasOne("TitanMDM.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("ActorUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.AndroidDevice", b =>
@@ -3031,6 +3343,16 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TitanMDM.Domain.Entities.SiteLocation", null)
+                        .WithMany()
+                        .HasForeignKey("SiteLocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.DeviceApplication", b =>
@@ -3289,6 +3611,32 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskSiteCoverage", b =>
+                {
+                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.NoAction)
+                        .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.SiteLocation", null)
+                        .WithMany()
+                        .HasForeignKey("SiteLocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TitanMDM.Domain.Entities.HelpdeskTeam", null)
+                        .WithMany()
+                        .HasForeignKey("TeamId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskTeam", b =>
                 {
                     b.HasOne("TitanMDM.Domain.Entities.Organization", null)
@@ -3379,6 +3727,16 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasForeignKey("RequesterUserId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TitanMDM.Domain.Entities.SiteLocation", null)
+                        .WithMany()
+                        .HasForeignKey("SiteLocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskTicketAttachment", b =>
@@ -3547,6 +3905,30 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .IsRequired();
                 });
 
+            modelBuilder.Entity("TitanMDM.Domain.Entities.Site", b =>
+                {
+                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.SiteLocation", b =>
+                {
+                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
             modelBuilder.Entity("TitanMDM.Domain.Entities.User", b =>
                 {
                     b.HasOne("TitanMDM.Domain.Entities.Department", null)
@@ -3559,6 +3941,16 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.Site", null)
+                        .WithMany()
+                        .HasForeignKey("SiteId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TitanMDM.Domain.Entities.SiteLocation", null)
+                        .WithMany()
+                        .HasForeignKey("SiteLocationId")
+                        .OnDelete(DeleteBehavior.NoAction);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.UserRole", b =>
@@ -3572,6 +3964,26 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .WithMany()
                         .HasForeignKey("RoleId")
                         .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("TitanMDM.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("UserId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+                });
+
+            modelBuilder.Entity("TitanMDM.Domain.Entities.UserScopeGrant", b =>
+                {
+                    b.HasOne("TitanMDM.Domain.Entities.User", null)
+                        .WithMany()
+                        .HasForeignKey("GrantedByUserId")
+                        .OnDelete(DeleteBehavior.NoAction);
+
+                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
+                        .WithMany()
+                        .HasForeignKey("OrganizationId")
+                        .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
 
                     b.HasOne("TitanMDM.Domain.Entities.User", null)

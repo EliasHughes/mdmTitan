@@ -3,7 +3,10 @@ using System.Security.Claims;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
+using TitanMDM.Api.Security;
+
 using TitanMDM.Application.Reports;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -16,72 +19,122 @@ public sealed class ReportsController
     private readonly IReportsService
         _reportsService;
 
+    private readonly IScopeAccessService
+        _scopeAccessService;
+
     public ReportsController(
-        IReportsService reportsService)
+        IReportsService reportsService,
+        IScopeAccessService scopeAccessService)
     {
         _reportsService =
             reportsService;
+
+        _scopeAccessService =
+            scopeAccessService;
     }
 
     [HttpGet("overview")]
+    [RequirePermission(
+        PermissionCodes.Reports.View)]
     public async Task<IActionResult>
         GetOverview(
             CancellationToken cancellationToken)
     {
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (
-            !organizationId
-                .HasValue)
+        if (context is null)
         {
             return Unauthorized();
+        }
+
+        if (
+            !await _scopeAccessService
+                .HasOrganizationScopeAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    cancellationToken))
+        {
+            return Forbid();
         }
 
         return Ok(
             await _reportsService
                 .GetOverviewAsync(
-                    organizationId.Value,
+                    context.Value.OrganizationId,
                     cancellationToken));
     }
 
     [HttpGet("devices/export/csv")]
+    [RequirePermission(
+        PermissionCodes.Reports.Export)]
     public async Task<IActionResult>
-        ExportDevices(
+        ExportDevicesCsv(
             CancellationToken cancellationToken)
     {
-        var organizationId =
-            GetOrganizationId();
+        var context =
+            GetSecurityContext();
 
-        if (
-            !organizationId
-                .HasValue)
+        if (context is null)
         {
             return Unauthorized();
+        }
+
+        if (
+            !await _scopeAccessService
+                .HasOrganizationScopeAsync(
+                    context.Value.OrganizationId,
+                    context.Value.UserId,
+                    cancellationToken))
+        {
+            return Forbid();
         }
 
         var bytes =
             await _reportsService
                 .ExportDevicesCsvAsync(
-                    organizationId.Value,
+                    context.Value.OrganizationId,
                     cancellationToken);
 
         return File(
             bytes,
-            "text/csv",
+            "text/csv; charset=utf-8",
             $"titanmdm-devices-{DateTime.UtcNow:yyyyMMdd-HHmmss}.csv");
     }
 
-    private Guid? GetOrganizationId()
+    private SecurityContext?
+        GetSecurityContext()
     {
-        var value =
+        var organization =
             User.FindFirstValue(
                 "organization_id");
 
-        return Guid.TryParse(
-            value,
-            out var organizationId)
-            ? organizationId
-            : null;
+        var user =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ??
+            User.FindFirstValue(
+                "sub");
+
+        if (
+            !Guid.TryParse(
+                organization,
+                out var organizationId)
+            ||
+            !Guid.TryParse(
+                user,
+                out var userId))
+        {
+            return null;
+        }
+
+        return new SecurityContext(
+            organizationId,
+            userId);
     }
+
+    private readonly record struct
+        SecurityContext(
+            Guid OrganizationId,
+            Guid UserId);
 }

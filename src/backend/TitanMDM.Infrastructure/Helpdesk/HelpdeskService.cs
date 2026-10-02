@@ -1,248 +1,501 @@
 using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Application.Helpdesk;
 using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Helpdesk;
 
-public sealed partial class HelpdeskService : IHelpdeskService
+public sealed partial class HelpdeskService
+    : IHelpdeskService
 {
-    private readonly TitanMdmDbContext _db;
+    private readonly TitanMdmDbContext
+        _db;
 
-    public HelpdeskService(TitanMdmDbContext db)
+    public HelpdeskService(
+        TitanMdmDbContext db)
     {
-        _db = db;
+        _db =
+            db;
     }
 
-    public async Task<HelpdeskTicketListResult> GetTicketsAsync(
-        Guid organizationId,
-        HelpdeskTicketQuery query,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // LIST
+    // ============================================================
+
+    public async Task<HelpdeskTicketListResult>
+        GetTicketsAsync(
+            Guid organizationId,
+            HelpdeskTicketQuery query,
+            CancellationToken cancellationToken = default)
     {
-        var page = Math.Max(1, query.Page);
-        var pageSize = query.PageSize is < 1 or > 100 ? 25 : query.PageSize;
+        var page =
+            Math.Max(
+                1,
+                query.Page);
 
-        var tickets = _db.HelpdeskTickets
-            .AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId);
+        var pageSize =
+            query.PageSize is < 1 or > 100
+                ? 25
+                : query.PageSize;
 
-        if (!string.IsNullOrWhiteSpace(query.Search))
+        var tickets =
+            _db.HelpdeskTickets
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId);
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                query.Search))
         {
-            var term = query.Search.Trim();
+            var term =
+                query.Search
+                    .Trim();
 
-            tickets = tickets.Where(x =>
-                x.Number.Contains(term) ||
-                x.Subject.Contains(term) ||
-                x.Category.Contains(term));
+            tickets =
+                tickets.Where(
+                    x =>
+                        x.Number.Contains(
+                            term)
+                        ||
+                        x.Subject.Contains(
+                            term)
+                        ||
+                        x.Category.Contains(
+                            term));
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Status))
+        if (
+            !string.IsNullOrWhiteSpace(
+                query.Status))
         {
-            var status = query.Status.Trim().ToLowerInvariant();
-            tickets = tickets.Where(x => x.Status == status);
+            var status =
+                query.Status
+                    .Trim()
+                    .ToLowerInvariant();
+
+            tickets =
+                tickets.Where(
+                    x =>
+                        x.Status ==
+                            status);
         }
 
-        if (!string.IsNullOrWhiteSpace(query.Priority))
+        if (
+            !string.IsNullOrWhiteSpace(
+                query.Priority))
         {
-            var priority = query.Priority.Trim().ToLowerInvariant();
-            tickets = tickets.Where(x => x.Priority == priority);
+            var priority =
+                query.Priority
+                    .Trim()
+                    .ToLowerInvariant();
+
+            tickets =
+                tickets.Where(
+                    x =>
+                        x.Priority ==
+                            priority);
         }
 
-        if (query.DeviceId.HasValue)
-            tickets = tickets.Where(x => x.DeviceId == query.DeviceId.Value);
-
-        if (query.AssigneeUserId.HasValue)
+        if (
+            query.DeviceId
+                .HasValue)
         {
-            tickets = tickets.Where(
-                x => x.AssigneeUserId == query.AssigneeUserId.Value);
+            tickets =
+                tickets.Where(
+                    x =>
+                        x.DeviceId ==
+                            query.DeviceId.Value);
         }
 
-        var total = await tickets.CountAsync(cancellationToken);
-
-        var rows = await tickets
-            .OrderByDescending(x => x.CreatedAtUtc)
-            .Skip((page - 1) * pageSize)
-            .Take(pageSize)
-            .ToListAsync(cancellationToken);
-
-        var userIds = rows
-            .Select(x => x.RequesterUserId)
-            .Concat(rows
-                .Where(x => x.AssigneeUserId.HasValue)
-                .Select(x => x.AssigneeUserId!.Value))
-            .Distinct()
-            .ToArray();
-
-        var users = await _db.Users
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                userIds.Contains(x.Id))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
-
-        var deviceIds = rows
-            .Where(x => x.DeviceId.HasValue)
-            .Select(x => x.DeviceId!.Value)
-            .Distinct()
-            .ToArray();
-
-        var devices = await _db.Devices
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == organizationId &&
-                deviceIds.Contains(x.Id))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
-
-        var now = DateTime.UtcNow;
-
-        var items = rows.Select(ticket =>
+        if (
+            query.AssigneeUserId
+                .HasValue)
         {
-            users.TryGetValue(ticket.RequesterUserId, out var requester);
+            tickets =
+                tickets.Where(
+                    x =>
+                        x.AssigneeUserId ==
+                            query.AssigneeUserId.Value);
+        }
 
-            User? assignee = null;
+        var total =
+            await tickets
+                .CountAsync(
+                    cancellationToken);
 
-            if (ticket.AssigneeUserId.HasValue)
-                users.TryGetValue(ticket.AssigneeUserId.Value, out assignee);
+        var rows =
+            await tickets
+                .OrderByDescending(
+                    x =>
+                        x.CreatedAtUtc)
+                .Skip(
+                    (page - 1) *
+                    pageSize)
+                .Take(
+                    pageSize)
+                .ToListAsync(
+                    cancellationToken);
 
-            Device? device = null;
+        var userIds =
+            rows
+                .Select(
+                    x =>
+                        x.RequesterUserId)
+                .Concat(
+                    rows
+                        .Where(
+                            x =>
+                                x.AssigneeUserId
+                                    .HasValue)
+                        .Select(
+                            x =>
+                                x.AssigneeUserId!
+                                    .Value))
+                .Distinct()
+                .ToArray();
 
-            if (ticket.DeviceId.HasValue)
-                devices.TryGetValue(ticket.DeviceId.Value, out device);
+        var users =
+            await _db.Users
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        userIds.Contains(
+                            x.Id))
+                .ToDictionaryAsync(
+                    x =>
+                        x.Id,
+                    cancellationToken);
 
-            var breached = ticket.Status is not ("resolved" or "closed") &&
-                ((ticket.FirstResponseDueAtUtc.HasValue &&
-                  ticket.FirstRespondedAtUtc is null &&
-                  ticket.FirstResponseDueAtUtc < now) ||
-                 (ticket.ResolveDueAtUtc.HasValue &&
-                  ticket.ResolvedAtUtc is null &&
-                  ticket.ResolveDueAtUtc < now));
+        var deviceIds =
+            rows
+                .Where(
+                    x =>
+                        x.DeviceId
+                            .HasValue)
+                .Select(
+                    x =>
+                        x.DeviceId!
+                            .Value)
+                .Distinct()
+                .ToArray();
 
-            return new HelpdeskTicketListItemDto(
-                ticket.Id,
-                ticket.Number,
-                ticket.Subject,
-                ticket.Status,
-                ticket.Priority,
-                ticket.Type,
-                ticket.Category,
-                ticket.Source,
-                ticket.RequesterUserId,
-                requester?.FullName ?? "Usuario Titan",
-                ticket.AssigneeUserId,
-                assignee?.FullName,
-                ticket.DeviceId,
-                device?.DeviceName,
-                device?.Platform.ToString(),
-                ticket.CreatedAtUtc,
-                ticket.UpdatedAtUtc,
-                ticket.FirstResponseDueAtUtc,
-                ticket.ResolveDueAtUtc,
-                breached);
-        }).ToList();
+        var devices =
+            await _db.Devices
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        deviceIds.Contains(
+                            x.Id))
+                .ToDictionaryAsync(
+                    x =>
+                        x.Id,
+                    cancellationToken);
 
-        return new HelpdeskTicketListResult(items, total, page, pageSize);
+        var now =
+            DateTime.UtcNow;
+
+        var items =
+            rows
+                .Select(
+                    ticket =>
+                    {
+                        users.TryGetValue(
+                            ticket.RequesterUserId,
+                            out var requester);
+
+                        User? assignee =
+                            null;
+
+                        if (
+                            ticket.AssigneeUserId
+                                .HasValue)
+                        {
+                            users.TryGetValue(
+                                ticket.AssigneeUserId.Value,
+                                out assignee);
+                        }
+
+                        Device? device =
+                            null;
+
+                        if (
+                            ticket.DeviceId
+                                .HasValue)
+                        {
+                            devices.TryGetValue(
+                                ticket.DeviceId.Value,
+                                out device);
+                        }
+
+                        var breached =
+                            ticket.Status
+                                is not (
+                                    "resolved"
+                                    or
+                                    "closed")
+                            &&
+                            (
+                                (
+                                    ticket.FirstResponseDueAtUtc
+                                        .HasValue
+                                    &&
+                                    ticket.FirstRespondedAtUtc
+                                        is null
+                                    &&
+                                    ticket.FirstResponseDueAtUtc <
+                                        now
+                                )
+                                ||
+                                (
+                                    ticket.ResolveDueAtUtc
+                                        .HasValue
+                                    &&
+                                    ticket.ResolvedAtUtc
+                                        is null
+                                    &&
+                                    ticket.ResolveDueAtUtc <
+                                        now
+                                )
+                            );
+
+                        return new HelpdeskTicketListItemDto(
+                            ticket.Id,
+                            ticket.Number,
+                            ticket.Subject,
+                            ticket.Status,
+                            ticket.Priority,
+                            ticket.Type,
+                            ticket.Category,
+                            ticket.Source,
+                            ticket.RequesterUserId,
+                            requester?.FullName ??
+                                "Usuario Titan",
+                            ticket.AssigneeUserId,
+                            assignee?.FullName,
+                            ticket.DeviceId,
+                            device?.DeviceName,
+                            device?.Platform
+                                .ToString(),
+                            ticket.CreatedAtUtc,
+                            ticket.UpdatedAtUtc,
+                            ticket.FirstResponseDueAtUtc,
+                            ticket.ResolveDueAtUtc,
+                            breached);
+                    })
+                .ToList();
+
+        return new HelpdeskTicketListResult(
+            items,
+            total,
+            page,
+            pageSize);
     }
 
-    public async Task<HelpdeskTicketDetailsDto?> GetTicketAsync(
-        Guid organizationId,
-        Guid ticketId,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // DETAILS
+    // ============================================================
+
+    public async Task<HelpdeskTicketDetailsDto?>
+        GetTicketAsync(
+            Guid organizationId,
+            Guid ticketId,
+            CancellationToken cancellationToken = default)
     {
-        var ticket = await _db.HelpdeskTickets
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                x => x.OrganizationId == organizationId && x.Id == ticketId,
-                cancellationToken);
+        var ticket =
+            await _db.HelpdeskTickets
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            ticketId,
+                    cancellationToken);
 
         return ticket is null
             ? null
-            : await MapDetailsAsync(ticket, cancellationToken);
+            : await MapDetailsAsync(
+                ticket,
+                cancellationToken);
     }
 
-    public async Task<HelpdeskTicketDetailsDto> CreateTicketAsync(
-        Guid organizationId,
-        Guid actorUserId,
-        CreateHelpdeskTicketRequest request,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // CREATE
+    // ============================================================
+
+    public async Task<HelpdeskTicketDetailsDto>
+        CreateTicketAsync(
+            Guid organizationId,
+            Guid actorUserId,
+            CreateHelpdeskTicketRequest request,
+            CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Subject) ||
-            request.Subject.Trim().Length > 250)
+        if (
+            string.IsNullOrWhiteSpace(
+                request.Subject)
+            ||
+            request.Subject
+                .Trim()
+                .Length >
+                250)
         {
             throw new ArgumentException(
                 "El asunto debe tener entre 1 y 250 caracteres.");
         }
 
-        if (request.Description?.Length > 4000)
+        if (
+            request.Description?
+                .Length >
+                4000)
         {
             throw new ArgumentException(
                 "La descripción excede 4000 caracteres.");
         }
 
-        var requesterId = request.RequesterUserId ?? actorUserId;
+        var requesterId =
+            request.RequesterUserId ??
+            actorUserId;
 
-        var requesterExists = await _db.Users.AnyAsync(
-            x => x.Id == requesterId &&
-                 x.OrganizationId == organizationId &&
-                 x.IsActive,
-            cancellationToken);
+        var requester =
+            await _db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.Id ==
+                            requesterId
+                        &&
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
 
-        if (!requesterExists)
+        if (requester is null)
         {
             throw new ArgumentException(
                 "El solicitante no existe o no pertenece a esta organización.");
         }
 
-        if (request.DeviceId.HasValue)
-        {
-            var deviceExists = await _db.Devices.AnyAsync(
-                x => x.Id == request.DeviceId.Value &&
-                     x.OrganizationId == organizationId,
-                cancellationToken);
+        Device? requestDevice =
+            null;
 
-            if (!deviceExists)
+        if (
+            request.DeviceId
+                .HasValue)
+        {
+            requestDevice =
+                await _db.Devices
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.Id ==
+                                request.DeviceId.Value
+                            &&
+                            x.OrganizationId ==
+                                organizationId,
+                        cancellationToken);
+
+            if (requestDevice is null)
             {
                 throw new ArgumentException(
                     "El dispositivo no pertenece a esta organización.");
             }
         }
 
-        var source = string.IsNullOrWhiteSpace(request.Source)
-            ? "console"
-            : request.Source.Trim().ToLowerInvariant();
+        var source =
+            string.IsNullOrWhiteSpace(
+                request.Source)
+                ? "console"
+                : request.Source
+                    .Trim()
+                    .ToLowerInvariant();
 
-        var requestedCategory = string.IsNullOrWhiteSpace(request.Category)
-            ? "general"
-            : request.Category.Trim().ToLowerInvariant();
+        var requestedCategory =
+            string.IsNullOrWhiteSpace(
+                request.Category)
+                ? "general"
+                : request.Category
+                    .Trim()
+                    .ToLowerInvariant();
 
-        if (requestedCategory.Length > 80)
+        if (
+            requestedCategory.Length >
+            80)
         {
             throw new ArgumentException(
                 "La categoría no puede superar 80 caracteres.");
         }
 
-        var rawCategories = await _db.HelpdeskTeams
-            .AsNoTracking()
-            .Where(x => x.OrganizationId == organizationId && x.IsActive)
-            .Select(x => x.Categories)
-            .ToListAsync(cancellationToken);
+        var rawCategories =
+            await _db.HelpdeskTeams
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.IsActive)
+                .Select(
+                    x =>
+                        x.Categories)
+                .ToListAsync(
+                    cancellationToken);
 
-        var categories = rawCategories
-            .SelectMany(value => (value ?? string.Empty).Split(
-                '|',
-                StringSplitOptions.RemoveEmptyEntries |
-                StringSplitOptions.TrimEntries))
-            .Select(value => value.Trim().ToLowerInvariant())
-            .Where(value => value.Length is > 0 and <= 80)
-            .Append("general")
-            .ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var categories =
+            rawCategories
+                .SelectMany(
+                    value =>
+                        (
+                            value ??
+                            string.Empty
+                        )
+                        .Split(
+                            '|',
+                            StringSplitOptions
+                                .RemoveEmptyEntries
+                            |
+                            StringSplitOptions
+                                .TrimEntries))
+                .Select(
+                    value =>
+                        value
+                            .Trim()
+                            .ToLowerInvariant())
+                .Where(
+                    value =>
+                        value.Length
+                            is > 0
+                            and <= 80)
+                .Append(
+                    "general")
+                .ToHashSet(
+                    StringComparer
+                        .OrdinalIgnoreCase);
 
-        var category = requestedCategory;
+        var category =
+            requestedCategory;
 
-        if (!categories.Contains(category))
+        if (
+            !categories.Contains(
+                category))
         {
-            if (source == "email")
+            if (
+                source ==
+                "email")
             {
-                category = "general";
+                category =
+                    "general";
             }
             else
             {
@@ -255,29 +508,106 @@ public sealed partial class HelpdeskService : IHelpdeskService
             $"HD-{DateTime.UtcNow:yyyyMMdd}-{Guid.NewGuid():N}"[..20]
                 .ToUpperInvariant();
 
-        var ticket = new HelpdeskTicket(
-            organizationId,
-            number,
-            request.Subject.Trim(),
-            request.Description ?? string.Empty,
-            request.Type ?? "incident",
-            request.Priority ?? "medium",
-            category,
-            source,
-            requesterId,
-            request.DeviceId,
-            null);
+        var ticket =
+            new HelpdeskTicket(
+                organizationId,
+                number,
+                request.Subject
+                    .Trim(),
+                request.Description ??
+                    string.Empty,
+                request.Type ??
+                    "incident",
+                request.Priority ??
+                    "medium",
+                category,
+                source,
+                requesterId,
+                request.DeviceId,
+                null);
 
-        if (!string.IsNullOrWhiteSpace(request.EntraObjectId))
+        // ========================================================
+        // MULTI-SITE INFERENCE
+        //
+        // Priority:
+        // 1. Explicit Device location
+        // 2. User location
+        // ========================================================
+
+        Guid? inferredSiteId =
+            null;
+
+        Guid? inferredSiteLocationId =
+            null;
+
+        if (
+            requestDevice?.SiteId
+                .HasValue ==
+            true)
         {
-            var directoryUser = await _db.EntraDirectoryUsers
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.OrganizationId == organizationId &&
-                         x.EntraObjectId == request.EntraObjectId,
-                    cancellationToken);
+            inferredSiteId =
+                requestDevice.SiteId;
 
-            if (directoryUser is null)
+            inferredSiteLocationId =
+                requestDevice.SiteLocationId;
+        }
+        else if (
+            requester.SiteId
+                .HasValue)
+        {
+            inferredSiteId =
+                requester.SiteId;
+
+            inferredSiteLocationId =
+                requester.SiteLocationId;
+        }
+
+        if (
+            inferredSiteId
+                .HasValue)
+        {
+            ticket.AssignSite(
+                inferredSiteId.Value,
+                inferredSiteLocationId);
+
+            _db.HelpdeskTicketEvents
+                .Add(
+                    new HelpdeskTicketEvent(
+                        organizationId,
+                        ticket.Id,
+                        actorUserId,
+                        "site_inferred",
+                        requestDevice?.SiteId
+                            .HasValue ==
+                            true
+                            ? "Localidad inferida desde el dispositivo asociado."
+                            : "Localidad inferida desde el usuario solicitante."));
+        }
+
+        // ========================================================
+        // ENTRA REQUESTER
+        // ========================================================
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                request.EntraObjectId))
+        {
+            var directoryUser =
+                await _db
+                    .EntraDirectoryUsers
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.OrganizationId ==
+                                organizationId
+                            &&
+                            x.EntraObjectId ==
+                                request.EntraObjectId,
+                        cancellationToken);
+
+            if (
+                directoryUser
+                is null)
             {
                 throw new ArgumentException(
                     "El solicitante de Entra ID no existe en esta organización.");
@@ -288,140 +618,242 @@ public sealed partial class HelpdeskService : IHelpdeskService
                 directoryUser.UserPrincipalName);
         }
 
-        var now = DateTime.UtcNow;
+        // ========================================================
+        // SLA
+        // ========================================================
 
-        var resolutionHours = ticket.Priority switch
-        {
-            "urgent" => 4,
-            "high" => 8,
-            "low" => 72,
-            _ => 24
-        };
+        var now =
+            DateTime.UtcNow;
+
+        var resolutionHours =
+            ticket.Priority
+                switch
+                {
+                    "urgent" =>
+                        4,
+
+                    "high" =>
+                        8,
+
+                    "low" =>
+                        72,
+
+                    _ =>
+                        24
+                };
 
         ticket.ApplySla(
-            now.AddHours(Math.Max(1, resolutionHours / 4)),
-            now.AddHours(resolutionHours));
+            now.AddHours(
+                Math.Max(
+                    1,
+                    resolutionHours /
+                    4)),
+            now.AddHours(
+                resolutionHours));
 
-        _db.HelpdeskTickets.Add(ticket);
+        _db.HelpdeskTickets
+            .Add(
+                ticket);
 
-        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-            organizationId,
-            ticket.Id,
-            actorUserId,
-            "created",
-            $"Ticket {ticket.Number} creado."));
+        _db.HelpdeskTicketEvents
+            .Add(
+                new HelpdeskTicketEvent(
+                    organizationId,
+                    ticket.Id,
+                    actorUserId,
+                    "created",
+                    $"Ticket {ticket.Number} creado."));
 
-        if (category != requestedCategory)
+        if (
+            category !=
+            requestedCategory)
         {
-            _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                "category_fallback",
-                "La categoría recibida por correo no estaba configurada. " +
-                "Se utilizó general."));
+            _db.HelpdeskTicketEvents
+                .Add(
+                    new HelpdeskTicketEvent(
+                        organizationId,
+                        ticket.Id,
+                        actorUserId,
+                        "category_fallback",
+                        "La categoría recibida por correo no estaba configurada. " +
+                        "Se utilizó general."));
         }
 
-        // El usuario técnico del buzón no identifica la ubicación
-        // de un remitente externo.
+        // ========================================================
+        // ROUTING
+        // ========================================================
+
+        /*
+         * El usuario técnico utilizado por el buzón no representa
+         * necesariamente la ubicación física del remitente.
+         */
         var externalEmail =
-            source == "email" && requesterId == actorUserId;
+            source ==
+                "email"
+            &&
+            requesterId ==
+                actorUserId;
 
-        var routing = externalEmail
-            ? null
-            : await FindAutomaticAssigneeAsync(
-                organizationId,
-                requesterId,
-                ticket.Category,
-                cancellationToken);
+        var routing =
+            externalEmail
+                ? null
+                : await FindAutomaticAssigneeAsync(
+                    organizationId,
+                    requesterId,
+                    ticket.Category,
+                    cancellationToken);
 
-        if (routing is not null)
+        if (
+            routing is not null)
         {
-            ticket.Assign(routing.UserId);
+            ticket.Assign(
+                routing.UserId);
 
-            _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                "auto_assigned",
-                "Asignación automática: categoría " +
-                $"{ticket.Category}, grupo {routing.TeamName}, " +
-                $"zona {routing.ZoneName}, técnico {routing.UserName}."));
+            var autoAssignmentSummary =
+                "Asignación automática: " +
+                $"categoría {ticket.Category}, " +
+                $"grupo {routing.TeamName}, " +
+                $"cobertura {routing.CoverageLocation}, " +
+                $"técnico {routing.UserName}, " +
+                $"ubicación técnico {routing.TechnicianLocation}, " +
+                $"carga {routing.OpenTickets}/{routing.Capacity}.";
+
+            _db.HelpdeskTicketEvents
+                .Add(
+                    new HelpdeskTicketEvent(
+                        organizationId,
+                        ticket.Id,
+                        actorUserId,
+                        "auto_assigned",
+                        autoAssignmentSummary[
+                            ..Math.Min(
+                                500,
+                                autoAssignmentSummary.Length)]));
         }
         else
         {
-            var explanation = externalEmail
-                ? "Remitente externo sin ubicación confirmada."
-                : "No hay un técnico disponible con cobertura, categoría " +
-                  "y capacidad para la ubicación del solicitante.";
+            var explanation =
+                externalEmail
+                    ? "Remitente externo sin ubicación confirmada."
+                    : "No hay un técnico disponible con cobertura por localidad, " +
+                      "categoría, horario y capacidad para la ubicación del solicitante.";
 
-            _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-                organizationId,
-                ticket.Id,
-                actorUserId,
-                "routing_pending",
-                "Sin asignación automática: " + explanation));
+            _db.HelpdeskTicketEvents
+                .Add(
+                    new HelpdeskTicketEvent(
+                        organizationId,
+                        ticket.Id,
+                        actorUserId,
+                        "routing_pending",
+                        "Sin asignación automática: " +
+                        explanation));
         }
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await _db
+            .SaveChangesAsync(
+                cancellationToken);
 
-        return (await GetTicketAsync(
-            organizationId,
-            ticket.Id,
-            cancellationToken))!;
+        return (
+            await GetTicketAsync(
+                organizationId,
+                ticket.Id,
+                cancellationToken)
+        )!;
     }
 
-    public async Task<HelpdeskTicketDetailsDto?> AddCommentAsync(
-        Guid organizationId,
-        Guid ticketId,
-        Guid actorUserId,
-        AddHelpdeskCommentRequest request,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // COMMENTS
+    // ============================================================
+
+    public async Task<HelpdeskTicketDetailsDto?>
+        AddCommentAsync(
+            Guid organizationId,
+            Guid ticketId,
+            Guid actorUserId,
+            AddHelpdeskCommentRequest request,
+            CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(request.Body) ||
-            request.Body.Trim().Length > 4000)
+        if (
+            string.IsNullOrWhiteSpace(
+                request.Body)
+            ||
+            request.Body
+                .Trim()
+                .Length >
+                4000)
         {
             throw new ArgumentException(
                 "El comentario debe tener entre 1 y 4000 caracteres.");
         }
 
-        var ticket = await _db.HelpdeskTickets.FirstOrDefaultAsync(
-            x => x.OrganizationId == organizationId && x.Id == ticketId,
-            cancellationToken);
+        var ticket =
+            await _db.HelpdeskTickets
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            ticketId,
+                    cancellationToken);
 
-        if (ticket is null)
+        if (
+            ticket is null)
+        {
             return null;
+        }
 
-        _db.HelpdeskTicketComments.Add(new HelpdeskTicketComment(
-            organizationId,
-            ticket.Id,
-            actorUserId,
-            request.Body.Trim(),
-            request.IsInternal));
+        _db.HelpdeskTicketComments
+            .Add(
+                new HelpdeskTicketComment(
+                    organizationId,
+                    ticket.Id,
+                    actorUserId,
+                    request.Body
+                        .Trim(),
+                    request.IsInternal));
 
-        // La respuesta del solicitante y las notas internas
-        // no satisfacen el SLA de primera respuesta del técnico.
-        if (!request.IsInternal &&
-            actorUserId != ticket.RequesterUserId &&
-            await EligibleTechnicians(organizationId).AnyAsync(
-                x => x == actorUserId, cancellationToken))
+        if (
+            !request.IsInternal
+            &&
+            actorUserId !=
+                ticket.RequesterUserId
+            &&
+            await EligibleTechnicians(
+                    organizationId)
+                .AnyAsync(
+                    x =>
+                        x ==
+                        actorUserId,
+                    cancellationToken))
         {
             ticket.MarkFirstResponse();
         }
 
-        if (ticket.Status == "new")
-            ticket.Transition("open");
+        if (
+            ticket.Status ==
+            "new")
+        {
+            ticket.Transition(
+                "open");
+        }
 
-        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-            organizationId,
-            ticket.Id,
-            actorUserId,
-            request.IsInternal ? "internal_note" : "comment",
-            request.IsInternal
-                ? "Nota interna agregada."
-                : "Respuesta pública agregada."));
+        _db.HelpdeskTicketEvents
+            .Add(
+                new HelpdeskTicketEvent(
+                    organizationId,
+                    ticket.Id,
+                    actorUserId,
+                    request.IsInternal
+                        ? "internal_note"
+                        : "comment",
+                    request.IsInternal
+                        ? "Nota interna agregada."
+                        : "Respuesta pública agregada."));
 
-        await _db.SaveChangesAsync(cancellationToken);
+        await _db
+            .SaveChangesAsync(
+                cancellationToken);
 
         return await GetTicketAsync(
             organizationId,
@@ -429,163 +861,292 @@ public sealed partial class HelpdeskService : IHelpdeskService
             cancellationToken);
     }
 
-    public async Task<HelpdeskTicketDetailsDto?> AssignAsync(
-        Guid organizationId,
-        Guid ticketId,
-        Guid actorUserId,
-        AssignHelpdeskTicketRequest request,
-        CancellationToken cancellationToken = default)
+    // ============================================================
+    // MANUAL ASSIGNMENT
+    // ============================================================
+
+    public async Task<HelpdeskTicketDetailsDto?>
+        AssignAsync(
+            Guid organizationId,
+            Guid ticketId,
+            Guid actorUserId,
+            AssignHelpdeskTicketRequest request,
+            CancellationToken cancellationToken = default)
     {
-        var ticket = await _db.HelpdeskTickets.FirstOrDefaultAsync(
-            x => x.OrganizationId == organizationId && x.Id == ticketId,
-            cancellationToken);
+        var ticket =
+            await _db.HelpdeskTickets
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            ticketId,
+                    cancellationToken);
 
-        if (ticket is null)
+        if (
+            ticket is null)
+        {
             return null;
+        }
 
-        var assigneeExists = await _db.Users.AnyAsync(
-            x => x.Id == request.AssigneeUserId &&
-                 x.OrganizationId == organizationId &&
-                 x.IsActive,
-            cancellationToken);
+        var assigneeExists =
+            await _db.Users
+                .AnyAsync(
+                    x =>
+                        x.Id ==
+                            request.AssigneeUserId
+                        &&
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
 
-        if (!assigneeExists ||
-            !await EligibleTechnicians(organizationId).AnyAsync(
-                x => x == request.AssigneeUserId, cancellationToken))
+        if (
+            !assigneeExists
+            ||
+            !await EligibleTechnicians(
+                    organizationId)
+                .AnyAsync(
+                    x =>
+                        x ==
+                        request.AssigneeUserId,
+                    cancellationToken))
         {
             throw new InvalidOperationException(
                 "El técnico debe estar activo y tener permiso tickets.comment.");
         }
 
-        ticket.Assign(request.AssigneeUserId);
+        ticket.Assign(
+            request.AssigneeUserId);
 
-        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-            organizationId,
-            ticket.Id,
-            actorUserId,
-            "assigned",
-            $"Asignación manual al usuario {request.AssigneeUserId}."));
+        _db.HelpdeskTicketEvents
+            .Add(
+                new HelpdeskTicketEvent(
+                    organizationId,
+                    ticket.Id,
+                    actorUserId,
+                    "assigned",
+                    $"Asignación manual al usuario {request.AssigneeUserId}."));
 
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return await GetTicketAsync(
-            organizationId,
-            ticket.Id,
-            cancellationToken);
-    }
-
-    public async Task<HelpdeskTicketDetailsDto?> TransitionAsync(
-        Guid organizationId,
-        Guid ticketId,
-        Guid actorUserId,
-        TransitionHelpdeskTicketRequest request,
-        CancellationToken cancellationToken = default)
-    {
-        var allowed = new[]
-        {
-            "open",
-            "inprogress",
-            "pendinguser",
-            "resolved",
-            "closed"
-        };
-
-        var status = request.Status?.Trim().ToLowerInvariant();
-
-        if (status is null || !allowed.Contains(status))
-            throw new ArgumentException("Estado de ticket no válido.");
-
-        var ticket = await _db.HelpdeskTickets.FirstOrDefaultAsync(
-            x => x.OrganizationId == organizationId && x.Id == ticketId,
-            cancellationToken);
-
-        if (ticket is null)
-            return null;
-
-        var previousStatus = ticket.Status;
-        ticket.Transition(status);
-
-        var reopened =
-            previousStatus is "resolved" or "closed" &&
-            status is not ("resolved" or "closed");
-
-        _db.HelpdeskTicketEvents.Add(new HelpdeskTicketEvent(
-            organizationId,
-            ticket.Id,
-            actorUserId,
-            reopened ? "reopened" : "status",
-            $"Estado actualizado de {previousStatus} a {ticket.Status}."));
-
-        await _db.SaveChangesAsync(cancellationToken);
-
-        return await GetTicketAsync(
-            organizationId,
-            ticket.Id,
-            cancellationToken);
-    }
-
-    private async Task<HelpdeskTicketDetailsDto> MapDetailsAsync(
-        HelpdeskTicket ticket,
-        CancellationToken cancellationToken)
-    {
-        var requester = await _db.Users
-            .AsNoTracking()
-            .FirstOrDefaultAsync(
-                x => x.Id == ticket.RequesterUserId &&
-                     x.OrganizationId == ticket.OrganizationId,
+        await _db
+            .SaveChangesAsync(
                 cancellationToken);
 
-        User? assignee = null;
+        return await GetTicketAsync(
+            organizationId,
+            ticket.Id,
+            cancellationToken);
+    }
 
-        if (ticket.AssigneeUserId.HasValue)
+    // ============================================================
+    // STATUS TRANSITION
+    // ============================================================
+
+    public async Task<HelpdeskTicketDetailsDto?>
+        TransitionAsync(
+            Guid organizationId,
+            Guid ticketId,
+            Guid actorUserId,
+            TransitionHelpdeskTicketRequest request,
+            CancellationToken cancellationToken = default)
+    {
+        var allowed =
+            new[]
+            {
+                "open",
+                "inprogress",
+                "pendinguser",
+                "resolved",
+                "closed"
+            };
+
+        var status =
+            request.Status?
+                .Trim()
+                .ToLowerInvariant();
+
+        if (
+            status is null
+            ||
+            !allowed.Contains(
+                status))
         {
-            assignee = await _db.Users
-                .AsNoTracking()
-                .FirstOrDefaultAsync(
-                    x => x.Id == ticket.AssigneeUserId.Value &&
-                         x.OrganizationId == ticket.OrganizationId,
-                    cancellationToken);
+            throw new ArgumentException(
+                "Estado de ticket no válido.");
         }
 
-        Device? device = null;
-
-        if (ticket.DeviceId.HasValue)
-        {
-            device = await _db.Devices
-                .AsNoTracking()
+        var ticket =
+            await _db.HelpdeskTickets
                 .FirstOrDefaultAsync(
-                    x => x.Id == ticket.DeviceId.Value &&
-                         x.OrganizationId == ticket.OrganizationId,
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            ticketId,
                     cancellationToken);
+
+        if (
+            ticket is null)
+        {
+            return null;
         }
 
-        var comments = await _db.HelpdeskTicketComments
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == ticket.OrganizationId &&
-                x.TicketId == ticket.Id)
-            .OrderBy(x => x.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
+        var previousStatus =
+            ticket.Status;
 
-        var authorIds = comments
-            .Select(x => x.AuthorUserId)
-            .Distinct()
-            .ToArray();
+        ticket.Transition(
+            status);
 
-        var authors = await _db.Users
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == ticket.OrganizationId &&
-                authorIds.Contains(x.Id))
-            .ToDictionaryAsync(x => x.Id, cancellationToken);
+        var reopened =
+            previousStatus
+                is "resolved"
+                or "closed"
+            &&
+            status
+                is not (
+                    "resolved"
+                    or
+                    "closed");
 
-        var events = await _db.HelpdeskTicketEvents
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == ticket.OrganizationId &&
-                x.TicketId == ticket.Id)
-            .OrderBy(x => x.CreatedAtUtc)
-            .ToListAsync(cancellationToken);
+        _db.HelpdeskTicketEvents
+            .Add(
+                new HelpdeskTicketEvent(
+                    organizationId,
+                    ticket.Id,
+                    actorUserId,
+                    reopened
+                        ? "reopened"
+                        : "status",
+                    $"Estado actualizado de {previousStatus} a {ticket.Status}."));
+
+        await _db
+            .SaveChangesAsync(
+                cancellationToken);
+
+        return await GetTicketAsync(
+            organizationId,
+            ticket.Id,
+            cancellationToken);
+    }
+
+    // ============================================================
+    // DETAILS MAPPING
+    // ============================================================
+
+    private async Task<HelpdeskTicketDetailsDto>
+        MapDetailsAsync(
+            HelpdeskTicket ticket,
+            CancellationToken cancellationToken)
+    {
+        var requester =
+            await _db.Users
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.Id ==
+                            ticket.RequesterUserId
+                        &&
+                        x.OrganizationId ==
+                            ticket.OrganizationId,
+                    cancellationToken);
+
+        User? assignee =
+            null;
+
+        if (
+            ticket.AssigneeUserId
+                .HasValue)
+        {
+            assignee =
+                await _db.Users
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.Id ==
+                                ticket.AssigneeUserId.Value
+                            &&
+                            x.OrganizationId ==
+                                ticket.OrganizationId,
+                        cancellationToken);
+        }
+
+        Device? device =
+            null;
+
+        if (
+            ticket.DeviceId
+                .HasValue)
+        {
+            device =
+                await _db.Devices
+                    .AsNoTracking()
+                    .FirstOrDefaultAsync(
+                        x =>
+                            x.Id ==
+                                ticket.DeviceId.Value
+                            &&
+                            x.OrganizationId ==
+                                ticket.OrganizationId,
+                        cancellationToken);
+        }
+
+        var comments =
+            await _db.HelpdeskTicketComments
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            ticket.OrganizationId
+                        &&
+                        x.TicketId ==
+                            ticket.Id)
+                .OrderBy(
+                    x =>
+                        x.CreatedAtUtc)
+                .ToListAsync(
+                    cancellationToken);
+
+        var authorIds =
+            comments
+                .Select(
+                    x =>
+                        x.AuthorUserId)
+                .Distinct()
+                .ToArray();
+
+        var authors =
+            await _db.Users
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            ticket.OrganizationId
+                        &&
+                        authorIds.Contains(
+                            x.Id))
+                .ToDictionaryAsync(
+                    x =>
+                        x.Id,
+                    cancellationToken);
+
+        var events =
+            await _db.HelpdeskTicketEvents
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            ticket.OrganizationId
+                        &&
+                        x.TicketId ==
+                            ticket.Id)
+                .OrderBy(
+                    x =>
+                        x.CreatedAtUtc)
+                .ToListAsync(
+                    cancellationToken);
 
         return new HelpdeskTicketDetailsDto(
             ticket.Id,
@@ -598,39 +1159,69 @@ public sealed partial class HelpdeskService : IHelpdeskService
             ticket.Category,
             ticket.Source,
             ticket.RequesterUserId,
-            requester?.FullName ?? "Usuario Titan",
+            requester?.FullName ??
+                "Usuario Titan",
             ticket.AssigneeUserId,
             assignee?.FullName,
             ticket.DeviceId,
             device?.DeviceName,
-            device?.Platform.ToString(),
+            device?.Platform
+                .ToString(),
             ticket.RemoteSessionId,
             ticket.EntraUserPrincipalName,
             ticket.CreatedAtUtc,
             ticket.UpdatedAtUtc,
             ticket.FirstResponseDueAtUtc,
             ticket.ResolveDueAtUtc,
-            ticket.Status is not ("resolved" or "closed") &&
-                ((ticket.FirstRespondedAtUtc is null &&
-                  ticket.FirstResponseDueAtUtc < DateTime.UtcNow) ||
-                 (ticket.ResolvedAtUtc is null &&
-                  ticket.ResolveDueAtUtc < DateTime.UtcNow)),
-            comments.Select(item =>
-            {
-                authors.TryGetValue(item.AuthorUserId, out var author);
+            ticket.Status
+                is not (
+                    "resolved"
+                    or
+                    "closed")
+            &&
+            (
+                (
+                    ticket.FirstRespondedAtUtc
+                        is null
+                    &&
+                    ticket.FirstResponseDueAtUtc <
+                        DateTime.UtcNow
+                )
+                ||
+                (
+                    ticket.ResolvedAtUtc
+                        is null
+                    &&
+                    ticket.ResolveDueAtUtc <
+                        DateTime.UtcNow
+                )
+            ),
+            comments
+                .Select(
+                    item =>
+                    {
+                        authors.TryGetValue(
+                            item.AuthorUserId,
+                            out var author);
 
-                return new HelpdeskCommentDto(
-                    item.Id,
-                    item.AuthorUserId,
-                    author?.FullName ?? "Usuario",
-                    item.Body,
-                    item.IsInternal,
-                    item.CreatedAtUtc);
-            }).ToList(),
-            events.Select(item => new HelpdeskEventDto(
-                item.Id,
-                item.EventType,
-                item.Summary,
-                item.CreatedAtUtc)).ToList());
+                        return new HelpdeskCommentDto(
+                            item.Id,
+                            item.AuthorUserId,
+                            author?.FullName ??
+                                "Usuario",
+                            item.Body,
+                            item.IsInternal,
+                            item.CreatedAtUtc);
+                    })
+                .ToList(),
+            events
+                .Select(
+                    item =>
+                        new HelpdeskEventDto(
+                            item.Id,
+                            item.EventType,
+                            item.Summary,
+                            item.CreatedAtUtc))
+                .ToList());
     }
 }

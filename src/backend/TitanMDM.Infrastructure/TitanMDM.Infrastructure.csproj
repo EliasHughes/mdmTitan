@@ -16,7 +16,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <PackageReference Include="Google.Apis.Auth" Version="1.73.0" />
+
+    <PackageReference
+      Include="DocumentFormat.OpenXml"
+      Version="3.3.0" />
+
+    <PackageReference
+      Include="Google.Apis.Auth"
+      Version="1.73.0" />
 
     <PackageReference
       Include="Microsoft.AspNetCore.Authentication.JwtBearer"
@@ -29,6 +36,7 @@
     <PackageReference
       Include="Microsoft.EntityFrameworkCore.Design"
       Version="10.0.12">
+
       <IncludeAssets>
         runtime;
         build;
@@ -37,12 +45,17 @@
         analyzers;
         buildtransitive
       </IncludeAssets>
-      <PrivateAssets>all</PrivateAssets>
+
+      <PrivateAssets>
+        all
+      </PrivateAssets>
+
     </PackageReference>
 
     <PackageReference
       Include="Microsoft.EntityFrameworkCore.SqlServer"
       Version="10.0.12" />
+
   </ItemGroup>
 
 </Project>

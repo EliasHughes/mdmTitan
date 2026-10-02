@@ -1,21 +1,45 @@
 using Microsoft.AspNetCore.Identity;
 using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Domain.Entities;
+using TitanMDM.Domain.Enums;
 
 namespace TitanMDM.Infrastructure.Persistence.Seed;
 
 public sealed class TitanMdmSeeder
 {
-    private readonly TitanMdmDbContext _dbContext;
-    private readonly IPasswordHasher<User> _passwordHasher;
+    private const string DefaultOrganizationCode =
+        "TITANMDM";
+
+    private const string DefaultOrganizationName =
+        "TitanMDM";
+
+    private const string SuperAdminRoleName =
+        "SuperAdmin";
+
+    private const string BootstrapAdminEmail =
+        "superadmin@titanmdm.local";
+
+    private readonly TitanMdmDbContext
+        _dbContext;
+
+    private readonly IPasswordHasher<User>
+        _passwordHasher;
 
     public TitanMdmSeeder(
         TitanMdmDbContext dbContext,
         IPasswordHasher<User> passwordHasher)
     {
-        _dbContext = dbContext;
-        _passwordHasher = passwordHasher;
+        _dbContext =
+            dbContext;
+
+        _passwordHasher =
+            passwordHasher;
     }
+
+    // ============================================================
+    // PERMISSION DEFINITION
+    // ============================================================
 
     private sealed record Definition(
         string Code,
@@ -23,216 +47,956 @@ public sealed class TitanMdmSeeder
         string Module,
         string Description);
 
-    private static readonly Definition[] Definitions =
-    {
-        new("dashboard.view", "Ver dashboard", "Dashboard", "Permite visualizar el dashboard principal."),
-        new("workspace.windows.view", "Acceder a Windows Management", "Workspaces", "Permite acceder al espacio de trabajo Windows."),
-        new("workspace.android.view", "Acceder a Android Management", "Workspaces", "Permite acceder al espacio de trabajo Android."),
-        new("workspace.administration.view", "Acceder a Administración", "Workspaces", "Permite acceder al espacio de administración de TitanMDM."),
-        new("dashboard.global.view", "Ver dashboard general", "Dashboard", "Permite visualizar métricas combinadas de todas las plataformas."),
-        new("devices.view", "Ver dispositivos", "Devices", "Permite consultar los dispositivos administrados."),
-        new("devices.create", "Registrar dispositivos", "Devices", "Permite registrar y preparar nuevos dispositivos."),
-        new("devices.update", "Modificar dispositivos", "Devices", "Permite modificar información administrativa de dispositivos."),
-        new("devices.delete", "Eliminar dispositivos", "Devices", "Permite retirar registros de dispositivos."),
-        new("devices.commands", "Ejecutar comandos", "Devices", "Permite enviar comandos remotos a dispositivos."),
-        new("enrollment.view", "Ver enrolamiento", "Enrollment", "Permite consultar métodos y procesos de enrolamiento."),
-        new("enrollment.manage", "Administrar enrolamiento", "Enrollment", "Permite crear y administrar procesos de enrolamiento."),
-        new("policies.view", "Ver políticas", "Policies", "Permite consultar políticas de administración."),
-        new("policies.manage", "Administrar políticas", "Policies", "Permite crear, modificar, asignar y retirar políticas."),
-        new("apps.view", "Ver aplicaciones", "Applications", "Permite consultar el catálogo de aplicaciones."),
-        new("apps.manage", "Administrar aplicaciones", "Applications", "Permite cargar, distribuir, actualizar y retirar aplicaciones."),
-        new("compliance.view", "Ver cumplimiento", "Compliance", "Permite consultar el estado de cumplimiento."),
-        new("compliance.manage", "Administrar cumplimiento", "Compliance", "Permite configurar reglas y acciones de cumplimiento."),
-        new("security.view", "Ver seguridad", "Security", "Permite consultar eventos y estado de seguridad."),
-        new("security.manage", "Administrar seguridad", "Security", "Permite administrar controles y acciones de seguridad."),
-        new("kiosk.view", "Ver modo kiosco", "Kiosk", "Permite consultar configuraciones de modo kiosco."),
-        new("kiosk.manage", "Administrar modo kiosco", "Kiosk", "Permite crear y aplicar configuraciones de modo kiosco."),
-        new("geofencing.view", "Ver geocercas", "Geofencing", "Permite consultar geocercas configuradas."),
-        new("geofencing.manage", "Administrar geocercas", "Geofencing", "Permite crear, modificar y asignar geocercas."),
-        new("remote.view", "Ver soporte remoto", "RemoteSupport", "Permite consultar sesiones de soporte remoto."),
-        new("remote.manage", "Administrar soporte remoto", "RemoteSupport", "Permite iniciar y administrar sesiones remotas."),
-        new("reports.view", "Ver reportes", "Reports", "Permite consultar reportes."),
-        new("reports.export", "Exportar reportes", "Reports", "Permite exportar información y reportes."),
-        new("users.view", "Ver usuarios", "Users", "Permite consultar usuarios administrativos."),
-        new("users.manage", "Administrar usuarios", "Users", "Permite crear, modificar, activar y desactivar usuarios."),
-        new("roles.view", "Ver roles", "Roles", "Permite consultar roles y permisos."),
-        new("roles.manage", "Administrar roles", "Roles", "Permite crear roles y asignar permisos."),
-        new("audit.view", "Ver auditoría", "Audit", "Permite consultar el registro de auditoría."),
-        new("settings.view", "Ver configuración", "Settings", "Permite consultar la configuración de TitanMDM."),
-        new("settings.manage", "Administrar configuración", "Settings", "Permite modificar la configuración global de TitanMDM."),
-        new("workspace.helpdesk.view", "Acceder a Mesa de Ayuda", "Workspaces", "Permite acceder al espacio de trabajo de Mesa de Ayuda."),
-        new("helpdesk.view", "Ver mesa de ayuda", "Helpdesk", "Permite visualizar el workspace de Mesa de Ayuda."),
-        new("helpdesk.manage", "Administrar mesa de ayuda", "Helpdesk", "Permite configurar Entra ID y la mesa de ayuda."),
-        new("tickets.view", "Ver tickets", "Helpdesk", "Permite consultar tickets de la mesa de ayuda."),
-        new("tickets.create", "Crear tickets", "Helpdesk", "Permite crear tickets."),
-        new("tickets.assign", "Asignar tickets", "Helpdesk", "Permite asignar tickets a administradores Titan existentes."),
-        new("tickets.comment", "Comentar tickets", "Helpdesk", "Permite agregar comentarios y notas internas."),
-        new("tickets.close", "Cerrar tickets", "Helpdesk", "Permite resolver y cerrar tickets."),
+    private static readonly Definition[]
+        Definitions =
+        [
+            // =====================================================
+            // DASHBOARD / WORKSPACES
+            // =====================================================
 
-        new("workspace.ponches.view", "Acceder a Ponches", "Ponches", "Acceder a Ponches."),
-        new("ponches.manage", "Administrar todo Ponches", "Ponches", "Administrar todo Ponches."),
-        new("ponches.dashboard.view", "Ver dashboard", "Ponches", "Ver dashboard."),
-        new("ponches.records.view", "Ver ponches", "Ponches", "Ver ponches."),
-        new("ponches.history.view", "Ver historial SQL", "Ponches", "Ver historial SQL."),
-        new("ponches.remote.create", "Registrar ponche remoto", "Ponches", "Registrar ponche remoto."),
-        new("ponches.devices.view", "Ver relojes", "Ponches", "Ver relojes."),
-        new("ponches.devices.manage", "Administrar relojes", "Ponches", "Administrar relojes."),
-        new("ponches.employees.view", "Ver empleados", "Ponches", "Ver empleados."),
-        new("ponches.collaborators.view", "Ver colaboradores", "Ponches", "Ver colaboradores."),
-        new("ponches.collaborators.manage", "Editar colaboradores", "Ponches", "Editar colaboradores."),
-        new("ponches.collaborators.sync", "Sincronizar colaboradores y biometría", "Ponches", "Sincronizar colaboradores y biometría."),
-        new("ponches.schedules.view", "Ver horarios", "Ponches", "Ver horarios."),
-        new("ponches.schedules.manage", "Administrar horarios", "Ponches", "Administrar horarios."),
-        new("ponches.inventory.view", "Ver inventario biométrico", "Ponches", "Ver inventario biométrico."),
-        new("ponches.inventory.manage", "Administrar inventario biométrico", "Ponches", "Administrar inventario biométrico."),
-        new("ponches.bulk.execute", "Ejecutar operaciones masivas", "Ponches", "Ejecutar operaciones masivas."),
-        new("ponches.reports.view", "Ver reportes de asistencia", "Ponches", "Ver reportes de asistencia."),
-        new("ponches.export", "Exportar Excel y PDF", "Ponches", "Exportar Excel y PDF."),
-        new("ponches.sync.view", "Ver historial de sincronización", "Ponches", "Ver historial de sincronización."),
-        new("ponches.sync.run", "Ejecutar sincronización", "Ponches", "Ejecutar sincronización."),
-        new("ponches.settings.view", "Ver configuración de Ponches", "Ponches", "Ver configuración de Ponches."),
-        new("ponches.settings.manage", "Editar configuración de Ponches", "Ponches", "Editar configuración de Ponches."),
-        new("ponches.users.view", "Acceder a usuarios desde Ponches", "Ponches", "Acceder a usuarios desde Ponches."),
-        new("ponches.advanced-reports.view", "Ver reportes avanzados", "Ponches", "Ver reportes avanzados."),
-        new("ponches.fiorella.use", "Usar Fiorella", "Ponches", "Usar Fiorella."),
-    };
+            new(
+                "dashboard.view",
+                "Ver dashboard",
+                "Dashboard",
+                "Permite visualizar el dashboard principal."),
+
+            new(
+                "dashboard.global.view",
+                "Ver dashboard general",
+                "Dashboard",
+                "Permite visualizar métricas combinadas de todas las plataformas."),
+
+            new(
+                "workspace.windows.view",
+                "Acceder a Windows Management",
+                "Workspaces",
+                "Permite acceder al espacio de trabajo Windows."),
+
+            new(
+                "workspace.android.view",
+                "Acceder a Android Management",
+                "Workspaces",
+                "Permite acceder al espacio de trabajo Android."),
+
+            new(
+                "workspace.administration.view",
+                "Acceder a Administración",
+                "Workspaces",
+                "Permite acceder al espacio de administración de TitanMDM."),
+
+            new(
+                "workspace.helpdesk.view",
+                "Acceder a Mesa de Ayuda",
+                "Workspaces",
+                "Permite acceder al espacio de trabajo de Mesa de Ayuda."),
+
+            // =====================================================
+            // DEVICES
+            // =====================================================
+
+            new(
+                "devices.view",
+                "Ver dispositivos",
+                "Devices",
+                "Permite consultar los dispositivos administrados."),
+
+            new(
+                "devices.create",
+                "Registrar dispositivos",
+                "Devices",
+                "Permite registrar y preparar nuevos dispositivos."),
+
+            new(
+                "devices.update",
+                "Modificar dispositivos",
+                "Devices",
+                "Permite modificar información administrativa de dispositivos."),
+
+            new(
+                "devices.delete",
+                "Eliminar dispositivos",
+                "Devices",
+                "Permite retirar registros de dispositivos."),
+
+            new(
+                "devices.commands",
+                "Ejecutar comandos",
+                "Devices",
+                "Permite enviar comandos remotos a dispositivos."),
+
+            // =====================================================
+            // ENROLLMENT
+            // =====================================================
+
+            new(
+                "enrollment.view",
+                "Ver enrolamiento",
+                "Enrollment",
+                "Permite consultar métodos y procesos de enrolamiento."),
+
+            new(
+                "enrollment.manage",
+                "Administrar enrolamiento",
+                "Enrollment",
+                "Permite crear y administrar procesos de enrolamiento."),
+
+            // =====================================================
+            // POLICIES
+            // =====================================================
+
+            new(
+                "policies.view",
+                "Ver políticas",
+                "Policies",
+                "Permite consultar políticas de administración."),
+
+            new(
+                "policies.manage",
+                "Administrar políticas",
+                "Policies",
+                "Permite crear, modificar, asignar y retirar políticas."),
+
+            // =====================================================
+            // APPLICATIONS
+            // =====================================================
+
+            new(
+                "apps.view",
+                "Ver aplicaciones",
+                "Applications",
+                "Permite consultar el catálogo de aplicaciones."),
+
+            new(
+                "apps.manage",
+                "Administrar aplicaciones",
+                "Applications",
+                "Permite cargar, distribuir, actualizar y retirar aplicaciones."),
+
+            // =====================================================
+            // COMPLIANCE
+            // =====================================================
+
+            new(
+                "compliance.view",
+                "Ver cumplimiento",
+                "Compliance",
+                "Permite consultar el estado de cumplimiento."),
+
+            new(
+                "compliance.manage",
+                "Administrar cumplimiento",
+                "Compliance",
+                "Permite configurar reglas y acciones de cumplimiento."),
+
+            // =====================================================
+            // SECURITY
+            // =====================================================
+
+            new(
+                "security.view",
+                "Ver seguridad",
+                "Security",
+                "Permite consultar eventos y estado de seguridad."),
+
+            new(
+                "security.manage",
+                "Administrar seguridad",
+                "Security",
+                "Permite administrar controles y acciones de seguridad."),
+
+            // =====================================================
+            // KIOSK
+            // =====================================================
+
+            new(
+                "kiosk.view",
+                "Ver modo kiosco",
+                "Kiosk",
+                "Permite consultar configuraciones de modo kiosco."),
+
+            new(
+                "kiosk.manage",
+                "Administrar modo kiosco",
+                "Kiosk",
+                "Permite crear y aplicar configuraciones de modo kiosco."),
+
+            // =====================================================
+            // GEOFENCING
+            // =====================================================
+
+            new(
+                "geofencing.view",
+                "Ver geocercas",
+                "Geofencing",
+                "Permite consultar geocercas configuradas."),
+
+            new(
+                "geofencing.manage",
+                "Administrar geocercas",
+                "Geofencing",
+                "Permite crear, modificar y asignar geocercas."),
+
+            // =====================================================
+            // REMOTE SUPPORT
+            // =====================================================
+
+            new(
+                "remote.view",
+                "Ver soporte remoto",
+                "RemoteSupport",
+                "Permite consultar sesiones de soporte remoto."),
+
+            new(
+                "remote.manage",
+                "Administrar soporte remoto",
+                "RemoteSupport",
+                "Permite iniciar y administrar sesiones remotas."),
+
+            // =====================================================
+            // REPORTS
+            // =====================================================
+
+            new(
+                "reports.view",
+                "Ver reportes",
+                "Reports",
+                "Permite consultar reportes."),
+
+            new(
+                "reports.export",
+                "Exportar reportes",
+                "Reports",
+                "Permite exportar información y reportes."),
+
+            // =====================================================
+            // USERS
+            // =====================================================
+
+            new(
+                "users.view",
+                "Ver usuarios",
+                "Users",
+                "Permite consultar usuarios administrativos."),
+
+            new(
+                "users.manage",
+                "Administrar usuarios",
+                "Users",
+                "Permite crear, modificar, activar y desactivar usuarios."),
+
+            // =====================================================
+            // ROLES
+            // =====================================================
+
+            new(
+                "roles.view",
+                "Ver roles",
+                "Roles",
+                "Permite consultar roles y permisos."),
+
+            new(
+                "roles.manage",
+                "Administrar roles",
+                "Roles",
+                "Permite crear roles y asignar permisos."),
+
+            // =====================================================
+            // AUDIT
+            // =====================================================
+
+            new(
+                "audit.view",
+                "Ver auditoría",
+                "Audit",
+                "Permite consultar el registro de auditoría."),
+
+            // =====================================================
+            // SETTINGS
+            // =====================================================
+
+            new(
+                "settings.view",
+                "Ver configuración",
+                "Settings",
+                "Permite consultar la configuración de TitanMDM."),
+
+            new(
+                "settings.manage",
+                "Administrar configuración",
+                "Settings",
+                "Permite modificar la configuración global de TitanMDM."),
+
+            // =====================================================
+            // HELPDESK
+            // =====================================================
+
+            new(
+                "helpdesk.view",
+                "Ver mesa de ayuda",
+                "Helpdesk",
+                "Permite visualizar el workspace de Mesa de Ayuda."),
+
+            new(
+                "helpdesk.manage",
+                "Administrar mesa de ayuda",
+                "Helpdesk",
+                "Permite configurar Entra ID y la mesa de ayuda."),
+
+            new(
+                "tickets.view",
+                "Ver tickets",
+                "Helpdesk",
+                "Permite consultar tickets de la mesa de ayuda."),
+
+            new(
+                "tickets.create",
+                "Crear tickets",
+                "Helpdesk",
+                "Permite crear tickets."),
+
+            new(
+                "tickets.assign",
+                "Asignar tickets",
+                "Helpdesk",
+                "Permite asignar tickets a administradores Titan existentes."),
+
+            new(
+                "tickets.comment",
+                "Comentar tickets",
+                "Helpdesk",
+                "Permite agregar comentarios y notas internas."),
+
+            new(
+                "tickets.close",
+                "Cerrar tickets",
+                "Helpdesk",
+                "Permite resolver y cerrar tickets."),
+
+            // =====================================================
+            // PONCHES
+            // =====================================================
+
+            new(
+                "workspace.ponches.view",
+                "Acceder a Ponches",
+                "Ponches",
+                "Acceder a Ponches."),
+
+            new(
+                "ponches.manage",
+                "Administrar todo Ponches",
+                "Ponches",
+                "Administrar todo Ponches."),
+
+            new(
+                "ponches.dashboard.view",
+                "Ver dashboard",
+                "Ponches",
+                "Ver dashboard."),
+
+            new(
+                "ponches.records.view",
+                "Ver ponches",
+                "Ponches",
+                "Ver ponches."),
+
+            new(
+                "ponches.history.view",
+                "Ver historial SQL",
+                "Ponches",
+                "Ver historial SQL."),
+
+            new(
+                "ponches.remote.create",
+                "Registrar ponche remoto",
+                "Ponches",
+                "Registrar ponche remoto."),
+
+            new(
+                "ponches.devices.view",
+                "Ver relojes",
+                "Ponches",
+                "Ver relojes."),
+
+            new(
+                "ponches.devices.manage",
+                "Administrar relojes",
+                "Ponches",
+                "Administrar relojes."),
+
+            new(
+                "ponches.employees.view",
+                "Ver empleados",
+                "Ponches",
+                "Ver empleados."),
+
+            new(
+                "ponches.collaborators.view",
+                "Ver colaboradores",
+                "Ponches",
+                "Ver colaboradores."),
+
+            new(
+                "ponches.collaborators.manage",
+                "Editar colaboradores",
+                "Ponches",
+                "Editar colaboradores."),
+
+            new(
+                "ponches.collaborators.sync",
+                "Sincronizar colaboradores y biometría",
+                "Ponches",
+                "Sincronizar colaboradores y biometría."),
+
+            new(
+                "ponches.schedules.view",
+                "Ver horarios",
+                "Ponches",
+                "Ver horarios."),
+
+            new(
+                "ponches.schedules.manage",
+                "Administrar horarios",
+                "Ponches",
+                "Administrar horarios."),
+
+            new(
+                "ponches.inventory.view",
+                "Ver inventario biométrico",
+                "Ponches",
+                "Ver inventario biométrico."),
+
+            new(
+                "ponches.inventory.manage",
+                "Administrar inventario biométrico",
+                "Ponches",
+                "Administrar inventario biométrico."),
+
+            new(
+                "ponches.bulk.execute",
+                "Ejecutar operaciones masivas",
+                "Ponches",
+                "Ejecutar operaciones masivas."),
+
+            new(
+                "ponches.reports.view",
+                "Ver reportes de asistencia",
+                "Ponches",
+                "Ver reportes de asistencia."),
+
+            new(
+                "ponches.export",
+                "Exportar Excel y PDF",
+                "Ponches",
+                "Exportar Excel y PDF."),
+
+            new(
+                "ponches.sync.view",
+                "Ver historial de sincronización",
+                "Ponches",
+                "Ver historial de sincronización."),
+
+            new(
+                "ponches.sync.run",
+                "Ejecutar sincronización",
+                "Ponches",
+                "Ejecutar sincronización."),
+
+            new(
+                "ponches.settings.view",
+                "Ver configuración de Ponches",
+                "Ponches",
+                "Ver configuración de Ponches."),
+
+            new(
+                "ponches.settings.manage",
+                "Editar configuración de Ponches",
+                "Ponches",
+                "Editar configuración de Ponches."),
+
+            new(
+                "ponches.users.view",
+                "Acceder a usuarios desde Ponches",
+                "Ponches",
+                "Acceder a usuarios desde Ponches."),
+
+            new(
+                "ponches.advanced-reports.view",
+                "Ver reportes avanzados",
+                "Ponches",
+                "Ver reportes avanzados."),
+
+            new(
+                "ponches.fiorella.use",
+                "Usar Fiorella",
+                "Ponches",
+                "Usar Fiorella."),
+
+           new(
+                "sites.view",
+                "Ver localidades",
+                "Sites",
+                "Permite consultar localidades y ubicaciones."),
+
+            new(
+                "sites.manage",
+                "Administrar localidades",
+                "Sites",
+                "Permite crear, modificar y administrar localidades y ubicaciones."),
+         ];
+
+    // ============================================================
+    // SEED
+    // ============================================================
 
     public async Task SeedAsync(
         CancellationToken cancellationToken = default)
     {
-        await _dbContext.Database.MigrateAsync(cancellationToken);
+        /*
+         * IMPORTANTE:
+         *
+         * El Seeder NO ejecuta migrations.
+         * DatabaseBootstrapper es responsable del schema.
+         */
 
-        var organization = await _dbContext.Organizations
-            .FirstOrDefaultAsync(
-                x => x.Code == "TITANMDM",
+        var organization =
+            await EnsureOrganizationAsync(
                 cancellationToken);
 
-        if (organization is null)
+        var permissions =
+            await EnsurePermissionsAsync(
+                cancellationToken);
+
+        var superAdminRole =
+            await EnsureSuperAdminRoleAsync(
+                organization,
+                cancellationToken);
+
+        await EnsureSuperAdminPermissionsAsync(
+            permissions,
+            cancellationToken);
+
+        var superAdminUser =
+            await EnsureBootstrapAdministratorAsync(
+                organization,
+                cancellationToken);
+
+        await EnsureSuperAdminRoleAssignmentAsync(
+            superAdminUser,
+            superAdminRole,
+            cancellationToken);
+
+        await EnsureOrganizationScopeAsync(
+            organization,
+            superAdminUser,
+            cancellationToken);
+    }
+
+    // ============================================================
+    // ORGANIZATION
+    // ============================================================
+
+    private async Task<Organization>
+        EnsureOrganizationAsync(
+            CancellationToken cancellationToken)
+    {
+        var organization =
+            await _dbContext
+                .Organizations
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.Code ==
+                        DefaultOrganizationCode,
+                    cancellationToken);
+
+        if (organization is not null)
         {
-            organization = new Organization("TitanMDM", "TITANMDM");
-
-            organization.UpdateInformation(
-                "TitanMDM",
-                "Plataforma empresarial de administración y seguridad de dispositivos.",
-                null,
-                "Dominican Republic",
-                "America/Santo_Domingo");
-
-            _dbContext.Organizations.Add(organization);
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            return organization;
         }
 
-        var codes = Definitions.Select(x => x.Code).ToArray();
+        organization =
+            new Organization(
+                DefaultOrganizationName,
+                DefaultOrganizationCode);
 
-        var permissions = await _dbContext.Permissions
-            .Where(x => codes.Contains(x.Code))
-            .ToListAsync(cancellationToken);
+        organization.UpdateInformation(
+            DefaultOrganizationName,
+            "Plataforma empresarial de administración y seguridad de dispositivos.",
+            null,
+            "Dominican Republic",
+            "America/Santo_Domingo");
+
+        _dbContext
+            .Organizations
+            .Add(
+                organization);
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        return organization;
+    }
+
+    // ============================================================
+    // PERMISSIONS
+    // ============================================================
+
+    private async Task<List<Permission>>
+        EnsurePermissionsAsync(
+            CancellationToken cancellationToken)
+    {
+        var codes =
+            Definitions
+                .Select(
+                    x =>
+                        x.Code)
+                .ToArray();
+
+        var permissions =
+            await _dbContext
+                .Permissions
+                .Where(
+                    x =>
+                        codes.Contains(
+                            x.Code))
+                .ToListAsync(
+                    cancellationToken);
+
+        var existingCodes =
+            permissions
+                .Select(
+                    x =>
+                        x.Code)
+                .ToHashSet(
+                    StringComparer.OrdinalIgnoreCase);
 
         foreach (var definition in Definitions)
         {
-            if (permissions.Any(x => x.Code == definition.Code))
+            if (
+                existingCodes.Contains(
+                    definition.Code))
+            {
                 continue;
+            }
 
-            var permission = new Permission(
-                definition.Code,
-                definition.Name,
-                definition.Module,
-                definition.Description);
+            var permission =
+                new Permission(
+                    definition.Code,
+                    definition.Name,
+                    definition.Module,
+                    definition.Description);
 
-            _dbContext.Permissions.Add(permission);
-            permissions.Add(permission);
+            _dbContext
+                .Permissions
+                .Add(
+                    permission);
+
+            permissions.Add(
+                permission);
+
+            existingCodes.Add(
+                definition.Code);
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
 
-        var role = await _dbContext.Roles.FirstOrDefaultAsync(
-            x => x.OrganizationId == organization.Id &&
-                 x.Name == "SuperAdmin",
-            cancellationToken);
+        return permissions;
+    }
 
-        if (role is null)
+    // ============================================================
+    // SUPERADMIN ROLE
+    // ============================================================
+
+    private async Task<Role>
+        EnsureSuperAdminRoleAsync(
+            Organization organization,
+            CancellationToken cancellationToken)
+    {
+        var role =
+            await _dbContext
+                .Roles
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organization.Id
+                        &&
+                        x.Name ==
+                            SuperAdminRoleName,
+                    cancellationToken);
+
+        if (role is not null)
         {
-            role = new Role(organization.Id, "SuperAdmin");
-
-            role.SetDescription(
-                "Administrador principal con acceso total a TitanMDM.");
-
-            role.MarkAsSystemRole();
-            _dbContext.Roles.Add(role);
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            return role;
         }
 
-        // Solo los SuperAdmin del sistema reciben automáticamente
-        // los permisos nuevos. Los demás roles se configuran en la UI.
-        var adminRoles = await _dbContext.Roles
-            .Where(x => x.IsSystemRole && x.Name == "SuperAdmin")
-            .Select(x => x.Id)
-            .ToListAsync(cancellationToken);
+        role =
+            new Role(
+                organization.Id,
+                SuperAdminRoleName);
 
-        foreach (var roleId in adminRoles)
+        role.SetDescription(
+            "Administrador principal con acceso total a TitanMDM.");
+
+        role.MarkAsSystemRole();
+
+        _dbContext
+            .Roles
+            .Add(
+                role);
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        return role;
+    }
+
+    // ============================================================
+    // SUPERADMIN PERMISSIONS
+    // ============================================================
+
+    private async Task
+        EnsureSuperAdminPermissionsAsync(
+            IReadOnlyCollection<Permission> permissions,
+            CancellationToken cancellationToken)
+    {
+        /*
+         * Todos los roles SuperAdmin del sistema reciben
+         * automáticamente los permisos activos.
+         *
+         * Los demás roles son administrados mediante RBAC UI/API.
+         */
+
+        var adminRoleIds =
+            await _dbContext
+                .Roles
+                .Where(
+                    x =>
+                        x.IsSystemRole
+                        &&
+                        x.Name ==
+                            SuperAdminRoleName)
+                .Select(
+                    x =>
+                        x.Id)
+                .ToArrayAsync(
+                    cancellationToken);
+
+        if (adminRoleIds.Length == 0)
         {
-            var owned = (
-                await _dbContext.RolePermissions
-                    .Where(x => x.RoleId == roleId)
-                    .Select(x => x.PermissionId)
-                    .ToListAsync(cancellationToken)
-            ).ToHashSet();
+            return;
+        }
 
-            foreach (var permission in permissions.Where(x => x.IsActive))
+        foreach (var roleId in adminRoleIds)
+        {
+            var assignedPermissionIds =
+                (
+                    await _dbContext
+                        .RolePermissions
+                        .Where(
+                            x =>
+                                x.RoleId ==
+                                roleId)
+                        .Select(
+                            x =>
+                                x.PermissionId)
+                        .ToListAsync(
+                            cancellationToken)
+                )
+                .ToHashSet();
+
+            foreach (
+                var permission
+                in permissions.Where(
+                    x =>
+                        x.IsActive))
             {
-                if (!owned.Contains(permission.Id))
+                if (
+                    assignedPermissionIds.Contains(
+                        permission.Id))
                 {
-                    _dbContext.RolePermissions.Add(
-                        new RolePermission(roleId, permission.Id));
+                    continue;
                 }
+
+                _dbContext
+                    .RolePermissions
+                    .Add(
+                        new RolePermission(
+                            roleId,
+                            permission.Id));
             }
         }
 
-        await _dbContext.SaveChangesAsync(cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+    }
 
-        var user = await _dbContext.Users.FirstOrDefaultAsync(
-            x => x.OrganizationId == organization.Id &&
-                 x.Email == "superadmin@titanmdm.local",
-            cancellationToken);
+    // ============================================================
+    // BOOTSTRAP ADMINISTRATOR / BREAK-GLASS
+    // ============================================================
 
-        if (user is null)
+    private async Task<User>
+        EnsureBootstrapAdministratorAsync(
+            Organization organization,
+            CancellationToken cancellationToken)
+    {
+        var user =
+            await _dbContext
+                .Users
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organization.Id
+                        &&
+                        x.Email ==
+                            BootstrapAdminEmail,
+                    cancellationToken);
+
+        if (user is not null)
         {
-            var password = Environment.GetEnvironmentVariable(
-                "TITAN_BOOTSTRAP_PASSWORD");
+            return user;
+        }
 
-            if (string.IsNullOrWhiteSpace(password) ||
-                password.Length < 12)
-            {
-                throw new InvalidOperationException(
-                    "Primera instalación: configura TITAN_BOOTSTRAP_PASSWORD " +
-                    "con al menos 12 caracteres. Las instalaciones con el " +
-                    "administrador existente no necesitan esta variable.");
-            }
+        var password =
+            Environment
+                .GetEnvironmentVariable(
+                    "TITAN_BOOTSTRAP_PASSWORD");
 
-            user = new User(
+        if (
+            string.IsNullOrWhiteSpace(
+                password)
+            ||
+            password.Length < 12)
+        {
+            throw new InvalidOperationException(
+                "Primera instalación: configura TITAN_BOOTSTRAP_PASSWORD " +
+                "con al menos 12 caracteres. Las instalaciones con el " +
+                "administrador existente no necesitan esta variable.");
+        }
+
+        user =
+            new User(
                 organization.Id,
                 "Titan",
                 "Administrator",
-                "superadmin@titanmdm.local");
+                BootstrapAdminEmail);
 
-            user.SetPasswordHash(
-                _passwordHasher.HashPassword(user, password));
+        user.SetPasswordHash(
+            _passwordHasher
+                .HashPassword(
+                    user,
+                    password));
 
-            _dbContext.Users.Add(user);
-            await _dbContext.SaveChangesAsync(cancellationToken);
-        }
+        _dbContext
+            .Users
+            .Add(
+                user);
 
-        var assigned = await _dbContext.UserRoles.AnyAsync(
-            x => x.UserId == user.Id && x.RoleId == role.Id,
-            cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
 
-        if (!assigned)
+        return user;
+    }
+
+    // ============================================================
+    // SUPERADMIN ROLE ASSIGNMENT
+    // ============================================================
+
+    private async Task
+        EnsureSuperAdminRoleAssignmentAsync(
+            User user,
+            Role role,
+            CancellationToken cancellationToken)
+    {
+        var assigned =
+            await _dbContext
+                .UserRoles
+                .AnyAsync(
+                    x =>
+                        x.UserId ==
+                            user.Id
+                        &&
+                        x.RoleId ==
+                            role.Id,
+                    cancellationToken);
+
+        if (assigned)
         {
-            _dbContext.UserRoles.Add(
-                new UserRole(user.Id, role.Id, null));
-
-            await _dbContext.SaveChangesAsync(cancellationToken);
+            return;
         }
+
+        _dbContext
+            .UserRoles
+            .Add(
+                new UserRole(
+                    user.Id,
+                    role.Id,
+                    null));
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+    }
+
+    // ============================================================
+    // ORGANIZATION SCOPE
+    // ============================================================
+
+    private async Task
+        EnsureOrganizationScopeAsync(
+            Organization organization,
+            User user,
+            CancellationToken cancellationToken)
+    {
+        /*
+         * El administrador bootstrap recibe scope completo
+         * únicamente dentro de SU organización.
+         *
+         * No existe bypass global por nombre/rol.
+         */
+
+        var organizationScopeExists =
+            await _dbContext
+                .UserScopeGrants
+                .AnyAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organization.Id
+                        &&
+                        x.UserId ==
+                            user.Id
+                        &&
+                        x.ScopeType ==
+                            AuthorizationScopeType
+                                .Organization
+                        &&
+                        x.ScopeId ==
+                            organization.Id,
+                    cancellationToken);
+
+        if (organizationScopeExists)
+        {
+            return;
+        }
+
+        _dbContext
+            .UserScopeGrants
+            .Add(
+                new UserScopeGrant(
+                    organization.Id,
+                    user.Id,
+                    AuthorizationScopeType
+                        .Organization,
+                    organization.Id,
+                    null));
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
     }
 }

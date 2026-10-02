@@ -84,6 +84,17 @@ public sealed class HelpdeskTicket
     public DateTime? FirstRespondedAtUtc { get; private set; }
     public DateTime? ResolvedAtUtc { get; private set; }
 
+    public Guid? SiteId
+        {
+            get;
+            private set;
+        }
+
+        public Guid? SiteLocationId
+        {
+            get;
+            private set;
+        }
     public DateTime CreatedAtUtc { get; private set; }
     public DateTime UpdatedAtUtc { get; private set; }
 
@@ -260,4 +271,26 @@ public sealed class HelpdeskTicket
     {
         UpdatedAtUtc = DateTime.UtcNow;
     }
+
+    public void AssignSite(
+    Guid? siteId,
+    Guid? siteLocationId = null)
+{
+    if (
+        !siteId.HasValue
+        &&
+        siteLocationId.HasValue)
+    {
+        throw new InvalidOperationException(
+            "No se puede asignar una ubicación sin una localidad.");
+    }
+
+    SiteId =
+        siteId;
+
+    SiteLocationId =
+        siteLocationId;
+
+    Touch();
+}
 }

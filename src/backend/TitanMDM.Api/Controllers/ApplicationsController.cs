@@ -1,13 +1,20 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
+using TitanMDM.Api.Security;
+
 using TitanMDM.Application.Applications;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
 [ApiController]
 [Route("api/applications")]
 [Authorize]
+[RequirePermission(
+    PermissionCodes.Applications.View)]
 public sealed class ApplicationsController
     : ControllerBase
 {
@@ -22,10 +29,11 @@ public sealed class ApplicationsController
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetApplications(
-        [FromQuery] string? search,
-        [FromQuery] bool? systemApp,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult>
+        GetApplications(
+            [FromQuery] string? search,
+            [FromQuery] bool? systemApp,
+            CancellationToken cancellationToken = default)
     {
         var organizationId =
             GetOrganizationId();
@@ -89,7 +97,7 @@ public sealed class ApplicationsController
         return Guid.TryParse(
             value,
             out var organizationId)
-                ? organizationId
-                : null;
+            ? organizationId
+            : null;
     }
 }

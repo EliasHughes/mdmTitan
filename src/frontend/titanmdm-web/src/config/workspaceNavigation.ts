@@ -18,6 +18,7 @@ import {
   Workflow,
   Inbox,
   CloudCog,
+  Building2,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -73,13 +74,50 @@ const androidNavigation: WorkspaceNavigationItem[] = [
   item('Reportes', '/reports?workspace=android', FileBarChart, 'reports.view'),
 ]
 
-const administrationNavigation: WorkspaceNavigationItem[] = [
-  item('Dashboard general', '/dashboard?workspace=global', Gauge, 'dashboard.global.view'),
-  item('Usuarios', '/users?workspace=administration', Users, 'users.view'),
-  item('Roles y permisos', '/roles?workspace=administration', UserCog, 'roles.view'),
-  item('Auditoría', '/audit?workspace=administration', ScrollText, 'audit.view'),
-  item('Configuración', '/settings?workspace=administration', Settings, 'settings.view'),
-]
+const administrationNavigation:
+  WorkspaceNavigationItem[] = [
+    item(
+      'Dashboard general',
+      '/dashboard?workspace=global',
+      Gauge,
+      'dashboard.global.view',
+    ),
+
+    item(
+      'Usuarios',
+      '/users?workspace=administration',
+      Users,
+      'users.view',
+    ),
+
+    item(
+      'Roles y permisos',
+      '/roles?workspace=administration',
+      UserCog,
+      'roles.view',
+    ),
+
+    item(
+      'Localidades',
+      '/sites?workspace=administration',
+      Building2,
+      'sites.view',
+    ),
+
+    item(
+      'Auditoría',
+      '/audit?workspace=administration',
+      ScrollText,
+      'audit.view',
+    ),
+
+    item(
+      'Configuración',
+      '/settings?workspace=administration',
+      Settings,
+      'settings.view',
+    ),
+  ]
 
 const helpDeskNavigation: WorkspaceNavigationItem[] = [
   item(

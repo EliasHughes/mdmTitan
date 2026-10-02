@@ -49,6 +49,18 @@ public sealed class Device
 
     public Guid OrganizationId { get; private set; }
 
+    public Guid? SiteId
+    {
+        get;
+        private set;
+    }
+
+    public Guid? SiteLocationId
+    {
+        get;
+        private set;
+    }
+
     public string DeviceName { get; private set; } =
         string.Empty;
 
@@ -305,4 +317,28 @@ public sealed class Device
                     DateTimeKind.Utc)
         };
     }
+
+    public void AssignSite(
+    Guid? siteId,
+    Guid? siteLocationId = null)
+{
+    if (
+        !siteId.HasValue
+        &&
+        siteLocationId.HasValue)
+    {
+        throw new InvalidOperationException(
+            "No se puede asignar una ubicación sin una localidad.");
+    }
+
+    SiteId =
+        siteId;
+
+    SiteLocationId =
+        siteLocationId;
+
+    UpdatedAtUtc =
+        DateTime.UtcNow;
 }
+        };
+     

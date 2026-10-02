@@ -1,7 +1,12 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
+using TitanMDM.Api.Security;
+
 using TitanMDM.Application.Groups;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -17,18 +22,24 @@ public sealed class DeviceGroupsController
     public DeviceGroupsController(
         IDeviceGroupService service)
     {
-        _service = service;
+        _service =
+            service;
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll(
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.View)]
+    public async Task<IActionResult>
+        GetAll(
+            CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         return Ok(
             await _service.GetAllAsync(
@@ -37,15 +48,20 @@ public sealed class DeviceGroupsController
     }
 
     [HttpGet("{groupId:guid}")]
-    public async Task<IActionResult> Get(
-        Guid groupId,
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.View)]
+    public async Task<IActionResult>
+        Get(
+            Guid groupId,
+            CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         var result =
             await _service.GetByIdAsync(
@@ -59,15 +75,20 @@ public sealed class DeviceGroupsController
     }
 
     [HttpPost]
-    public async Task<IActionResult> Create(
-        CreateDeviceGroupRequest request,
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.Update)]
+    public async Task<IActionResult>
+        Create(
+            CreateDeviceGroupRequest request,
+            CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         try
         {
@@ -94,25 +115,32 @@ public sealed class DeviceGroupsController
     }
 
     [HttpPut("{groupId:guid}")]
-    public async Task<IActionResult> Update(
-        Guid groupId,
-        UpdateDeviceGroupRequest request,
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.Update)]
+    public async Task<IActionResult>
+        Update(
+            Guid groupId,
+            UpdateDeviceGroupRequest request,
+            CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         try
         {
-            return Ok(
+            var result =
                 await _service.UpdateAsync(
                     organizationId.Value,
                     groupId,
                     request,
-                    cancellationToken));
+                    cancellationToken);
+
+            return Ok(result);
         }
         catch (
             InvalidOperationException exception)
@@ -127,16 +155,21 @@ public sealed class DeviceGroupsController
     }
 
     [HttpPost("{groupId:guid}/members")]
-    public async Task<IActionResult> AddMembers(
-        Guid groupId,
-        AddGroupMembersRequest request,
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.Update)]
+    public async Task<IActionResult>
+        AddMembers(
+            Guid groupId,
+            AddGroupMembersRequest request,
+            CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         await _service.AddMembersAsync(
             organizationId.Value,
@@ -149,6 +182,8 @@ public sealed class DeviceGroupsController
 
     [HttpDelete(
         "{groupId:guid}/members/{deviceId:guid}")]
+    [RequirePermission(
+        PermissionCodes.Devices.Update)]
     public async Task<IActionResult>
         RemoveMember(
             Guid groupId,
@@ -159,7 +194,9 @@ public sealed class DeviceGroupsController
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         await _service.RemoveMemberAsync(
             organizationId.Value,
@@ -171,6 +208,8 @@ public sealed class DeviceGroupsController
     }
 
     [HttpPost("{groupId:guid}/commands")]
+    [RequirePermission(
+        PermissionCodes.Devices.Commands)]
     public async Task<IActionResult>
         ExecuteCommand(
             Guid groupId,
@@ -201,20 +240,26 @@ public sealed class DeviceGroupsController
         return Ok(
             new
             {
-                queuedDevices = count
+                queuedDevices =
+                    count
             });
     }
 
     [HttpDelete("{groupId:guid}")]
-    public async Task<IActionResult> Delete(
-        Guid groupId,
-        CancellationToken cancellationToken)
+    [RequirePermission(
+        PermissionCodes.Devices.Delete)]
+    public async Task<IActionResult>
+        Delete(
+            Guid groupId,
+            CancellationToken cancellationToken)
     {
         var organizationId =
             GetOrganizationId();
 
         if (organizationId is null)
+        {
             return Unauthorized();
+        }
 
         await _service.DeleteAsync(
             organizationId.Value,
@@ -242,7 +287,9 @@ public sealed class DeviceGroupsController
         var value =
             User.FindFirstValue(
                 ClaimTypes.NameIdentifier)
-            ?? User.FindFirstValue("sub");
+            ??
+            User.FindFirstValue(
+                "sub");
 
         return Guid.TryParse(
             value,

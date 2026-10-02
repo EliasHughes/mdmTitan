@@ -1,5 +1,6 @@
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+
 using TitanMDM.Application.Devices.Agent;
 
 namespace TitanMDM.Api.Controllers;
@@ -9,7 +10,8 @@ namespace TitanMDM.Api.Controllers;
 public sealed class DeviceAgentController
     : ControllerBase
 {
-    private readonly IDeviceAgentService _deviceAgentService;
+    private readonly IDeviceAgentService
+        _deviceAgentService;
 
     public DeviceAgentController(
         IDeviceAgentService deviceAgentService)
@@ -20,20 +22,25 @@ public sealed class DeviceAgentController
 
     [AllowAnonymous]
     [HttpPost("heartbeat")]
-    public async Task<IActionResult> Heartbeat(
-        [FromBody] DeviceHeartbeatRequest request,
-        CancellationToken cancellationToken)
+    public async Task<IActionResult>
+        Heartbeat(
+            [FromBody]
+            DeviceHeartbeatRequest request,
+            CancellationToken cancellationToken)
     {
         try
         {
             var result =
-                await _deviceAgentService.HeartbeatAsync(
-                    request,
-                    cancellationToken);
+                await _deviceAgentService
+                    .HeartbeatAsync(
+                        request,
+                        cancellationToken);
 
-            return Ok(result);
+            return Ok(
+                result);
         }
-        catch (DeviceAuthenticationException ex)
+        catch (
+            DeviceAuthenticationException ex)
         {
             var statusCode =
                 ex.Code switch
@@ -52,8 +59,11 @@ public sealed class DeviceAgentController
                 statusCode,
                 new
                 {
-                    code = ex.Code,
-                    message = ex.Message
+                    code =
+                        ex.Code,
+
+                    message =
+                        ex.Message
                 });
         }
     }

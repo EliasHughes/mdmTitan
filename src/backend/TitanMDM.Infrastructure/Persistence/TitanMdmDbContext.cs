@@ -196,8 +196,26 @@ public sealed class TitanMdmDbContext : DbContext
     public DbSet<HelpdeskAssistantAccess>
         HelpdeskAssistantAccess =>
             Set<HelpdeskAssistantAccess>();
+            
+    public DbSet<UserScopeGrant>
+    UserScopeGrants =>
+        Set<UserScopeGrant>();
+
+    public DbSet<AdministrativeAuditEvent>
+    AdministrativeAuditEvents =>
+        Set<AdministrativeAuditEvent>();
     
-    
+    public DbSet<Site>
+    Sites =>
+        Set<Site>();
+
+    public DbSet<SiteLocation>
+    SiteLocations =>
+        Set<SiteLocation>();
+
+    public DbSet<HelpdeskSiteCoverage>
+    HelpdeskSiteCoverages =>
+        Set<HelpdeskSiteCoverage>();
 
     protected override void OnModelCreating(
         ModelBuilder modelBuilder)

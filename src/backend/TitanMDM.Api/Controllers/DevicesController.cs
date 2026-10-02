@@ -4,6 +4,7 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 
 using TitanMDM.Application.Devices;
+using TitanMDM.Application.Security;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -25,61 +26,70 @@ public sealed class DevicesController
     private readonly IDeviceQueryService
         _deviceQueryService;
 
+    private readonly IScopeAccessService
+        _scopeAccessService;
+
     public DevicesController(
-        IDeviceQueryService deviceQueryService)
+        IDeviceQueryService deviceQueryService,
+        IScopeAccessService scopeAccessService)
     {
         _deviceQueryService =
-            deviceQueryService
-            ??
-            throw new ArgumentNullException(
-                nameof(deviceQueryService));
+            deviceQueryService;
+
+        _scopeAccessService =
+            scopeAccessService;
     }
 
-    /*
-     * ============================================================
-     * LIST DEVICES
-     * ============================================================
-     */
+    // ============================================================
+    // GLOBAL DEVICE LIST
+    // ============================================================
 
     [HttpGet]
-    public async Task<IActionResult> GetDevices(
-        [FromQuery] string? search,
-        [FromQuery] string? platform,
-        [FromQuery] string? status,
-        [FromQuery] string? compliance,
-        [FromQuery] bool? managed,
-        [FromQuery] string? sortBy,
-        [FromQuery] string? sortDirection,
-        [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 25,
-        CancellationToken cancellationToken = default)
+    public async Task<IActionResult>
+        GetDevices(
+            [FromQuery] string? search,
+            [FromQuery] string? platform,
+            [FromQuery] string? status,
+            [FromQuery] string? compliance,
+            [FromQuery] bool? managed,
+            [FromQuery] string? sortBy,
+            [FromQuery] string? sortDirection,
+            [FromQuery] int page = 1,
+            [FromQuery] int pageSize = 25,
+            CancellationToken cancellationToken = default)
     {
-        if (
-            !HasPermission(
+        if (!HasPermission(
                 DevicesViewPermission))
         {
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var securityContext =
+            GetSecurityContext();
 
-        if (
-            organizationId is null)
+        if (securityContext is null)
         {
-            return Unauthorized(
-                new
-                {
-                    message =
-                        "El token no contiene una organización válida."
-                });
+            return Unauthorized();
         }
 
         /*
-         * ========================================================
-         * PLATFORM ACCESS
-         * ========================================================
+         * La consulta global solamente está disponible
+         * para Organization scope.
+         *
+         * Usuarios limitados a Sites utilizarán
+         * /api/sites/{siteId}/operations/...
          */
+        var organizationWide =
+            await _scopeAccessService
+                .HasOrganizationScopeAsync(
+                    securityContext.Value.OrganizationId,
+                    securityContext.Value.UserId,
+                    cancellationToken);
+
+        if (!organizationWide)
+        {
+            return Forbid();
+        }
 
         var hasWindowsAccess =
             HasPermission(
@@ -101,13 +111,9 @@ public sealed class DevicesController
             NormalizePlatform(
                 platform);
 
-        /*
-         * Plataforma explícita.
-         */
-
         if (
             normalizedPlatform ==
-            "Windows"
+                "Windows"
             &&
             !hasWindowsAccess)
         {
@@ -116,28 +122,14 @@ public sealed class DevicesController
 
         if (
             normalizedPlatform ==
-            "Android"
+                "Android"
             &&
             !hasAndroidAccess)
         {
             return Forbid();
         }
 
-        /*
-         * Si no llega platform y el usuario solo tiene
-         * acceso a un workspace, forzamos ese workspace.
-         *
-         * Esto evita:
-         *
-         * usuario Android
-         *   ↓
-         * elimina ?platform=Android
-         *   ↓
-         * recibe Windows también
-         */
-
-        if (
-            string.IsNullOrWhiteSpace(
+        if (string.IsNullOrWhiteSpace(
                 normalizedPlatform))
         {
             if (
@@ -161,7 +153,7 @@ public sealed class DevicesController
         var result =
             await _deviceQueryService
                 .GetDevicesAsync(
-                    organizationId.Value,
+                    securityContext.Value.OrganizationId,
                     search,
                     normalizedPlatform,
                     status,
@@ -177,11 +169,9 @@ public sealed class DevicesController
             result);
     }
 
-    /*
-     * ============================================================
-     * DEVICE DETAILS
-     * ============================================================
-     */
+    // ============================================================
+    // DEVICE DETAILS
+    // ============================================================
 
     [HttpGet("{deviceId:guid}")]
     public async Task<IActionResult>
@@ -189,50 +179,42 @@ public sealed class DevicesController
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasPermission(
+        if (!HasPermission(
                 DevicesViewPermission))
         {
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var securityContext =
+            GetSecurityContext();
+
+        if (securityContext is null)
+        {
+            return Unauthorized();
+        }
 
         if (
-            organizationId is null)
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    securityContext.Value.OrganizationId,
+                    securityContext.Value.UserId,
+                    deviceId,
+                    cancellationToken))
         {
-            return Unauthorized(
-                new
-                {
-                    message =
-                        "El token no contiene una organización válida."
-                });
+            return Forbid();
         }
 
         var device =
             await _deviceQueryService
                 .GetDeviceByIdAsync(
-                    organizationId.Value,
+                    securityContext.Value.OrganizationId,
                     deviceId,
                     cancellationToken);
 
-        if (
-            device is null)
+        if (device is null)
         {
-            return NotFound(
-                new
-                {
-                    message =
-                        "El dispositivo no existe o no pertenece a la organización."
-                });
+            return NotFound();
         }
-
-        /*
-         * El usuario puede conocer el ID del dispositivo,
-         * pero no recibe los datos si no tiene acceso al
-         * workspace correspondiente.
-         */
 
         if (
             string.Equals(
@@ -262,11 +244,9 @@ public sealed class DevicesController
             device);
     }
 
-    /*
-     * ============================================================
-     * ANDROID DETAILS
-     * ============================================================
-     */
+    // ============================================================
+    // ANDROID DETAILS
+    // ============================================================
 
     [HttpGet("{deviceId:guid}/android")]
     public async Task<IActionResult>
@@ -284,140 +264,124 @@ public sealed class DevicesController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var securityContext =
+            GetSecurityContext();
+
+        if (securityContext is null)
+        {
+            return Unauthorized();
+        }
 
         if (
-            organizationId is null)
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    securityContext.Value.OrganizationId,
+                    securityContext.Value.UserId,
+                    deviceId,
+                    cancellationToken))
         {
-            return Unauthorized(
-                new
-                {
-                    message =
-                        "El token no contiene una organización válida."
-                });
+            return Forbid();
         }
 
         var android =
             await _deviceQueryService
                 .GetAndroidDeviceDetailsAsync(
-                    organizationId.Value,
+                    securityContext.Value.OrganizationId,
                     deviceId,
                     cancellationToken);
 
-        if (
-            android is null)
+        return android is null
+            ? NotFound()
+            : Ok(android);
+    }
+
+    // ============================================================
+    // OPERATIONAL SNAPSHOT
+    // ============================================================
+
+    [HttpGet("{deviceId:guid}/snapshot")]
+    public async Task<IActionResult>
+        GetOperationalSnapshot(
+            Guid deviceId,
+            CancellationToken cancellationToken = default)
+    {
+        if (!HasPermission(
+                DevicesViewPermission))
         {
-            return NotFound(
-                new
-                {
-                    message =
-                        "No existe información Android Enterprise para este dispositivo."
-                });
+            return Forbid();
+        }
+
+        var securityContext =
+            GetSecurityContext();
+
+        if (securityContext is null)
+        {
+            return Unauthorized();
+        }
+
+        if (
+            !await _scopeAccessService
+                .CanAccessDeviceAsync(
+                    securityContext.Value.OrganizationId,
+                    securityContext.Value.UserId,
+                    deviceId,
+                    cancellationToken))
+        {
+            return Forbid();
+        }
+
+        var snapshot =
+            await _deviceQueryService
+                .GetOperationalSnapshotAsync(
+                    securityContext.Value.OrganizationId,
+                    deviceId,
+                    cancellationToken);
+
+        if (snapshot is null)
+        {
+            return NotFound();
+        }
+
+        if (
+            string.Equals(
+                snapshot.Device.Platform,
+                "Windows",
+                StringComparison.OrdinalIgnoreCase)
+            &&
+            !HasPermission(
+                WindowsWorkspacePermission))
+        {
+            return Forbid();
+        }
+
+        if (
+            string.Equals(
+                snapshot.Device.Platform,
+                "Android",
+                StringComparison.OrdinalIgnoreCase)
+            &&
+            !HasPermission(
+                AndroidWorkspacePermission))
+        {
+            return Forbid();
         }
 
         return Ok(
-            android);
+            snapshot);
     }
 
-    /*
- * ============================================================
- * OPERATIONAL SNAPSHOT
- * ============================================================
- */
-
-[HttpGet("{deviceId:guid}/snapshot")]
-public async Task<IActionResult>
-    GetOperationalSnapshot(
-        Guid deviceId,
-        CancellationToken cancellationToken = default)
-{
-    if (
-        !HasPermission(
-            DevicesViewPermission))
+    private static string?
+        NormalizePlatform(
+            string? platform)
     {
-        return Forbid();
-    }
-
-    var organizationId =
-        GetOrganizationId();
-
-    if (
-        organizationId is null)
-    {
-        return Unauthorized(
-            new
-            {
-                message =
-                    "El token no contiene una organización válida."
-            });
-    }
-
-    var snapshot =
-        await _deviceQueryService
-            .GetOperationalSnapshotAsync(
-                organizationId.Value,
-                deviceId,
-                cancellationToken);
-
-    if (
-        snapshot is null)
-    {
-        return NotFound(
-            new
-            {
-                message =
-                    "El dispositivo no existe."
-            });
-    }
-
-    if (
-        string.Equals(
-            snapshot.Device.Platform,
-            "Windows",
-            StringComparison.OrdinalIgnoreCase)
-        &&
-        !HasPermission(
-            WindowsWorkspacePermission))
-    {
-        return Forbid();
-    }
-
-    if (
-        string.Equals(
-            snapshot.Device.Platform,
-            "Android",
-            StringComparison.OrdinalIgnoreCase)
-        &&
-        !HasPermission(
-            AndroidWorkspacePermission))
-    {
-        return Forbid();
-    }
-
-    return Ok(
-        snapshot);
-}
-
-    /*
-     * ============================================================
-     * PLATFORM NORMALIZATION
-     * ============================================================
-     */
-
-    private static string? NormalizePlatform(
-        string? platform)
-    {
-        if (
-            string.IsNullOrWhiteSpace(
+        if (string.IsNullOrWhiteSpace(
                 platform))
         {
             return null;
         }
 
         var value =
-            platform
-                .Trim();
+            platform.Trim();
 
         if (
             value.Equals(
@@ -435,49 +399,59 @@ public async Task<IActionResult>
             return "Android";
         }
 
-        /*
-         * Una plataforma desconocida no debe convertirse
-         * silenciosamente en una consulta global.
-         */
-
         return value;
     }
 
-    /*
-     * ============================================================
-     * CLAIMS
-     * ============================================================
-     */
-
-    private Guid? GetOrganizationId()
+    private SecurityContext?
+        GetSecurityContext()
     {
-        var value =
+        var organizationValue =
             User.FindFirstValue(
                 "organization_id")
             ??
             User.FindFirstValue(
                 "organizationId");
 
-        return Guid.TryParse(
-            value,
-            out var organizationId)
-            ? organizationId
-            : null;
+        var userValue =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ??
+            User.FindFirstValue(
+                "sub");
+
+        if (
+            !Guid.TryParse(
+                organizationValue,
+                out var organizationId)
+            ||
+            !Guid.TryParse(
+                userValue,
+                out var userId))
+        {
+            return null;
+        }
+
+        return new SecurityContext(
+            organizationId,
+            userId);
     }
 
     private bool HasPermission(
         string permission)
     {
-        return User.Claims
-            .Any(
-                claim =>
-                    claim.Type ==
-                        "permission"
-                    &&
-                    string.Equals(
-                        claim.Value,
-                        permission,
-                        StringComparison
-                            .OrdinalIgnoreCase));
+        return User.Claims.Any(
+            claim =>
+                claim.Type ==
+                    "permission"
+                &&
+                string.Equals(
+                    claim.Value,
+                    permission,
+                    StringComparison.OrdinalIgnoreCase));
     }
+
+    private readonly record struct
+        SecurityContext(
+            Guid OrganizationId,
+            Guid UserId);
 }
