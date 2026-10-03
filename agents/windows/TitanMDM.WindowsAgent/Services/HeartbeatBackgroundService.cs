@@ -27,6 +27,9 @@ public sealed class HeartbeatBackgroundService
     private readonly DeviceIdentityStore
         _identityStore;
 
+    private readonly AgentLifecycleCoordinator
+        _lifecycle;
+
     private readonly AgentOptions
         _options;
 
@@ -34,6 +37,7 @@ public sealed class HeartbeatBackgroundService
         ILogger<HeartbeatBackgroundService> logger,
         TitanMdmApiClient apiClient,
         DeviceIdentityStore identityStore,
+        AgentLifecycleCoordinator lifecycle,
         IOptions<AgentOptions> options)
     {
         _logger =
@@ -44,6 +48,9 @@ public sealed class HeartbeatBackgroundService
 
         _identityStore =
             identityStore;
+
+        _lifecycle =
+            lifecycle;
 
         _options =
             options.Value;
@@ -58,7 +65,9 @@ public sealed class HeartbeatBackgroundService
         var consecutiveFailures =
             0;
 
-        while (!stoppingToken.IsCancellationRequested)
+        while (
+            !stoppingToken
+                .IsCancellationRequested)
         {
             var heartbeatSucceeded =
                 false;
@@ -70,10 +79,26 @@ public sealed class HeartbeatBackgroundService
                         .LoadAsync(
                             stoppingToken);
 
-                if (identity is null)
+                if (
+                    identity is null)
                 {
                     consecutiveFailures =
                         0;
+
+                    if (
+                        _lifecycle.State is
+                            not AgentLifecycleState.Enrolling
+                        and
+                            not AgentLifecycleState.TokenExpired
+                        and
+                            not AgentLifecycleState.TokenInvalid
+                        and
+                            not AgentLifecycleState.RecoveryRequired)
+                    {
+                        _lifecycle
+                            .MarkEnrollmentRequired(
+                                "Heartbeat esperando identidad TitanMDM.");
+                    }
 
                     _logger.LogDebug(
                         "Heartbeat omitido: dispositivo todavía no inscrito.");
@@ -91,6 +116,9 @@ public sealed class HeartbeatBackgroundService
                     consecutiveFailures =
                         0;
 
+                    _lifecycle
+                        .MarkHealthy();
+
                     _logger.LogDebug(
                         "Heartbeat correcto. DeviceId: {DeviceId}, Estado: {Status}, LastSeen: {LastSeenAtUtc}",
                         heartbeat.DeviceId,
@@ -98,31 +126,47 @@ public sealed class HeartbeatBackgroundService
                         heartbeat.LastSeenAtUtc);
                 }
             }
-            catch (OperationCanceledException)
-                when (stoppingToken.IsCancellationRequested)
+            catch (
+                OperationCanceledException)
+                when (
+                    stoppingToken
+                        .IsCancellationRequested)
             {
                 break;
             }
-            catch (HttpRequestException ex)
+            catch (
+                HttpRequestException ex)
             {
                 consecutiveFailures++;
+
+                _lifecycle
+                    .MarkServerUnavailable(
+                        ex.Message);
 
                 _logger.LogWarning(
                     ex,
                     "No fue posible enviar heartbeat a TitanMDM. Fallos consecutivos: {FailureCount}.",
                     consecutiveFailures);
             }
-            catch (TaskCanceledException ex)
-                when (!stoppingToken.IsCancellationRequested)
+            catch (
+                TaskCanceledException ex)
+                when (
+                    !stoppingToken
+                        .IsCancellationRequested)
             {
                 consecutiveFailures++;
+
+                _lifecycle
+                    .MarkServerUnavailable(
+                        "Timeout enviando heartbeat.");
 
                 _logger.LogWarning(
                     ex,
                     "Timeout enviando heartbeat a TitanMDM. Fallos consecutivos: {FailureCount}.",
                     consecutiveFailures);
             }
-            catch (Exception ex)
+            catch (
+                Exception ex)
             {
                 consecutiveFailures++;
 
@@ -143,8 +187,11 @@ public sealed class HeartbeatBackgroundService
                     delay,
                     stoppingToken);
             }
-            catch (OperationCanceledException)
-                when (stoppingToken.IsCancellationRequested)
+            catch (
+                OperationCanceledException)
+                when (
+                    stoppingToken
+                        .IsCancellationRequested)
             {
                 break;
             }
@@ -165,22 +212,16 @@ public sealed class HeartbeatBackgroundService
                 MinimumHeartbeatSeconds,
                 3600);
 
-        if (heartbeatSucceeded ||
-            consecutiveFailures <= 0)
+        if (
+            heartbeatSucceeded
+            ||
+            consecutiveFailures <=
+                0)
         {
             return TimeSpan.FromSeconds(
                 configuredIntervalSeconds);
         }
 
-        /*
-         * Backoff exponencial exclusivamente para
-         * fallos de comunicación.
-         *
-         * El intervalo normal de heartbeat no se suma
-         * al backoff. De lo contrario un heartbeat de
-         * 60 s podría tardar varios minutos incluso
-         * después de una caída breve.
-         */
         var exponent =
             Math.Min(
                 consecutiveFailures - 1,
@@ -191,16 +232,27 @@ public sealed class HeartbeatBackgroundService
                 MaximumBackoffSeconds,
                 5 * (1 << exponent));
 
-        /*
-         * Se conserva un mínimo para evitar loops
-         * agresivos contra el servidor.
-         */
         var retrySeconds =
             Math.Max(
                 MinimumHeartbeatSeconds,
                 backoffSeconds);
 
-        return TimeSpan.FromSeconds(
-            retrySeconds);
+        /*
+         * Jitter evita que cientos de agentes reconecten
+         * exactamente al mismo tiempo después de una
+         * caída de red/servidor.
+         */
+
+        var jitterMilliseconds =
+            Random.Shared.Next(
+                250,
+                2500);
+
+        return
+            TimeSpan.FromSeconds(
+                retrySeconds)
+            +
+            TimeSpan.FromMilliseconds(
+                jitterMilliseconds);
     }
 }

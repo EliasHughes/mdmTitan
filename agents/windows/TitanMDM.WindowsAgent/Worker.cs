@@ -1,4 +1,5 @@
 using Microsoft.Extensions.Options;
+
 using TitanMDM.WindowsAgent.Configuration;
 using TitanMDM.WindowsAgent.Contracts;
 using TitanMDM.WindowsAgent.Execution;
@@ -28,6 +29,12 @@ public sealed class Worker
     private readonly AgentRuntimeSettingsStore
         _runtimeSettingsStore;
 
+    private readonly AgentLifecycleCoordinator
+        _lifecycle;
+
+    private readonly AgentRetryPolicy
+        _retryPolicy;
+
     private readonly AgentOptions
         _options;
 
@@ -37,8 +44,9 @@ public sealed class Worker
         EnrollmentService enrollmentService,
         ICommandExecutor commandExecutor,
         DeviceIdentityStore identityStore,
-        AgentRuntimeSettingsStore
-            runtimeSettingsStore,
+        AgentRuntimeSettingsStore runtimeSettingsStore,
+        AgentLifecycleCoordinator lifecycle,
+        AgentRetryPolicy retryPolicy,
         IOptions<AgentOptions> options)
     {
         _logger =
@@ -59,6 +67,12 @@ public sealed class Worker
         _runtimeSettingsStore =
             runtimeSettingsStore;
 
+        _lifecycle =
+            lifecycle;
+
+        _retryPolicy =
+            retryPolicy;
+
         _options =
             options.Value;
     }
@@ -66,6 +80,8 @@ public sealed class Worker
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
+        _lifecycle.MarkStarting();
+
         _logger.LogInformation(
             "TitanMDM Windows Agent iniciado.");
 
@@ -83,6 +99,9 @@ public sealed class Worker
             _runtimeSettingsStore
                 .GetSettingsFilePath());
 
+        var consecutiveFailures =
+            0;
+
         while (
             !stoppingToken
                 .IsCancellationRequested)
@@ -95,16 +114,54 @@ public sealed class Worker
 
                 if (identity is null)
                 {
+                    consecutiveFailures =
+                        0;
+
                     await DelayAsync(
                         stoppingToken);
 
                     continue;
                 }
 
+                /*
+                 * =================================================
+                 * COMMAND POLLING
+                 * =================================================
+                 *
+                 * Retry solamente para transporte.
+                 *
+                 * NO se reintenta automáticamente la ejecución
+                 * del comando porque acciones como:
+                 *
+                 * - shutdown
+                 * - restart
+                 * - uninstall
+                 * - lock
+                 *
+                 * no deben ejecutarse múltiples veces debido a
+                 * un problema de red.
+                 * =================================================
+                 */
+
                 var commands =
-                    await _apiClient
-                        .GetCommandsAsync(
-                            stoppingToken);
+                    await _retryPolicy
+                        .ExecuteAsync(
+                            token =>
+                                _apiClient
+                                    .GetCommandsAsync(
+                                        token),
+
+                            "consultar comandos",
+
+                            stoppingToken,
+
+                            maximumAttempts:
+                                3);
+
+                consecutiveFailures =
+                    0;
+
+                _lifecycle.MarkHealthy();
 
                 foreach (
                     var command
@@ -131,27 +188,74 @@ public sealed class Worker
                 break;
             }
             catch (
-                HttpRequestException ex)
+                EnrollmentException ex)
             {
+                consecutiveFailures++;
+
+                HandleEnrollmentException(
+                    ex);
+
                 _logger.LogWarning(
                     ex,
-                    "TitanMDM API no está disponible actualmente.");
+                    "TitanMDM no pudo completar el enrolamiento. Code={Code}, StatusCode={StatusCode}.",
+                    ex.Code,
+                    ex.StatusCode);
+            }
+            catch (
+                HttpRequestException ex)
+            {
+                consecutiveFailures++;
+
+                _lifecycle
+                    .MarkServerUnavailable(
+                        ex.Message);
+
+                _logger.LogWarning(
+                    ex,
+                    "TitanMDM API no está disponible actualmente. Fallos consecutivos={FailureCount}.",
+                    consecutiveFailures);
+            }
+            catch (
+                TaskCanceledException ex)
+                when (
+                    !stoppingToken
+                        .IsCancellationRequested)
+            {
+                consecutiveFailures++;
+
+                _lifecycle
+                    .MarkServerUnavailable(
+                        "Timeout comunicando con TitanMDM.");
+
+                _logger.LogWarning(
+                    ex,
+                    "Timeout comunicando con TitanMDM. Fallos consecutivos={FailureCount}.",
+                    consecutiveFailures);
             }
             catch (
                 Exception ex)
             {
+                consecutiveFailures++;
+
                 _logger.LogError(
                     ex,
                     "Error durante el ciclo principal del agente TitanMDM.");
             }
 
-            await DelayAsync(
+            await DelayWithBackoffAsync(
+                consecutiveFailures,
                 stoppingToken);
         }
+
+        _lifecycle.MarkStopping();
 
         _logger.LogInformation(
             "TitanMDM Windows Agent detenido.");
     }
+
+    // ============================================================
+    // ENROLLMENT
+    // ============================================================
 
     private async Task<DeviceIdentity?>
         EnsureEnrollmentAsync(
@@ -162,47 +266,105 @@ public sealed class Worker
                 .LoadAsync(
                     cancellationToken);
 
+        /*
+         * ========================================================
+         * EXISTING IDENTITY
+         * ========================================================
+         *
+         * Si device.json ya existe:
+         *
+         * - jamás volver a enrolar
+         * - jamás consumir otro token
+         * - limpiar un token residual de reinstall/repair
+         * ========================================================
+         */
+
         if (
             identity is
             not null)
         {
+            _lifecycle
+                .MarkEnrolled();
+
+            await ClearResidualEnrollmentTokenAsync(
+                cancellationToken);
+
             return identity;
         }
+
+        /*
+         * No existe identidad.
+         */
 
         if (
             string.IsNullOrWhiteSpace(
                 _options.EnrollmentToken))
         {
+            _lifecycle
+                .MarkEnrollmentRequired(
+                    "El dispositivo no posee device.json ni EnrollmentToken.");
+
             _logger.LogWarning(
                 "El equipo todavía no está inscrito y no existe EnrollmentToken.");
 
             return null;
         }
 
+        _lifecycle.MarkEnrolling();
+
         _logger.LogInformation(
             "Iniciando inscripción del dispositivo contra {ServerUrl}.",
             _options.ServerUrl);
 
-        identity =
-            await _enrollmentService
-                .EnrollAsync(
-                    _options.EnrollmentToken,
-                    cancellationToken);
+        try
+        {
+            identity =
+                await _enrollmentService
+                    .EnrollAsync(
+                        _options.EnrollmentToken,
+                        cancellationToken);
+        }
+        catch (
+            EnrollmentException)
+        {
+            throw;
+        }
+
+        _lifecycle.MarkEnrolled();
 
         _logger.LogInformation(
             "Dispositivo inscrito correctamente. DeviceId={DeviceId}",
             identity.DeviceId);
 
-        /*
-         * El EnrollmentToken ya no es necesario después de crear
-         * DeviceId + DeviceSecret.
-         *
-         * Se elimina del archivo runtime para no dejar credenciales
-         * de inscripción almacenadas permanentemente.
-         */
+        await ClearResidualEnrollmentTokenAsync(
+            cancellationToken);
 
+        return identity;
+    }
+
+    private async Task
+        ClearResidualEnrollmentTokenAsync(
+            CancellationToken cancellationToken)
+    {
         try
         {
+            var settings =
+                await _runtimeSettingsStore
+                    .LoadAsync(
+                        cancellationToken);
+
+            if (
+                settings is null
+                ||
+                string.IsNullOrWhiteSpace(
+                    settings.EnrollmentToken))
+            {
+                _options.EnrollmentToken =
+                    null;
+
+                return;
+            }
+
             await _runtimeSettingsStore
                 .ClearEnrollmentTokenAsync(
                     cancellationToken);
@@ -211,24 +373,99 @@ public sealed class Worker
                 null;
 
             _logger.LogInformation(
-                "EnrollmentToken eliminado de la configuración runtime.");
+                "EnrollmentToken residual eliminado de agentsettings.json.");
+        }
+        catch (
+            OperationCanceledException)
+            when (
+                cancellationToken
+                    .IsCancellationRequested)
+        {
+            throw;
         }
         catch (
             Exception ex)
         {
             /*
-             * La inscripción YA fue completada.
-             * Un fallo al limpiar el token no debe invalidar
-             * DeviceId/DeviceSecret.
+             * device.json ya es la credencial definitiva.
+             *
+             * No invalidamos un equipo enrolado porque falle
+             * la limpieza de un token temporal.
              */
 
             _logger.LogWarning(
                 ex,
-                "El dispositivo fue inscrito, pero no fue posible limpiar EnrollmentToken.");
+                "No fue posible limpiar EnrollmentToken residual.");
         }
-
-        return identity;
     }
+
+    private void HandleEnrollmentException(
+        EnrollmentException exception)
+    {
+        switch (
+            exception.Code
+                .ToUpperInvariant())
+        {
+            case "TOKEN_EXPIRED":
+                _lifecycle
+                    .MarkTokenExpired(
+                        exception.Message);
+
+                break;
+
+            case "INVALID_TOKEN":
+
+            case "TOKEN_REQUIRED":
+
+            case "TOKEN_REVOKED":
+
+            case "TOKEN_EXHAUSTED":
+
+            case "TOKEN_NOT_ACTIVE":
+
+            case "PLATFORM_MISMATCH":
+                _lifecycle
+                    .MarkTokenInvalid(
+                        exception.Code,
+                        exception.Message);
+
+                break;
+
+            case "SERVER_UNAVAILABLE":
+
+            case "SERVER_TIMEOUT":
+                _lifecycle
+                    .MarkServerUnavailable(
+                        exception.Message);
+
+                break;
+
+            default:
+
+                if (
+                    exception
+                        .IsRecoveryError)
+                {
+                    _lifecycle
+                        .MarkRecoveryRequired(
+                            exception.Code,
+                            exception.Message);
+
+                    break;
+                }
+
+                _lifecycle
+                    .MarkRecoveryRequired(
+                        exception.Code,
+                        exception.Message);
+
+                break;
+        }
+    }
+
+    // ============================================================
+    // COMMAND EXECUTION
+    // ============================================================
 
     private async Task ProcessCommandAsync(
         AgentCommand command,
@@ -241,15 +478,47 @@ public sealed class Worker
                 command.CommandId,
                 command.CommandType);
 
-            await _apiClient
-                .MarkDeliveredAsync(
-                    command.CommandId,
-                    cancellationToken);
+            /*
+             * DELIVERY
+             */
 
-            await _apiClient
-                .MarkExecutingAsync(
-                    command.CommandId,
-                    cancellationToken);
+            await _retryPolicy
+                .ExecuteAsync(
+                    token =>
+                        _apiClient
+                            .MarkDeliveredAsync(
+                                command.CommandId,
+                                token),
+
+                    $"marcar delivered {command.CommandId}",
+
+                    cancellationToken,
+
+                    maximumAttempts:
+                        3);
+
+            /*
+             * EXECUTING
+             */
+
+            await _retryPolicy
+                .ExecuteAsync(
+                    token =>
+                        _apiClient
+                            .MarkExecutingAsync(
+                                command.CommandId,
+                                token),
+
+                    $"marcar executing {command.CommandId}",
+
+                    cancellationToken,
+
+                    maximumAttempts:
+                        3);
+
+            /*
+             * Ejecutar EXACTAMENTE UNA VEZ.
+             */
 
             var result =
                 await _commandExecutor
@@ -260,40 +529,24 @@ public sealed class Worker
             if (
                 result.Success)
             {
-                await _apiClient
-                    .MarkSuccessAsync(
-                        command.CommandId,
-                        result.ResultJson,
-                        cancellationToken);
-
-                _logger.LogInformation(
-                    "Comando completado: {CommandId}",
-                    command.CommandId);
+                await ReportSuccessAsync(
+                    command,
+                    result,
+                    cancellationToken);
 
                 return;
             }
 
-            await _apiClient
-                .MarkFailedAsync(
-                    command.CommandId,
-
-                    result.ErrorCode
+            await ReportFailureAsync(
+                command,
+                result.ErrorCode
                     ??
                     "COMMAND_FAILED",
-
-                    result.ErrorMessage
+                result.ErrorMessage
                     ??
                     "El comando no pudo ejecutarse.",
-
-                    result.ResultJson,
-
-                    cancellationToken);
-
-            _logger.LogWarning(
-                "Comando fallido: {CommandId} - {CommandType} - {ErrorCode}",
-                command.CommandId,
-                command.CommandType,
-                result.ErrorCode);
+                result.ResultJson,
+                cancellationToken);
         }
         catch (
             OperationCanceledException)
@@ -311,15 +564,20 @@ public sealed class Worker
                 "Error procesando comando {CommandId}.",
                 command.CommandId);
 
+            /*
+             * Intentamos reportar el error.
+             *
+             * NO se vuelve a ejecutar el comando.
+             */
+
             try
             {
-                await _apiClient
-                    .MarkFailedAsync(
-                        command.CommandId,
-                        "AGENT_EXCEPTION",
-                        ex.Message,
-                        null,
-                        cancellationToken);
+                await ReportFailureAsync(
+                    command,
+                    "AGENT_EXCEPTION",
+                    ex.Message,
+                    null,
+                    cancellationToken);
             }
             catch (
                 Exception reportException)
@@ -332,6 +590,69 @@ public sealed class Worker
         }
     }
 
+    private async Task ReportSuccessAsync(
+        AgentCommand command,
+        CommandExecutionResult result,
+        CancellationToken cancellationToken)
+    {
+        await _retryPolicy
+            .ExecuteAsync(
+                token =>
+                    _apiClient
+                        .MarkSuccessAsync(
+                            command.CommandId,
+                            result.ResultJson,
+                            token),
+
+                $"reportar success {command.CommandId}",
+
+                cancellationToken,
+
+                maximumAttempts:
+                    3);
+
+        _logger.LogInformation(
+            "Comando completado: {CommandId} - {CommandType}.",
+            command.CommandId,
+            command.CommandType);
+    }
+
+    private async Task ReportFailureAsync(
+        AgentCommand command,
+        string errorCode,
+        string errorMessage,
+        string? resultJson,
+        CancellationToken cancellationToken)
+    {
+        await _retryPolicy
+            .ExecuteAsync(
+                token =>
+                    _apiClient
+                        .MarkFailedAsync(
+                            command.CommandId,
+                            errorCode,
+                            errorMessage,
+                            resultJson,
+                            token),
+
+                $"reportar failed {command.CommandId}",
+
+                cancellationToken,
+
+                maximumAttempts:
+                    3);
+
+        _logger.LogWarning(
+            "Comando fallido: {CommandId} - {CommandType} - {ErrorCode}.",
+            command.CommandId,
+            command.CommandType,
+            errorCode);
+    }
+
+    // ============================================================
+    // DELAYS
+    // ============================================================
+
     private async Task DelayAsync(
         CancellationToken cancellationToken)
     {
@@ -339,19 +660,68 @@ public sealed class Worker
         {
             await Task.Delay(
                 TimeSpan.FromSeconds(
-                    Math.Max(
-                        5,
+                    Math.Clamp(
                         _options
-                            .CommandPollingIntervalSeconds)),
+                            .CommandPollingIntervalSeconds,
+                        5,
+                        300)),
                 cancellationToken);
         }
         catch (
             OperationCanceledException)
-                when (
-                    cancellationToken
-                        .IsCancellationRequested)
+            when (
+                cancellationToken
+                    .IsCancellationRequested)
         {
-            // Finalización normal del servicio.
+        }
+    }
+
+    private async Task DelayWithBackoffAsync(
+        int consecutiveFailures,
+        CancellationToken cancellationToken)
+    {
+        if (
+            consecutiveFailures <=
+            0)
+        {
+            await DelayAsync(
+                cancellationToken);
+
+            return;
+        }
+
+        var exponent =
+            Math.Min(
+                consecutiveFailures - 1,
+                6);
+
+        var seconds =
+            Math.Min(
+                300,
+                5 * (1 << exponent));
+
+        var jitterMilliseconds =
+            Random.Shared.Next(
+                250,
+                1500);
+
+        try
+        {
+            await Task.Delay(
+                TimeSpan.FromSeconds(
+                    seconds)
+                +
+                TimeSpan.FromMilliseconds(
+                    jitterMilliseconds),
+
+                cancellationToken);
+        }
+        catch (
+            OperationCanceledException)
+            when (
+                cancellationToken
+                    .IsCancellationRequested)
+        {
         }
     }
 }
