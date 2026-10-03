@@ -2,13 +2,14 @@ using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Application.Applications;
 using TitanMDM.Application.Commands.Agent;
+using TitanMDM.Application.Location;
 using TitanMDM.Application.Security;
 
 using TitanMDM.Domain.Entities;
 using TitanMDM.Domain.Enums;
 
+using TitanMDM.Infrastructure.Devices.Agent;
 using TitanMDM.Infrastructure.Persistence;
-using TitanMDM.Application.Location;
 
 namespace TitanMDM.Infrastructure.Commands;
 
@@ -25,29 +26,46 @@ public sealed class DeviceCommandAgentService
         _securityPostureService;
 
     private readonly IDeviceLocationService
-    _deviceLocationService;
+        _deviceLocationService;
+
+    private readonly WindowsInventoryResultProcessor
+        _windowsInventoryProcessor;
 
     public DeviceCommandAgentService(
-    TitanMdmDbContext dbContext,
-    IApplicationInventoryService applicationInventoryService,
-    ISecurityPostureService securityPostureService,
-    IDeviceLocationService deviceLocationService)
-{
-    _dbContext = dbContext;
-    _applicationInventoryService =
-        applicationInventoryService;
-    _securityPostureService =
-        securityPostureService;
-    _deviceLocationService =
-        deviceLocationService;
-}
+        TitanMdmDbContext dbContext,
+        IApplicationInventoryService applicationInventoryService,
+        ISecurityPostureService securityPostureService,
+        IDeviceLocationService deviceLocationService,
+        WindowsInventoryResultProcessor windowsInventoryProcessor)
+    {
+        _dbContext =
+            dbContext;
+
+        _applicationInventoryService =
+            applicationInventoryService;
+
+        _securityPostureService =
+            securityPostureService;
+
+        _deviceLocationService =
+            deviceLocationService;
+
+        _windowsInventoryProcessor =
+            windowsInventoryProcessor;
+    }
+
+    // ============================================================
+    // PENDING COMMANDS
+    // ============================================================
 
     public async Task<IReadOnlyCollection<AgentCommandDto>>
         GetPendingCommandsAsync(
             Guid deviceId,
             CancellationToken cancellationToken = default)
     {
-        if (deviceId == Guid.Empty)
+        if (
+            deviceId ==
+            Guid.Empty)
         {
             throw new InvalidOperationException(
                 "DeviceId no es válido.");
@@ -57,25 +75,29 @@ public sealed class DeviceCommandAgentService
             DateTime.UtcNow;
 
         var expiredCommands =
-            await _dbContext.DeviceCommands
+            await _dbContext
+                .DeviceCommands
                 .Where(
                     x =>
                         x.DeviceId ==
-                            deviceId &&
+                            deviceId
+                        &&
                         (
                             x.Status ==
-                                DeviceCommandStatus.Pending ||
-
+                                DeviceCommandStatus.Pending
+                            ||
                             x.Status ==
-                                DeviceCommandStatus.Queued ||
-
+                                DeviceCommandStatus.Queued
+                            ||
                             x.Status ==
-                                DeviceCommandStatus.Dispatching ||
-
+                                DeviceCommandStatus.Dispatching
+                            ||
                             x.Status ==
                                 DeviceCommandStatus.Sent
-                        ) &&
-                        x.ExpiresAtUtc <= now)
+                        )
+                        &&
+                        x.ExpiresAtUtc <=
+                            now)
                 .ToListAsync(
                     cancellationToken);
 
@@ -83,39 +105,49 @@ public sealed class DeviceCommandAgentService
             var expiredCommand
             in expiredCommands)
         {
-            expiredCommand.MarkTimeout();
+            expiredCommand
+                .MarkTimeout();
         }
 
         var commands =
-            await _dbContext.DeviceCommands
+            await _dbContext
+                .DeviceCommands
                 .Where(
                     x =>
                         x.DeviceId ==
-                            deviceId &&
+                            deviceId
+                        &&
                         (
                             x.Status ==
-                                DeviceCommandStatus.Pending ||
-
+                                DeviceCommandStatus.Pending
+                            ||
                             x.Status ==
                                 DeviceCommandStatus.Queued
-                        ) &&
-                        x.ExpiresAtUtc > now)
+                        )
+                        &&
+                        x.ExpiresAtUtc >
+                            now)
                 .OrderBy(
                     x =>
                         x.CreatedAtUtc)
-                .Take(20)
+                .Take(
+                    20)
                 .ToListAsync(
                     cancellationToken);
 
         var result =
-            new List<AgentCommandDto>();
+            new List<
+                AgentCommandDto>();
 
         foreach (
             var command
             in commands)
         {
-            command.MarkDispatching();
-            command.MarkSent();
+            command
+                .MarkDispatching();
+
+            command
+                .MarkSent();
 
             result.Add(
                 new AgentCommandDto(
@@ -126,11 +158,16 @@ public sealed class DeviceCommandAgentService
                     command.ExpiresAtUtc));
         }
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
 
         return result;
     }
+
+    // ============================================================
+    // DELIVERED
+    // ============================================================
 
     public async Task MarkDeliveredAsync(
         Guid deviceId,
@@ -143,11 +180,17 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        command.MarkDelivered();
+        command
+            .MarkDelivered();
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
     }
+
+    // ============================================================
+    // EXECUTING
+    // ============================================================
 
     public async Task MarkExecutingAsync(
         Guid deviceId,
@@ -160,11 +203,17 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        command.MarkExecuting();
+        command
+            .MarkExecuting();
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
     }
+
+    // ============================================================
+    // SUCCESS
+    // ============================================================
 
     public async Task MarkSuccessAsync(
         Guid deviceId,
@@ -178,76 +227,148 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        if (
-            command.CommandType.Equals(
-                "APP_INVENTORY",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            RequireResult(
-                resultJson,
-                "APP_INVENTORY");
+        var commandType =
+            command.CommandType
+                .Trim()
+                .ToUpperInvariant();
 
-            await _applicationInventoryService
-                .ProcessInventoryAsync(
-                    deviceId,
-                    resultJson!,
-                    cancellationToken);
+        switch (
+            commandType)
+        {
+            // =====================================================
+            // WINDOWS DEVICE INVENTORY
+            // =====================================================
+
+            case "DEVICE_INFO":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _windowsInventoryProcessor
+                    .ProcessDeviceInfoAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
+
+            case "DEVICE_INVENTORY":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _windowsInventoryProcessor
+                    .ProcessInventoryAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
+
+            case "NETWORK_INFO":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _windowsInventoryProcessor
+                    .ProcessNetworkAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
+
+            // =====================================================
+            // APPLICATIONS
+            // =====================================================
+
+            case "APP_INVENTORY":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _applicationInventoryService
+                    .ProcessInventoryAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
+
+            // =====================================================
+            // SECURITY
+            // =====================================================
+
+            case "SECURITY_STATUS":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _securityPostureService
+                    .ProcessSecurityStatusAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
+
+            case "COMPLIANCE_CHECK":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _securityPostureService
+                    .ProcessComplianceAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
+
+            // =====================================================
+            // LOCATION
+            // =====================================================
+
+            case "LOCATION_REQUEST":
+            {
+                RequireResult(
+                    resultJson,
+                    commandType);
+
+                await _deviceLocationService
+                    .ProcessLocationAsync(
+                        deviceId,
+                        resultJson!,
+                        cancellationToken);
+
+                break;
+            }
         }
 
-        if (
-            command.CommandType.Equals(
-                "SECURITY_STATUS",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            RequireResult(
-                resultJson,
-                "SECURITY_STATUS");
+        command
+            .CompleteSuccess(
+                resultJson);
 
-            await _securityPostureService
-                .ProcessSecurityStatusAsync(
-                    deviceId,
-                    resultJson!,
-                    cancellationToken);
-        }
-
-        if (
-            command.CommandType.Equals(
-                "COMPLIANCE_CHECK",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            RequireResult(
-                resultJson,
-                "COMPLIANCE_CHECK");
-
-            await _securityPostureService
-                .ProcessComplianceAsync(
-                    deviceId,
-                    resultJson!,
-                    cancellationToken);
-        }
-
-        if (
-            command.CommandType.Equals(
-                "LOCATION_REQUEST",
-                StringComparison.OrdinalIgnoreCase))
-        {
-            RequireResult(
-                resultJson,
-                "LOCATION_REQUEST");
-
-            await _deviceLocationService
-                .ProcessLocationAsync(
-                    deviceId,
-                    resultJson!,
-                    cancellationToken);
-        }
-
-        command.CompleteSuccess(
-            resultJson);
-
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
     }
+
+    // ============================================================
+    // FAILED
+    // ============================================================
 
     public async Task MarkFailedAsync(
         Guid deviceId,
@@ -279,14 +400,20 @@ public sealed class DeviceCommandAgentService
                 commandId,
                 cancellationToken);
 
-        command.CompleteFailure(
-            errorCode,
-            errorMessage,
-            resultJson);
+        command
+            .CompleteFailure(
+                errorCode,
+                errorMessage,
+                resultJson);
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
     }
+
+    // ============================================================
+    // GET COMMAND
+    // ============================================================
 
     private async Task<DeviceCommand>
         GetCommandAsync(
@@ -294,29 +421,36 @@ public sealed class DeviceCommandAgentService
             Guid commandId,
             CancellationToken cancellationToken)
     {
-        if (deviceId == Guid.Empty)
+        if (
+            deviceId ==
+            Guid.Empty)
         {
             throw new InvalidOperationException(
                 "DeviceId no es válido.");
         }
 
-        if (commandId == Guid.Empty)
+        if (
+            commandId ==
+            Guid.Empty)
         {
             throw new InvalidOperationException(
                 "CommandId no es válido.");
         }
 
         var command =
-            await _dbContext.DeviceCommands
+            await _dbContext
+                .DeviceCommands
                 .SingleOrDefaultAsync(
                     x =>
                         x.Id ==
-                            commandId &&
+                            commandId
+                        &&
                         x.DeviceId ==
                             deviceId,
                     cancellationToken);
 
-        if (command is null)
+        if (
+            command is null)
         {
             throw new InvalidOperationException(
                 "El comando no existe o no pertenece al dispositivo.");
@@ -324,6 +458,10 @@ public sealed class DeviceCommandAgentService
 
         return command;
     }
+
+    // ============================================================
+    // RESULT VALIDATION
+    // ============================================================
 
     private static void RequireResult(
         string? resultJson,

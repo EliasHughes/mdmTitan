@@ -54,13 +54,40 @@ builder.Services
 
 /*
  * ==============================================================
- * IDENTITY
+ * IDENTITY / LIFECYCLE
  * ==============================================================
  */
 
 builder.Services
     .AddSingleton<
         DeviceIdentityStore>();
+
+/*
+ * Si estos servicios ya existen por el trabajo de R1-R8
+ * se registran aquí una sola vez.
+ */
+
+builder.Services
+    .AddSingleton<
+        AgentLifecycleCoordinator>();
+
+/*
+ * ==============================================================
+ * DIAGNOSTICS / SELF HEALING / RESILIENCE
+ * ==============================================================
+ */
+
+builder.Services
+    .AddSingleton<
+        AgentDiagnosticsService>();
+
+builder.Services
+    .AddSingleton<
+        AgentSelfHealingService>();
+
+builder.Services
+    .AddSingleton<
+        AgentRetryPolicy>();
 
 /*
  * ==============================================================
@@ -151,13 +178,6 @@ builder.Services
 /*
  * ==============================================================
  * HTTP CLIENTS
- *
- * IMPORTANTE:
- * AgentConfigurationBootstrapper modifica el objeto AgentOptions
- * antes de iniciar los BackgroundServices.
- *
- * Los typed clients se resuelven posteriormente, por lo que leen
- * la URL runtime ya cargada desde ProgramData.
  * ==============================================================
  */
 
@@ -236,6 +256,14 @@ builder.Services
     .AddHostedService<
         RemoteSupportBackgroundService>();
 
+builder.Services
+    .AddHostedService<
+        AgentDiagnosticsBackgroundService>();
+
+builder.Services
+    .AddHostedService<
+        AgentSelfHealingBackgroundService>();
+
 /*
  * ==============================================================
  * BUILD
@@ -247,21 +275,7 @@ var host =
 
 /*
  * ==============================================================
- * RUNTIME CONFIGURATION BOOTSTRAP
- *
- * Se ejecuta ANTES de RunAsync().
- *
- * Así:
- *
- * appsettings.json
- *        ↓
- * C:\ProgramData\TitanMDM\agentsettings.json
- *        ↓
- * AgentOptions
- *        ↓
- * HttpClientFactory
- *        ↓
- * Worker / Heartbeat / RemoteSupport
+ * PRE-FLIGHT / RUNTIME BOOTSTRAP
  * ==============================================================
  */
 
@@ -273,11 +287,35 @@ var bootstrapper =
 await bootstrapper
     .InitializeAsync();
 
+/*
+ * Self-Healing inicial antes de comenzar servicios.
+ */
+
+var selfHealing =
+    host.Services
+        .GetRequiredService<
+            AgentSelfHealingService>();
+
+await selfHealing
+    .RepairAsync();
+
+/*
+ * Snapshot inicial.
+ */
+
+var diagnostics =
+    host.Services
+        .GetRequiredService<
+            AgentDiagnosticsService>();
+
+await diagnostics
+    .CaptureAsync();
+
 await host.RunAsync();
 
 /*
  * ==============================================================
- * HTTP CLIENT CONFIGURATION
+ * HTTP
  * ==============================================================
  */
 
@@ -285,14 +323,16 @@ static void ConfigureHttpClient(
     HttpClient client,
     AgentOptions options)
 {
-    if (string.IsNullOrWhiteSpace(
+    if (
+        string.IsNullOrWhiteSpace(
             options.ServerUrl))
     {
         throw new InvalidOperationException(
             "TitanMDM ServerUrl no puede estar vacío.");
     }
 
-    if (!Uri.TryCreate(
+    if (
+        !Uri.TryCreate(
             options.ServerUrl,
             UriKind.Absolute,
             out var serverUri))

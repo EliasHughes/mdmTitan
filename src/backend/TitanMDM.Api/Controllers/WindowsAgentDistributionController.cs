@@ -276,15 +276,45 @@ public sealed class WindowsAgentDistributionController
                         ex.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (UnauthorizedAccessException ex)
+{
+    return StatusCode(
+        StatusCodes.Status500InternalServerError,
+        new
         {
-            return BadRequest(
-                new
-                {
-                    message =
-                        ex.Message
-                });
-        }
+            code =
+                "WINDOWS_INSTALLER_ACCESS_DENIED",
+
+            message =
+                ex.Message
+        });
+}
+catch (IOException ex)
+{
+    return StatusCode(
+        StatusCodes.Status500InternalServerError,
+        new
+        {
+            code =
+                "WINDOWS_INSTALLER_IO_ERROR",
+
+            message =
+                ex.Message
+        });
+}
+       catch (InvalidOperationException ex)
+{
+    return StatusCode(
+        StatusCodes.Status500InternalServerError,
+        new
+        {
+            code =
+                "WINDOWS_INSTALLER_GENERATION_FAILED",
+
+            message =
+                ex.Message
+        });
+}
     }
 
     private Guid? GetOrganizationId()

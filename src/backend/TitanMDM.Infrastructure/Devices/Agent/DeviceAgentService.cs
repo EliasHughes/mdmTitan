@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using TitanMDM.Application.Automation;
 using TitanMDM.Application.Devices.Agent;
 using TitanMDM.Domain.Enums;
+using TitanMDM.Infrastructure.Devices;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Infrastructure.Devices.Agent;
@@ -25,12 +26,22 @@ public sealed class DeviceAgentService
     private readonly IAutomationEventDispatcher
         _automation;
 
+    private readonly DeviceNamingResolver
+        _deviceNamingResolver;
+
     public DeviceAgentService(
         TitanMdmDbContext dbContext,
-        IAutomationEventDispatcher automation)
+        IAutomationEventDispatcher automation,
+        DeviceNamingResolver deviceNamingResolver)
     {
-        _dbContext = dbContext;
-        _automation = automation;
+        _dbContext =
+            dbContext;
+
+        _automation =
+            automation;
+
+        _deviceNamingResolver =
+            deviceNamingResolver;
     }
 
     public async Task<DeviceHeartbeatResultDto>
@@ -38,14 +49,21 @@ public sealed class DeviceAgentService
             DeviceHeartbeatRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (request.DeviceId == Guid.Empty)
+        // ============================================================
+        // REQUEST VALIDATION
+        // ============================================================
+
+        if (
+            request.DeviceId ==
+            Guid.Empty)
         {
             throw new DeviceAuthenticationException(
                 "INVALID_DEVICE_ID",
                 "DeviceId no es válido.");
         }
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 request.DeviceSecret))
         {
             throw new DeviceAuthenticationException(
@@ -53,12 +71,17 @@ public sealed class DeviceAgentService
                 "DeviceSecret es obligatorio.");
         }
 
+        // ============================================================
+        // DEVICE
+        // ============================================================
+
         var device =
             await _dbContext.Devices
                 .SingleOrDefaultAsync(
                     x =>
                         x.Id ==
-                            request.DeviceId &&
+                            request.DeviceId
+                        &&
                         !x.IsDeleted,
                     cancellationToken);
 
@@ -69,13 +92,18 @@ public sealed class DeviceAgentService
                 "El dispositivo no existe.");
         }
 
+        // ============================================================
+        // DEVICE CREDENTIAL
+        // ============================================================
+
         var credential =
             await _dbContext
                 .DeviceCredentials
                 .SingleOrDefaultAsync(
                     x =>
                         x.DeviceId ==
-                            request.DeviceId &&
+                            request.DeviceId
+                        &&
                         x.IsActive,
                     cancellationToken);
 
@@ -86,11 +114,16 @@ public sealed class DeviceAgentService
                 "El dispositivo no posee una credencial activa.");
         }
 
+        // ============================================================
+        // CONSTANT-TIME CREDENTIAL VALIDATION
+        // ============================================================
+
         var suppliedSecretHash =
             ComputeSha256(
                 request.DeviceSecret.Trim());
 
-        if (!FixedTimeEquals(
+        if (
+            !FixedTimeEquals(
                 credential.SecretHash,
                 suppliedSecretHash))
         {
@@ -99,177 +132,384 @@ public sealed class DeviceAgentService
                 "La credencial del dispositivo no es válida.");
         }
 
+        // ============================================================
+        // PREVIOUS STATE
+        // ============================================================
+
         /*
-         * Capturamos el estado ANTES de registrar
-         * el heartbeat porque RegisterHeartbeat()
-         * cambia automáticamente el dispositivo
-         * a Online.
+         * Guardamos los valores ANTES del heartbeat.
+         *
+         * RegisterHeartbeat cambia automáticamente Status a Online.
          */
+
         var previousStatus =
             device.Status;
 
         var previousBatteryLevel =
             device.BatteryLevel;
 
-        credential.RegisterAuthentication();
+        var hadExplicitSite =
+            device.SiteId.HasValue;
+
+        // ============================================================
+        // DEVICE AUTHENTICATION
+        // ============================================================
+
+        credential
+            .RegisterAuthentication();
+
+        // ============================================================
+        // HEARTBEAT
+        // ============================================================
 
         device.RegisterHeartbeat(
             Normalize(
                 request.IpAddress),
             request.BatteryLevel);
 
-        await _dbContext.SaveChangesAsync(
-            cancellationToken);
+        // ============================================================
+        // CORPORATE DEVICE NAMING
+        // ============================================================
 
         /*
-         * DEVICE ONLINE
+         * REGLA:
          *
-         * Solo publicamos la transición:
+         * Una asignación manual siempre tiene prioridad.
+         *
+         * Solo intentamos inferir Site / SiteLocation cuando
+         * el dispositivo todavía NO tiene Site.
+         *
+         * Ejemplo:
+         *
+         * CILSPMCEDI01
+         *
+         * CI   = Cesar Iglesias
+         * L    = Laptop
+         * SPM  = San Pedro de Macorís
+         * CEDI = área/site configurado
+         * 01   = consecutivo
+         */
+
+        DeviceNamingResolution?
+            namingResolution =
+                null;
+
+        if (
+            !device.SiteId
+                .HasValue)
+        {
+            namingResolution =
+                await _deviceNamingResolver
+                    .ResolveAsync(
+                        device.OrganizationId,
+                        device.DeviceName,
+                        cancellationToken);
+
+            if (
+                namingResolution.Resolved
+                &&
+                namingResolution.SiteId
+                    .HasValue)
+            {
+                device.AssignSite(
+                    namingResolution.SiteId,
+                    namingResolution
+                        .SiteLocationId);
+            }
+        }
+
+        // ============================================================
+        // PERSIST
+        // ============================================================
+
+        await _dbContext
+            .SaveChangesAsync(
+                cancellationToken);
+
+        // ============================================================
+        // DEVICE AUTO CLASSIFICATION EVENT
+        // ============================================================
+
+        if (
+            !hadExplicitSite
+            &&
+            namingResolution is
+            {
+                Resolved: true,
+                SiteId: not null
+            })
+        {
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "DeviceSiteResolved",
+                    new
+                    {
+                        platform =
+                            device.Platform
+                                .ToString(),
+
+                        deviceName =
+                            device.DeviceName,
+
+                        siteId =
+                            namingResolution
+                                .SiteId,
+
+                        siteLocationId =
+                            namingResolution
+                                .SiteLocationId,
+
+                        naming =
+                            new
+                            {
+                                namingResolution
+                                    .Parsed
+                                    .OrganizationCode,
+
+                                namingResolution
+                                    .Parsed
+                                    .DeviceTypeCode,
+
+                                namingResolution
+                                    .Parsed
+                                    .DeviceType,
+
+                                namingResolution
+                                    .Parsed
+                                    .CityCode,
+
+                                namingResolution
+                                    .Parsed
+                                    .City,
+
+                                namingResolution
+                                    .Parsed
+                                    .AreaCode,
+
+                                namingResolution
+                                    .Parsed
+                                    .Sequence
+                            },
+
+                        source =
+                            "corporate-device-name"
+                    },
+                    cancellationToken:
+                        cancellationToken);
+        }
+
+        // ============================================================
+        // DEVICE ONLINE
+        // ============================================================
+
+        /*
+         * Solo publicamos:
          *
          * Offline -> Online
          *
-         * No publicamos DeviceOnline en cada
-         * heartbeat.
+         * No generamos DeviceOnline cada vez que llega heartbeat.
          */
+
         if (
             previousStatus ==
-                DeviceStatus.Offline &&
+                DeviceStatus.Offline
+            &&
             device.Status ==
                 DeviceStatus.Online)
         {
-            await _automation.DispatchAsync(
-                device.OrganizationId,
-                device.Id,
-                "DeviceOnline",
-                new
-                {
-                    platform =
-                        device.Platform.ToString(),
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "DeviceOnline",
+                    new
+                    {
+                        platform =
+                            device.Platform
+                                .ToString(),
 
-                    deviceName =
-                        device.DeviceName,
+                        deviceName =
+                            device.DeviceName,
 
-                    previousStatus =
-                        previousStatus.ToString(),
+                        previousStatus =
+                            previousStatus
+                                .ToString(),
 
-                    currentStatus =
-                        device.Status.ToString(),
+                        currentStatus =
+                            device.Status
+                                .ToString(),
 
-                    lastSeenAtUtc =
-                        device.LastSeenAtUtc
-                },
-                cancellationToken:
-                    cancellationToken);
+                        lastSeenAtUtc =
+                            device.LastSeenAtUtc,
+
+                        siteId =
+                            device.SiteId,
+
+                        siteLocationId =
+                            device.SiteLocationId
+                    },
+                    cancellationToken:
+                        cancellationToken);
         }
 
+        // ============================================================
+        // LOW BATTERY
+        // ============================================================
+
         /*
-         * LOW BATTERY
+         * Solo se dispara al cruzar:
          *
-         * Se dispara únicamente cuando se cruza
-         * el umbral desde >20 hacia <=20.
+         * >20% -> <=20%
          *
-         * Esto evita generar una automatización
-         * en cada heartbeat.
+         * Esto evita lanzar una automatización en cada heartbeat.
          */
+
         if (
-            request.BatteryLevel.HasValue &&
+            request.BatteryLevel
+                .HasValue
+            &&
             request.BatteryLevel.Value <=
-                LowBatteryThreshold &&
+                LowBatteryThreshold
+            &&
             (
-                !previousBatteryLevel.HasValue ||
+                !previousBatteryLevel
+                    .HasValue
+                ||
                 previousBatteryLevel.Value >
                     LowBatteryThreshold
             ))
         {
-            await _automation.DispatchAsync(
-                device.OrganizationId,
-                device.Id,
-                "LowBattery",
-                new
-                {
-                    platform =
-                        device.Platform.ToString(),
+            await _automation
+                .DispatchAsync(
+                    device.OrganizationId,
+                    device.Id,
+                    "LowBattery",
+                    new
+                    {
+                        platform =
+                            device.Platform
+                                .ToString(),
 
-                    deviceName =
-                        device.DeviceName,
+                        deviceName =
+                            device.DeviceName,
 
-                    batteryLevel =
-                        request.BatteryLevel.Value,
+                        batteryLevel =
+                            request.BatteryLevel
+                                .Value,
 
-                    threshold =
-                        LowBatteryThreshold,
+                        threshold =
+                            LowBatteryThreshold,
 
-                    previousBatteryLevel
-                },
-                cancellationToken:
-                    cancellationToken);
+                        previousBatteryLevel,
+
+                        siteId =
+                            device.SiteId,
+
+                        siteLocationId =
+                            device.SiteLocationId
+                    },
+                    cancellationToken:
+                        cancellationToken);
         }
 
+        // ============================================================
+        // BATTERY RECOVERY HYSTERESIS
+        // ============================================================
+
         /*
-         * La recuperación por encima de 25%
-         * no genera evento todavía, pero deja
-         * preparado el comportamiento de
-         * histéresis para futuras reglas.
+         * Actualmente no generamos BatteryRecovered.
          *
-         * Como BatteryLevel queda persistido,
-         * una caída posterior desde >20%
-         * volverá a generar LowBattery.
+         * Pero al persistirse BatteryLevel, cuando vuelva a caer
+         * después de haber superado 25%, LowBattery podrá volver
+         * a dispararse correctamente.
          */
+
         _ =
-            request.BatteryLevel.HasValue &&
+            request.BatteryLevel
+                .HasValue
+            &&
             request.BatteryLevel.Value >=
                 BatteryRecoveryThreshold;
 
+        // ============================================================
+        // RESULT
+        // ============================================================
+
         return new DeviceHeartbeatResultDto(
             device.Id,
-            device.Status.ToString(),
-            device.ComplianceStatus.ToString(),
+            device.Status
+                .ToString(),
+            device.ComplianceStatus
+                .ToString(),
             DateTime.UtcNow,
             device.LastSeenAtUtc);
     }
 
-    private static string ComputeSha256(
-        string value)
+    // ================================================================
+    // SHA-256
+    // ================================================================
+
+    private static string
+        ComputeSha256(
+            string value)
     {
         var bytes =
             SHA256.HashData(
-                Encoding.UTF8.GetBytes(
-                    value));
+                Encoding.UTF8
+                    .GetBytes(
+                        value));
 
-        return Convert.ToHexString(
-            bytes);
+        return Convert
+            .ToHexString(
+                bytes);
     }
 
-    private static bool FixedTimeEquals(
-        string expectedHash,
-        string suppliedHash)
+    // ================================================================
+    // CONSTANT TIME COMPARISON
+    // ================================================================
+
+    private static bool
+        FixedTimeEquals(
+            string expectedHash,
+            string suppliedHash)
     {
         try
         {
             var expected =
-                Convert.FromHexString(
-                    expectedHash);
+                Convert
+                    .FromHexString(
+                        expectedHash);
 
             var supplied =
-                Convert.FromHexString(
-                    suppliedHash);
+                Convert
+                    .FromHexString(
+                        suppliedHash);
 
             return CryptographicOperations
                 .FixedTimeEquals(
                     expected,
                     supplied);
         }
-        catch (FormatException)
+        catch (
+            FormatException)
         {
             return false;
         }
     }
 
-    private static string? Normalize(
-        string? value)
+    // ================================================================
+    // NORMALIZE
+    // ================================================================
+
+    private static string?
+        Normalize(
+            string? value)
     {
-        return string.IsNullOrWhiteSpace(
-            value)
+        return string
+            .IsNullOrWhiteSpace(
+                value)
             ? null
             : value.Trim();
     }

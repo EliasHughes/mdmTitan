@@ -192,65 +192,202 @@ public sealed class SecurityPostureService
     }
 
     public async Task<
-        IReadOnlyCollection<DeviceSecurityDto>>
-        GetDevicesAsync(
-            Guid organizationId,
-            CancellationToken cancellationToken = default)
+    IReadOnlyCollection<DeviceSecurityDto>>
+    GetDevicesAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken = default)
+{
+    /*
+     * ============================================================
+     * SECURITY INVENTORY
+     * ============================================================
+     *
+     * El inventario de Seguridad debe partir de Devices,
+     * no de DeviceSecurityPostures.
+     *
+     * De esta manera también aparecen:
+     *
+     * - equipos nuevos;
+     * - equipos todavía no evaluados;
+     * - endpoints recuperados;
+     * - dispositivos que nunca ejecutaron SECURITY_STATUS;
+     * - dispositivos que nunca ejecutaron COMPLIANCE_CHECK.
+     *
+     * DeviceSecurityPosture es información adicional del equipo,
+     * no el catálogo principal de dispositivos.
+     * ============================================================
+     */
+
+    var devices =
+        await _dbContext
+            .Devices
+            .AsNoTracking()
+            .Where(
+                x =>
+                    x.OrganizationId ==
+                        organizationId
+                    &&
+                    !x.IsDeleted)
+            .OrderBy(
+                x =>
+                    x.DeviceName)
+            .ToListAsync(
+                cancellationToken);
+
+    var deviceIds =
+        devices
+            .Select(
+                x =>
+                    x.Id)
+            .ToArray();
+
+    var postures =
+        await _dbContext
+            .DeviceSecurityPostures
+            .AsNoTracking()
+            .Where(
+                x =>
+                    x.OrganizationId ==
+                        organizationId
+                    &&
+                    deviceIds.Contains(
+                        x.DeviceId))
+            .ToDictionaryAsync(
+                x =>
+                    x.DeviceId,
+                cancellationToken);
+
+    var result =
+        new List<DeviceSecurityDto>(
+            devices.Count);
+
+    foreach (
+        var device
+        in devices)
     {
-        var query =
-            from posture
-                in _dbContext
-                    .DeviceSecurityPostures
-                    .AsNoTracking()
+        if (
+            postures.TryGetValue(
+                device.Id,
+                out var posture))
+        {
+            result.Add(
+                new DeviceSecurityDto(
+                    device.Id,
+                    device.DeviceName,
+                    device.Platform.ToString(),
+                    device.Status.ToString(),
 
-            join device
-                in _dbContext
-                    .Devices
-                    .AsNoTracking()
+                    posture.ComplianceStatus,
+                    posture.ComplianceScore,
+                    posture.RiskLevel,
 
-                on posture.DeviceId
-                equals device.Id
+                    posture.DeviceSecure,
+                    posture.EncryptionStatus,
 
-            where
-                posture.OrganizationId ==
-                    organizationId
-                &&
-                !device.IsDeleted
+                    posture.AdbEnabled,
+                    posture.DeveloperOptionsEnabled,
+                    posture.RootDetected,
+                    posture.EmulatorDetected,
 
-            orderby
-                posture.ComplianceScore,
-                device.DeviceName
+                    posture.BootloaderLocked,
+                    posture.SelinuxEnforced,
 
-            select new DeviceSecurityDto(
+                    posture.AgentInstalled,
+                    posture.AgentVersionName,
+
+                    posture.SecurityPatchLevel,
+
+                    posture.TotalChecks,
+                    posture.PassedChecks,
+                    posture.FailedChecks,
+
+                    posture.FindingsJson,
+
+                    posture.LastSecurityScanAtUtc,
+                    posture.LastComplianceCheckAtUtc));
+
+            continue;
+        }
+
+        /*
+         * ========================================================
+         * NEVER EVALUATED
+         * ========================================================
+         */
+
+        result.Add(
+            new DeviceSecurityDto(
                 device.Id,
                 device.DeviceName,
                 device.Platform.ToString(),
                 device.Status.ToString(),
-                posture.ComplianceStatus,
-                posture.ComplianceScore,
-                posture.RiskLevel,
-                posture.DeviceSecure,
-                posture.EncryptionStatus,
-                posture.AdbEnabled,
-                posture.DeveloperOptionsEnabled,
-                posture.RootDetected,
-                posture.EmulatorDetected,
-                posture.BootloaderLocked,
-                posture.SelinuxEnforced,
-                posture.AgentInstalled,
-                posture.AgentVersionName,
-                posture.SecurityPatchLevel,
-                posture.TotalChecks,
-                posture.PassedChecks,
-                posture.FailedChecks,
-                posture.FindingsJson,
-                posture.LastSecurityScanAtUtc,
-                posture.LastComplianceCheckAtUtc);
 
-        return await query
-            .ToListAsync(
-                cancellationToken);
+                ComplianceStatus:
+                    "NotEvaluated",
+
+                ComplianceScore:
+                    0,
+
+                RiskLevel:
+                    "Unknown",
+
+                DeviceSecure:
+                    false,
+
+                EncryptionStatus:
+                    "Unknown",
+
+                AdbEnabled:
+                    false,
+
+                DeveloperOptionsEnabled:
+                    false,
+
+                RootDetected:
+                    false,
+
+                EmulatorDetected:
+                    false,
+
+                BootloaderLocked:
+                    null,
+
+                SelinuxEnforced:
+                    null,
+
+                AgentInstalled:
+                    !string.IsNullOrWhiteSpace(
+                        device.AgentVersion),
+
+                AgentVersionName:
+                    device.AgentVersion
+                    ??
+                    string.Empty,
+
+                SecurityPatchLevel:
+                    null,
+
+                TotalChecks:
+                    0,
+
+                PassedChecks:
+                    0,
+
+                FailedChecks:
+                    0,
+
+                FindingsJson:
+                    "[]",
+
+                LastSecurityScanAtUtc:
+                    null,
+
+                LastComplianceCheckAtUtc:
+                    null));
     }
+
+    return result;
+}
 
     // =========================================================
     // WINDOWS

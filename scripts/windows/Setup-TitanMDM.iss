@@ -11,7 +11,9 @@
 #endif
 
 [Setup]
+
 AppId={{3D681C48-1D8C-47A0-9A20-TITANMDM00001}
+
 AppName=TitanMDM Windows Agent
 AppVersion=1.0.0
 AppPublisher=TitanMDM
@@ -28,6 +30,7 @@ ArchitecturesInstallIn64BitMode=x64compatible
 
 DisableProgramGroupPage=yes
 DisableDirPage=yes
+DisableReadyPage=no
 
 Compression=lzma2/ultra64
 SolidCompression=yes
@@ -36,9 +39,19 @@ OutputDir={#OutputDir}
 OutputBaseFilename={#OutputName}
 
 SetupLogging=yes
+
+/*
+ * La desinstalación real se implementará de manera
+ * controlada por TitanMDM y no mediante eliminación
+ * ciega del directorio ProgramData.
+ */
+
 Uninstallable=no
 
 WizardStyle=modern
+
+CloseApplications=no
+RestartApplications=no
 
 [Files]
 
@@ -53,6 +66,6 @@ Flags: ignoreversion
 [Run]
 
 Filename: "{sys}\WindowsPowerShell\v1.0\powershell.exe"; \
-Parameters: "-NoLogo -NoProfile -ExecutionPolicy Bypass -File ""{tmp}\TitanMDM\Install-TitanMDMAgent.ps1"" -ConfigPath ""{tmp}\TitanMDM\config.json"""; \
-StatusMsg: "Instalando TitanMDM Windows Agent..."; \
+Parameters: "-NoLogo -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ""{tmp}\TitanMDM\Install-TitanMDMAgent.ps1"" -ConfigPath ""{tmp}\TitanMDM\config.json"""; \
+StatusMsg: "Instalando o reparando TitanMDM Windows Agent..."; \
 Flags: runhidden waituntilterminated

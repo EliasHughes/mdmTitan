@@ -1,9 +1,9 @@
 using System.Diagnostics;
-using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Runtime.InteropServices;
 using System.Runtime.Versioning;
+
 using Microsoft.Win32;
 
 namespace TitanMDM.WindowsAgent.Services;
@@ -11,44 +11,111 @@ namespace TitanMDM.WindowsAgent.Services;
 [SupportedOSPlatform("windows")]
 public sealed class WindowsInventoryProvider
 {
-    public WindowsInventorySnapshot Collect()
+    private readonly WindowsDeviceInfoProvider
+        _deviceInfoProvider;
+
+    public WindowsInventoryProvider(
+        WindowsDeviceInfoProvider deviceInfoProvider)
     {
-        return new WindowsInventorySnapshot(
-            Device: CollectDevice(),
-            Network: CollectNetwork(),
-            Applications: CollectApplications(),
-            Processes: CollectProcesses(),
-            Services: CollectServices(),
-            CollectedAtUtc: DateTime.UtcNow);
+        _deviceInfoProvider =
+            deviceInfoProvider;
     }
 
-    public WindowsDeviceSnapshot CollectDevice()
+    // ============================================================
+    // FULL INVENTORY
+    // ============================================================
+
+    public WindowsInventorySnapshot
+        Collect()
     {
+        return new WindowsInventorySnapshot(
+            Device:
+                CollectDevice(),
+
+            Network:
+                CollectNetwork(),
+
+            Disks:
+                CollectDisks(),
+
+            Applications:
+                CollectApplications(),
+
+            Processes:
+                CollectProcesses(),
+
+            Services:
+                CollectServices(),
+
+            CollectedAtUtc:
+                DateTime.UtcNow);
+    }
+
+    // ============================================================
+    // DEVICE
+    // ============================================================
+
+    public WindowsDeviceSnapshot
+        CollectDevice()
+    {
+        var info =
+            _deviceInfoProvider
+                .GetDeviceInformation();
+
         var systemDrive =
             Path.GetPathRoot(
                 Environment.SystemDirectory)
-            ?? @"C:\";
+            ??
+            @"C:\";
 
-        var drive =
-            new DriveInfo(systemDrive);
+        DriveInfo?
+            drive =
+                null;
+
+        try
+        {
+            drive =
+                new DriveInfo(
+                    systemDrive);
+        }
+        catch
+        {
+            // La recolección continúa.
+        }
 
         return new WindowsDeviceSnapshot(
             ComputerName:
-                Environment.MachineName,
+                info.DeviceName,
 
             UserName:
-                Environment.UserName,
+                info.UserName,
 
             DomainName:
-                Environment.UserDomainName,
+                info.DomainName,
+
+            Manufacturer:
+                info.Manufacturer,
+
+            Model:
+                info.Model,
+
+            SerialNumber:
+                info.SerialNumber,
+
+            BiosVersion:
+                info.BiosVersion,
+
+            CpuName:
+                info.CpuName,
+
+            TotalMemoryBytes:
+                info.TotalMemoryBytes,
 
             OperatingSystem:
-                RuntimeInformation.OSDescription,
+                info.OperatingSystem,
 
             OperatingSystemVersion:
-                Environment.OSVersion
-                    .Version
-                    .ToString(),
+                info.OperatingSystemVersion,
 
             OsArchitecture:
                 RuntimeInformation
@@ -65,17 +132,15 @@ public sealed class WindowsInventoryProvider
                     .FrameworkDescription,
 
             ProcessorCount:
-                Environment.ProcessorCount,
+                Environment
+                    .ProcessorCount,
 
             Is64BitOperatingSystem:
                 Environment
                     .Is64BitOperatingSystem,
 
             MachineGuid:
-                ReadRegistryString(
-                    Registry.LocalMachine,
-                    @"SOFTWARE\Microsoft\Cryptography",
-                    "MachineGuid"),
+                info.MachineGuid,
 
             ProductName:
                 ReadRegistryString(
@@ -93,30 +158,41 @@ public sealed class WindowsInventoryProvider
                 ReadRegistryString(
                     Registry.LocalMachine,
                     @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
+                    "CurrentBuildNumber")
+                ??
+                ReadRegistryString(
+                    Registry.LocalMachine,
+                    @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
                     "CurrentBuild"),
 
             InstallDateUtc:
                 ReadInstallDate(),
 
             SystemDrive:
-                drive.Name,
+                drive?
+                    .Name
+                ??
+                systemDrive,
 
             SystemDriveTotalBytes:
                 SafeDriveValue(
-                    () => drive.TotalSize),
+                    () =>
+                        drive?
+                            .TotalSize),
 
             SystemDriveFreeBytes:
                 SafeDriveValue(
-                    () => drive.AvailableFreeSpace),
+                    () =>
+                        drive?
+                            .AvailableFreeSpace),
 
             AgentVersion:
-                typeof(WindowsInventoryProvider)
-                    .Assembly
-                    .GetName()
-                    .Version?
-                    .ToString()
-                ?? "1.0.0");
+                info.AgentVersion);
     }
+
+    // ============================================================
+    // NETWORK
+    // ============================================================
 
     public IReadOnlyCollection<
         WindowsNetworkAdapterSnapshot>
@@ -141,17 +217,19 @@ public sealed class WindowsInventoryProvider
                     properties
                         .UnicastAddresses
                         .Where(
-                            address =>
-                                address.Address
+                            x =>
+                                x.Address
                                     .AddressFamily ==
-                                AddressFamily.InterNetwork
+                                    AddressFamily
+                                        .InterNetwork
                                 ||
-                                address.Address
+                                x.Address
                                     .AddressFamily ==
-                                AddressFamily.InterNetworkV6)
+                                    AddressFamily
+                                        .InterNetworkV6)
                         .Select(
-                            address =>
-                                address.Address
+                            x =>
+                                x.Address
                                     .ToString())
                         .Distinct()
                         .ToArray();
@@ -160,13 +238,13 @@ public sealed class WindowsInventoryProvider
                     properties
                         .GatewayAddresses
                         .Select(
-                            gateway =>
-                                gateway.Address
+                            x =>
+                                x.Address
                                     .ToString())
                         .Where(
-                            value =>
+                            x =>
                                 !string.IsNullOrWhiteSpace(
-                                    value))
+                                    x))
                         .Distinct()
                         .ToArray();
 
@@ -174,15 +252,16 @@ public sealed class WindowsInventoryProvider
                     properties
                         .DnsAddresses
                         .Select(
-                            address =>
-                                address.ToString())
+                            x =>
+                                x.ToString())
                         .Distinct()
                         .ToArray();
 
                 adapters.Add(
                     new WindowsNetworkAdapterSnapshot(
                         Name:
-                            networkInterface.Name,
+                            networkInterface
+                                .Name,
 
                         Description:
                             networkInterface
@@ -204,7 +283,8 @@ public sealed class WindowsInventoryProvider
                                     .GetPhysicalAddress()),
 
                         Speed:
-                            networkInterface.Speed,
+                            networkInterface
+                                .Speed,
 
                         IpAddresses:
                             addresses,
@@ -217,13 +297,73 @@ public sealed class WindowsInventoryProvider
             }
             catch
             {
-                // Un adaptador defectuoso no debe
-                // invalidar el inventario completo.
+                // Un adaptador defectuoso no invalida inventario.
             }
         }
 
         return adapters;
     }
+
+    // ============================================================
+    // DISKS
+    // ============================================================
+
+    public IReadOnlyCollection<
+        WindowsDiskSnapshot>
+        CollectDisks()
+    {
+        var disks =
+            new List<
+                WindowsDiskSnapshot>();
+
+        foreach (
+            var drive
+            in DriveInfo
+                .GetDrives())
+        {
+            try
+            {
+                if (
+                    !drive.IsReady)
+                {
+                    continue;
+                }
+
+                disks.Add(
+                    new WindowsDiskSnapshot(
+                        Name:
+                            drive.Name,
+
+                        DriveType:
+                            drive.DriveType
+                                .ToString(),
+
+                        FileSystem:
+                            Normalize(
+                                drive.DriveFormat),
+
+                        VolumeLabel:
+                            Normalize(
+                                drive.VolumeLabel),
+
+                        TotalBytes:
+                            drive.TotalSize,
+
+                        FreeBytes:
+                            drive.AvailableFreeSpace));
+            }
+            catch
+            {
+                // Continuar.
+            }
+        }
+
+        return disks;
+    }
+
+    // ============================================================
+    // APPLICATIONS
+    // ============================================================
 
     public IReadOnlyCollection<
         WindowsApplicationSnapshot>
@@ -233,30 +373,35 @@ public sealed class WindowsInventoryProvider
             new Dictionary<
                 string,
                 WindowsApplicationSnapshot>(
-                    StringComparer.OrdinalIgnoreCase);
+                    StringComparer
+                        .OrdinalIgnoreCase);
 
         ReadApplications(
-            Registry.LocalMachine,
+            RegistryHive.LocalMachine,
             RegistryView.Registry64,
             applications);
 
         ReadApplications(
-            Registry.LocalMachine,
+            RegistryHive.LocalMachine,
             RegistryView.Registry32,
             applications);
 
         ReadApplications(
-            Registry.CurrentUser,
+            RegistryHive.CurrentUser,
             RegistryView.Default,
             applications);
 
         return applications
             .Values
             .OrderBy(
-                application =>
-                    application.Name)
+                x =>
+                    x.Name)
             .ToArray();
     }
+
+    // ============================================================
+    // PROCESSES
+    // ============================================================
 
     public IReadOnlyCollection<
         WindowsProcessSnapshot>
@@ -268,7 +413,8 @@ public sealed class WindowsInventoryProvider
 
         foreach (
             var process
-            in Process.GetProcesses())
+            in Process
+                .GetProcesses())
         {
             try
             {
@@ -289,8 +435,7 @@ public sealed class WindowsInventoryProvider
             }
             catch
             {
-                // Algunos procesos del sistema
-                // pueden negar acceso.
+                // Algunos procesos del sistema niegan acceso.
             }
             finally
             {
@@ -300,10 +445,14 @@ public sealed class WindowsInventoryProvider
 
         return processes
             .OrderBy(
-                process =>
-                    process.Name)
+                x =>
+                    x.Name)
             .ToArray();
     }
+
+    // ============================================================
+    // SERVICES
+    // ============================================================
 
     public IReadOnlyCollection<
         WindowsServiceSnapshot>
@@ -318,43 +467,29 @@ public sealed class WindowsInventoryProvider
                 .OpenSubKey(
                     @"SYSTEM\CurrentControlSet\Services");
 
-        if (servicesKey is null)
+        if (
+            servicesKey is null)
         {
             return services;
         }
 
         foreach (
             var serviceName
-            in servicesKey.GetSubKeyNames())
+            in servicesKey
+                .GetSubKeyNames())
         {
             try
             {
                 using var serviceKey =
-                    servicesKey.OpenSubKey(
-                        serviceName);
+                    servicesKey
+                        .OpenSubKey(
+                            serviceName);
 
-                if (serviceKey is null)
+                if (
+                    serviceKey is null)
                 {
                     continue;
                 }
-
-                var imagePath =
-                    serviceKey
-                        .GetValue("ImagePath")
-                        ?.ToString();
-
-                var displayName =
-                    serviceKey
-                        .GetValue("DisplayName")
-                        ?.ToString();
-
-                var start =
-                    serviceKey
-                        .GetValue("Start");
-
-                var type =
-                    serviceKey
-                        .GetValue("Type");
 
                 services.Add(
                     new WindowsServiceSnapshot(
@@ -362,37 +497,56 @@ public sealed class WindowsInventoryProvider
                             serviceName,
 
                         DisplayName:
-                            displayName,
+                            Normalize(
+                                serviceKey
+                                    .GetValue(
+                                        "DisplayName")
+                                    ?.ToString()),
 
                         ImagePath:
-                            imagePath,
+                            Normalize(
+                                serviceKey
+                                    .GetValue(
+                                        "ImagePath")
+                                    ?.ToString()),
 
                         StartType:
-                            start?.ToString(),
+                            serviceKey
+                                .GetValue(
+                                    "Start")
+                                ?.ToString(),
 
                         ServiceType:
-                            type?.ToString()));
+                            serviceKey
+                                .GetValue(
+                                    "Type")
+                                ?.ToString()));
             }
             catch
             {
-                // Continuar con el resto.
+                // Continuar.
             }
         }
 
         return services
             .OrderBy(
-                service =>
-                    service.Name)
+                x =>
+                    x.Name)
             .ToArray();
     }
 
-    private static void ReadApplications(
-        RegistryKey hive,
-        RegistryView view,
-        IDictionary<
-            string,
-            WindowsApplicationSnapshot>
-            applications)
+    // ============================================================
+    // INSTALLED APPLICATIONS
+    // ============================================================
+
+    private static void
+        ReadApplications(
+            RegistryHive hive,
+            RegistryView view,
+            IDictionary<
+                string,
+                WindowsApplicationSnapshot>
+                applications)
     {
         const string uninstallPath =
             @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall";
@@ -402,16 +556,16 @@ public sealed class WindowsInventoryProvider
             using var baseKey =
                 RegistryKey
                     .OpenBaseKey(
-                        hive == Registry.LocalMachine
-                            ? RegistryHive.LocalMachine
-                            : RegistryHive.CurrentUser,
+                        hive,
                         view);
 
             using var uninstallKey =
-                baseKey.OpenSubKey(
-                    uninstallPath);
+                baseKey
+                    .OpenSubKey(
+                        uninstallPath);
 
-            if (uninstallKey is null)
+            if (
+                uninstallKey is null)
             {
                 return;
             }
@@ -421,79 +575,95 @@ public sealed class WindowsInventoryProvider
                 in uninstallKey
                     .GetSubKeyNames())
             {
-                using var applicationKey =
-                    uninstallKey
-                        .OpenSubKey(
-                            subKeyName);
-
-                if (applicationKey is null)
+                try
                 {
-                    continue;
+                    using var applicationKey =
+                        uninstallKey
+                            .OpenSubKey(
+                                subKeyName);
+
+                    if (
+                        applicationKey is null)
+                    {
+                        continue;
+                    }
+
+                    var name =
+                        Normalize(
+                            applicationKey
+                                .GetValue(
+                                    "DisplayName")
+                                ?.ToString());
+
+                    if (
+                        name is null)
+                    {
+                        continue;
+                    }
+
+                    var version =
+                        Normalize(
+                            applicationKey
+                                .GetValue(
+                                    "DisplayVersion")
+                                ?.ToString());
+
+                    var publisher =
+                        Normalize(
+                            applicationKey
+                                .GetValue(
+                                    "Publisher")
+                                ?.ToString());
+
+                    var installLocation =
+                        Normalize(
+                            applicationKey
+                                .GetValue(
+                                    "InstallLocation")
+                                ?.ToString());
+
+                    var uninstallString =
+                        Normalize(
+                            applicationKey
+                                .GetValue(
+                                    "UninstallString")
+                                ?.ToString());
+
+                    var key =
+                        $"{name}|{version}|{publisher}";
+
+                    applications[key] =
+                        new WindowsApplicationSnapshot(
+                            Name:
+                                name,
+
+                            Version:
+                                version,
+
+                            Publisher:
+                                publisher,
+
+                            InstallLocation:
+                                installLocation,
+
+                            UninstallString:
+                                uninstallString);
                 }
-
-                var name =
-                    applicationKey
-                        .GetValue(
-                            "DisplayName")
-                        ?.ToString();
-
-                if (string.IsNullOrWhiteSpace(
-                        name))
+                catch
                 {
-                    continue;
+                    // Saltar aplicación defectuosa.
                 }
-
-                var version =
-                    applicationKey
-                        .GetValue(
-                            "DisplayVersion")
-                        ?.ToString();
-
-                var publisher =
-                    applicationKey
-                        .GetValue(
-                            "Publisher")
-                        ?.ToString();
-
-                var installLocation =
-                    applicationKey
-                        .GetValue(
-                            "InstallLocation")
-                        ?.ToString();
-
-                var uninstallString =
-                    applicationKey
-                        .GetValue(
-                            "UninstallString")
-                        ?.ToString();
-
-                var key =
-                    $"{name}|{version}|{publisher}";
-
-                applications[key] =
-                    new WindowsApplicationSnapshot(
-                        Name:
-                            name,
-
-                        Version:
-                            version,
-
-                        Publisher:
-                            publisher,
-
-                        InstallLocation:
-                            installLocation,
-
-                        UninstallString:
-                            uninstallString);
             }
         }
         catch
         {
-            // El inventario debe continuar aunque
-            // una vista del registro no sea accesible.
+            // Continuar.
         }
     }
+
+    // ============================================================
+    // REGISTRY
+    // ============================================================
 
     private static string?
         ReadRegistryString(
@@ -504,19 +674,25 @@ public sealed class WindowsInventoryProvider
         try
         {
             using var key =
-                root.OpenSubKey(
-                    path);
+                root
+                    .OpenSubKey(
+                        path);
 
-            return key?
-                .GetValue(
-                    valueName)
-                ?.ToString();
+            return Normalize(
+                key?
+                    .GetValue(
+                        valueName)
+                    ?.ToString());
         }
         catch
         {
             return null;
         }
     }
+
+    // ============================================================
+    // INSTALL DATE
+    // ============================================================
 
     private static DateTime?
         ReadInstallDate()
@@ -527,7 +703,8 @@ public sealed class WindowsInventoryProvider
                 @"SOFTWARE\Microsoft\Windows NT\CurrentVersion",
                 "InstallDate");
 
-        if (!long.TryParse(
+        if (
+            !long.TryParse(
                 raw,
                 out var unixSeconds))
         {
@@ -547,9 +724,13 @@ public sealed class WindowsInventoryProvider
         }
     }
 
+    // ============================================================
+    // DRIVE SAFE
+    // ============================================================
+
     private static long?
         SafeDriveValue(
-            Func<long> getter)
+            Func<long?> getter)
     {
         try
         {
@@ -560,6 +741,10 @@ public sealed class WindowsInventoryProvider
             return null;
         }
     }
+
+    // ============================================================
+    // PROCESS
+    // ============================================================
 
     private static DateTime?
         TryGetProcessStartTime(
@@ -577,24 +762,58 @@ public sealed class WindowsInventoryProvider
         }
     }
 
+    // ============================================================
+    // MAC
+    // ============================================================
+
     private static string
         FormatMacAddress(
             PhysicalAddress address)
     {
+        var bytes =
+            address
+                .GetAddressBytes();
+
+        if (
+            bytes.Length ==
+                0)
+        {
+            return string.Empty;
+        }
+
         return string.Join(
             ":",
-            address
-                .GetAddressBytes()
-                .Select(
-                    value =>
-                        value.ToString("X2")));
+            bytes.Select(
+                x =>
+                    x.ToString(
+                        "X2")));
+    }
+
+    // ============================================================
+    // NORMALIZE
+    // ============================================================
+
+    private static string?
+        Normalize(
+            string? value)
+    {
+        return string.IsNullOrWhiteSpace(
+                value)
+            ? null
+            : value.Trim();
     }
 }
+
+// ================================================================
+// CONTRACTS
+// ================================================================
 
 public sealed record WindowsInventorySnapshot(
     WindowsDeviceSnapshot Device,
     IReadOnlyCollection<
         WindowsNetworkAdapterSnapshot> Network,
+    IReadOnlyCollection<
+        WindowsDiskSnapshot> Disks,
     IReadOnlyCollection<
         WindowsApplicationSnapshot> Applications,
     IReadOnlyCollection<
@@ -605,8 +824,14 @@ public sealed record WindowsInventorySnapshot(
 
 public sealed record WindowsDeviceSnapshot(
     string ComputerName,
-    string UserName,
-    string DomainName,
+    string? UserName,
+    string? DomainName,
+    string? Manufacturer,
+    string? Model,
+    string SerialNumber,
+    string? BiosVersion,
+    string? CpuName,
+    long? TotalMemoryBytes,
     string OperatingSystem,
     string OperatingSystemVersion,
     string OsArchitecture,
@@ -634,6 +859,14 @@ public sealed record WindowsNetworkAdapterSnapshot(
     IReadOnlyCollection<string> IpAddresses,
     IReadOnlyCollection<string> Gateways,
     IReadOnlyCollection<string> DnsServers);
+
+public sealed record WindowsDiskSnapshot(
+    string Name,
+    string DriveType,
+    string? FileSystem,
+    string? VolumeLabel,
+    long TotalBytes,
+    long FreeBytes);
 
 public sealed record WindowsApplicationSnapshot(
     string Name,

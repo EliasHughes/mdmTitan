@@ -1,6 +1,8 @@
 using System.Diagnostics;
+using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
+
 using TitanMDM.WindowsAgent.Contracts;
 using TitanMDM.WindowsAgent.Interop;
 
@@ -8,6 +10,9 @@ namespace TitanMDM.WindowsAgent.Services;
 
 public sealed class RemoteDesktopHostLauncher
 {
+    private static readonly TimeSpan StartupProbeDelay =
+        TimeSpan.FromMilliseconds(1500);
+
     private readonly ILogger<RemoteDesktopHostLauncher>
         _logger;
 
@@ -27,6 +32,18 @@ public sealed class RemoteDesktopHostLauncher
     private Guid?
         _remoteSessionId;
 
+    private string?
+        _lastExecutablePath;
+
+    private string?
+        _lastExecutableSha256;
+
+    private string?
+        _lastLaunchMode;
+
+    private DateTime?
+        _lastStartedAtUtc;
+
     public RemoteDesktopHostLauncher(
         ActiveSessionProcessLauncher activeSessionLauncher,
         ILogger<RemoteDesktopHostLauncher> logger)
@@ -38,13 +55,16 @@ public sealed class RemoteDesktopHostLauncher
             logger;
     }
 
-        public bool IsRunning
+    public bool IsRunning
     {
         get
         {
             lock (_syncRoot)
             {
-                return IsProcessRunningUnsafe();
+                CleanupExitedProcessUnsafe();
+
+                return
+                    IsProcessRunningUnsafe();
             }
         }
     }
@@ -56,22 +76,63 @@ public sealed class RemoteDesktopHostLauncher
             lock (_syncRoot)
             {
                 CleanupExitedProcessUnsafe();
-                return _windowsSessionId;
+
+                return
+                    _windowsSessionId;
             }
         }
     }
 
-    public int? ActiveConsoleSessionId =>
-        _activeSessionLauncher.GetActiveConsoleSessionId();
+    public int?
+        ActiveConsoleSessionId =>
+            _activeSessionLauncher
+                .GetActiveConsoleSessionId();
 
+    public RemoteHostStatus
+        GetStatus()
+    {
+        lock (_syncRoot)
+        {
+            CleanupExitedProcessUnsafe();
 
-    public Task StartAsync(
+            return new RemoteHostStatus(
+                IsRunning:
+                    IsProcessRunningUnsafe(),
+
+                ProcessId:
+                    _hostProcessId,
+
+                WindowsSessionId:
+                    _windowsSessionId,
+
+                RemoteSessionId:
+                    _remoteSessionId,
+
+                ExecutablePath:
+                    _lastExecutablePath,
+
+                ExecutableSha256:
+                    _lastExecutableSha256,
+
+                LaunchMode:
+                    _lastLaunchMode,
+
+                StartedAtUtc:
+                    _lastStartedAtUtc);
+        }
+    }
+
+    public async Task StartAsync(
         RemoteDesktopStartRequest request,
         CancellationToken cancellationToken =
             default)
     {
         cancellationToken
             .ThrowIfCancellationRequested();
+
+        string executablePath;
+
+        ProcessLaunchResult launchResult;
 
         lock (_syncRoot)
         {
@@ -84,20 +145,33 @@ public sealed class RemoteDesktopHostLauncher
                     request.SessionId)
                 {
                     _logger.LogInformation(
-                        "RemoteHost ya está activo para la sesión {SessionId}. PID={Pid}.",
+                        "RemoteHost ya está activo para RemoteSession={SessionId}. PID={Pid}.",
                         request.SessionId,
                         _hostProcessId);
 
-                    return Task.CompletedTask;
+                    return;
                 }
 
                 throw new InvalidOperationException(
-                    $"Ya existe un TitanMDM RemoteHost activo. " +
-                    $"SessionId={_remoteSessionId}, PID={_hostProcessId}.");
+                    "Ya existe una sesión RemoteHost activa. " +
+                    $"RemoteSession={_remoteSessionId}, " +
+                    $"PID={_hostProcessId}.");
             }
 
-            var executablePath =
+            executablePath =
                 ResolveRemoteHostPath();
+
+            ValidateRemoteHostPath(
+                executablePath);
+
+            var sha256 =
+                ComputeSha256(
+                    executablePath);
+
+            _logger.LogInformation(
+                "RemoteHost validado. Path={Path}, SHA256={Sha256}.",
+                executablePath,
+                sha256);
 
             var payload =
                 JsonSerializer.Serialize(
@@ -105,9 +179,8 @@ public sealed class RemoteDesktopHostLauncher
 
             var encodedPayload =
                 Convert.ToBase64String(
-                    Encoding.UTF8
-                        .GetBytes(
-                            payload));
+                    Encoding.UTF8.GetBytes(
+                        payload));
 
             var arguments =
                 $"--session \"{encodedPayload}\"";
@@ -119,11 +192,10 @@ public sealed class RemoteDesktopHostLauncher
                 AppContext.BaseDirectory;
 
             _logger.LogInformation(
-                "Iniciando TitanMDM RemoteHost. RemoteSession={SessionId}, Path={Path}.",
-                request.SessionId,
-                executablePath);
+                "Iniciando TitanMDM RemoteHost. RemoteSession={SessionId}.",
+                request.SessionId);
 
-            var launchResult =
+            launchResult =
                 _activeSessionLauncher
                     .Launch(
                         executablePath,
@@ -139,15 +211,75 @@ public sealed class RemoteDesktopHostLauncher
             _remoteSessionId =
                 request.SessionId;
 
-            _logger.LogInformation(
-                "TitanMDM RemoteHost iniciado correctamente. RemoteSession={RemoteSessionId}, PID={Pid}, WindowsSession={WindowsSessionId}, LaunchMode={LaunchMode}.",
-                request.SessionId,
-                launchResult.ProcessId,
-                launchResult.WindowsSessionId,
-                launchResult.LaunchMode);
+            _lastExecutablePath =
+                executablePath;
+
+            _lastExecutableSha256 =
+                sha256;
+
+            _lastLaunchMode =
+                launchResult.LaunchMode;
+
+            _lastStartedAtUtc =
+                DateTime.UtcNow;
         }
 
-        return Task.CompletedTask;
+        /*
+         * ========================================================
+         * STARTUP PROBE
+         * ========================================================
+         *
+         * CreateProcess puede devolver correctamente aunque
+         * Defender / ASR termine el proceso inmediatamente.
+         *
+         * Esperamos brevemente y comprobamos que RemoteHost
+         * siga vivo.
+         * ========================================================
+         */
+
+        await Task.Delay(
+            StartupProbeDelay,
+            cancellationToken);
+
+        Process? process =
+            null;
+
+        try
+        {
+            process =
+                Process.GetProcessById(
+                    launchResult.ProcessId);
+
+            if (process.HasExited)
+            {
+                throw new RemoteHostLaunchException(
+                    "REMOTE_HOST_EXITED_IMMEDIATELY",
+                    "TitanMDM RemoteHost terminó inmediatamente después de iniciarse. " +
+                    "Revise Microsoft Defender, ASR, AppLocker, WDAC o el visor de eventos.");
+            }
+        }
+        catch (ArgumentException)
+        {
+            Reset();
+
+            throw new RemoteHostLaunchException(
+                "REMOTE_HOST_BLOCKED_OR_TERMINATED",
+                "TitanMDM RemoteHost no permaneció en ejecución. " +
+                "El proceso pudo ser bloqueado por Microsoft Defender/ASR " +
+                "o terminado durante el inicio.");
+        }
+        finally
+        {
+            process?.Dispose();
+        }
+
+        _logger.LogInformation(
+            "TitanMDM RemoteHost estable después del startup probe. " +
+            "RemoteSession={RemoteSessionId}, PID={Pid}, WindowsSession={WindowsSessionId}, LaunchMode={LaunchMode}.",
+            request.SessionId,
+            launchResult.ProcessId,
+            launchResult.WindowsSessionId,
+            launchResult.LaunchMode);
     }
 
     public async Task StopAsync(
@@ -220,7 +352,7 @@ public sealed class RemoteDesktopHostLauncher
                 }
                 catch
                 {
-                    // Puede no existir ventana principal.
+                    // RemoteHost puede no disponer de ventana principal.
                 }
 
                 using var timeout =
@@ -238,8 +370,7 @@ public sealed class RemoteDesktopHostLauncher
                         .WaitForExitAsync(
                             timeout.Token);
                 }
-                catch (
-                    OperationCanceledException)
+                catch (OperationCanceledException)
                     when (
                         !cancellationToken
                             .IsCancellationRequested)
@@ -247,7 +378,7 @@ public sealed class RemoteDesktopHostLauncher
                     if (!process.HasExited)
                     {
                         _logger.LogWarning(
-                            "RemoteHost no finalizó normalmente. Se terminará PID={Pid}.",
+                            "RemoteHost no finalizó normalmente. Terminando PID={Pid}.",
                             processId.Value);
 
                         process.Kill(
@@ -272,14 +403,6 @@ public sealed class RemoteDesktopHostLauncher
         var agentDirectory =
             AppContext.BaseDirectory;
 
-        /*
-         * PRODUCCIÓN:
-         *
-         * C:\Program Files\TitanMDM\
-         * ├── Agent\
-         * └── RemoteHost\
-         */
-
         var productionSibling =
             Path.GetFullPath(
                 Path.Combine(
@@ -288,18 +411,10 @@ public sealed class RemoteDesktopHostLauncher
                     "RemoteHost",
                     "TitanMDM.RemoteHost.exe"));
 
-        /*
-         * Compatibilidad con paquete plano.
-         */
-
         var sameDirectory =
             Path.Combine(
                 agentDirectory,
                 "TitanMDM.RemoteHost.exe");
-
-        /*
-         * Compatibilidad con entorno de desarrollo.
-         */
 
         var developmentDebug =
             Path.GetFullPath(
@@ -339,13 +454,10 @@ public sealed class RemoteDesktopHostLauncher
             };
 
         var executablePath =
-            candidates
-                .FirstOrDefault(
-                    File.Exists);
+            candidates.FirstOrDefault(
+                File.Exists);
 
-        if (
-            executablePath is
-            not null)
+        if (executablePath is not null)
         {
             return executablePath;
         }
@@ -354,6 +466,69 @@ public sealed class RemoteDesktopHostLauncher
             "TitanMDM no encontró TitanMDM.RemoteHost.exe. " +
             "El componente RemoteHost debe instalarse junto al Windows Agent.",
             productionSibling);
+    }
+
+    private static void ValidateRemoteHostPath(
+        string executablePath)
+    {
+        if (string.IsNullOrWhiteSpace(
+                executablePath))
+        {
+            throw new RemoteHostLaunchException(
+                "REMOTE_HOST_PATH_EMPTY",
+                "La ruta de RemoteHost está vacía.");
+        }
+
+        var fullPath =
+            Path.GetFullPath(
+                executablePath);
+
+        if (!File.Exists(
+                fullPath))
+        {
+            throw new RemoteHostLaunchException(
+                "REMOTE_HOST_NOT_FOUND",
+                $"RemoteHost no existe: {fullPath}");
+        }
+
+        if (
+            !string.Equals(
+                Path.GetFileName(
+                    fullPath),
+                "TitanMDM.RemoteHost.exe",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            throw new RemoteHostLaunchException(
+                "REMOTE_HOST_INVALID_EXECUTABLE",
+                "El ejecutable solicitado no corresponde a TitanMDM.RemoteHost.exe.");
+        }
+
+        var length =
+            new FileInfo(
+                fullPath)
+                .Length;
+
+        if (length <= 0)
+        {
+            throw new RemoteHostLaunchException(
+                "REMOTE_HOST_EMPTY_FILE",
+                "TitanMDM.RemoteHost.exe está vacío o corrupto.");
+        }
+    }
+
+    private static string ComputeSha256(
+        string executablePath)
+    {
+        using var stream =
+            File.OpenRead(
+                executablePath);
+
+        var hash =
+            SHA256.HashData(
+                stream);
+
+        return Convert.ToHexString(
+            hash);
     }
 
     private bool IsProcessRunningUnsafe()
@@ -369,7 +544,8 @@ public sealed class RemoteDesktopHostLauncher
                 Process.GetProcessById(
                     _hostProcessId.Value);
 
-            return !process.HasExited;
+            return
+                !process.HasExited;
         }
         catch
         {
@@ -412,5 +588,33 @@ public sealed class RemoteDesktopHostLauncher
             _remoteSessionId =
                 null;
         }
+    }
+}
+
+public sealed record RemoteHostStatus(
+    bool IsRunning,
+    int? ProcessId,
+    int? WindowsSessionId,
+    Guid? RemoteSessionId,
+    string? ExecutablePath,
+    string? ExecutableSha256,
+    string? LaunchMode,
+    DateTime? StartedAtUtc);
+
+public sealed class RemoteHostLaunchException
+    : Exception
+{
+    public RemoteHostLaunchException(
+        string code,
+        string message)
+        : base(message)
+    {
+        Code =
+            code;
+    }
+
+    public string Code
+    {
+        get;
     }
 }

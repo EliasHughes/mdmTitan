@@ -31,10 +31,16 @@ public sealed class TitanMdmSeeder
         IPasswordHasher<User> passwordHasher)
     {
         _dbContext =
-            dbContext;
+            dbContext
+            ??
+            throw new ArgumentNullException(
+                nameof(dbContext));
 
         _passwordHasher =
-            passwordHasher;
+            passwordHasher
+            ??
+            throw new ArgumentNullException(
+                nameof(passwordHasher));
     }
 
     // ============================================================
@@ -532,7 +538,11 @@ public sealed class TitanMdmSeeder
                 "Ponches",
                 "Usar Fiorella."),
 
-           new(
+            // =====================================================
+            // SITES / MULTI-SITE
+            // =====================================================
+
+            new(
                 "sites.view",
                 "Ver localidades",
                 "Sites",
@@ -542,21 +552,21 @@ public sealed class TitanMdmSeeder
                 "sites.manage",
                 "Administrar localidades",
                 "Sites",
-                "Permite crear, modificar y administrar localidades y ubicaciones."),
-         ];
+                "Permite crear, modificar y administrar localidades y ubicaciones.")
+        ];
 
     // ============================================================
-    // SEED
+    // SEED ENTRY POINT
     // ============================================================
 
     public async Task SeedAsync(
         CancellationToken cancellationToken = default)
     {
         /*
-         * IMPORTANTE:
+         * DatabaseBootstrapper maneja migrations.
          *
-         * El Seeder NO ejecuta migrations.
-         * DatabaseBootstrapper es responsable del schema.
+         * El Seeder únicamente garantiza datos mínimos,
+         * permisos, break-glass y reconciliación de scopes.
          */
 
         var organization =
@@ -576,19 +586,25 @@ public sealed class TitanMdmSeeder
             permissions,
             cancellationToken);
 
-        var superAdminUser =
+        var bootstrapAdministrator =
             await EnsureBootstrapAdministratorAsync(
                 organization,
                 cancellationToken);
 
         await EnsureSuperAdminRoleAssignmentAsync(
-            superAdminUser,
+            bootstrapAdministrator,
             superAdminRole,
             cancellationToken);
 
-        await EnsureOrganizationScopeAsync(
-            organization,
-            superAdminUser,
+        /*
+         * IMPORTANTE
+         *
+         * Ya no otorgamos Organization Scope solamente al
+         * usuario bootstrap.
+         *
+         * Reconciliamos TODOS los SuperAdmin activos.
+         */
+        await EnsureSystemSuperAdminScopesAsync(
             cancellationToken);
     }
 
@@ -606,7 +622,7 @@ public sealed class TitanMdmSeeder
                 .FirstOrDefaultAsync(
                     x =>
                         x.Code ==
-                        DefaultOrganizationCode,
+                            DefaultOrganizationCode,
                     cancellationToken);
 
         if (organization is not null)
@@ -671,7 +687,9 @@ public sealed class TitanMdmSeeder
                 .ToHashSet(
                     StringComparer.OrdinalIgnoreCase);
 
-        foreach (var definition in Definitions)
+        foreach (
+            var definition
+            in Definitions)
         {
             if (
                 existingCodes.Contains(
@@ -764,10 +782,10 @@ public sealed class TitanMdmSeeder
             CancellationToken cancellationToken)
     {
         /*
-         * Todos los roles SuperAdmin del sistema reciben
-         * automáticamente los permisos activos.
+         * Todos los roles de sistema llamados SuperAdmin
+         * reciben todos los permisos activos.
          *
-         * Los demás roles son administrados mediante RBAC UI/API.
+         * Esto mantiene soporte para futuras organizaciones.
          */
 
         var adminRoleIds =
@@ -777,6 +795,8 @@ public sealed class TitanMdmSeeder
                     x =>
                         x.IsSystemRole
                         &&
+                        x.IsActive
+                        &&
                         x.Name ==
                             SuperAdminRoleName)
                 .Select(
@@ -785,12 +805,16 @@ public sealed class TitanMdmSeeder
                 .ToArrayAsync(
                     cancellationToken);
 
-        if (adminRoleIds.Length == 0)
+        if (
+            adminRoleIds.Length ==
+                0)
         {
             return;
         }
 
-        foreach (var roleId in adminRoleIds)
+        foreach (
+            var roleId
+            in adminRoleIds)
         {
             var assignedPermissionIds =
                 (
@@ -799,7 +823,7 @@ public sealed class TitanMdmSeeder
                         .Where(
                             x =>
                                 x.RoleId ==
-                                roleId)
+                                    roleId)
                         .Select(
                             x =>
                                 x.PermissionId)
@@ -827,6 +851,9 @@ public sealed class TitanMdmSeeder
                         new RolePermission(
                             roleId,
                             permission.Id));
+
+                assignedPermissionIds.Add(
+                    permission.Id);
             }
         }
 
@@ -870,7 +897,8 @@ public sealed class TitanMdmSeeder
             string.IsNullOrWhiteSpace(
                 password)
             ||
-            password.Length < 12)
+            password.Length <
+                12)
         {
             throw new InvalidOperationException(
                 "Primera instalación: configura TITAN_BOOTSTRAP_PASSWORD " +
@@ -904,7 +932,7 @@ public sealed class TitanMdmSeeder
     }
 
     // ============================================================
-    // SUPERADMIN ROLE ASSIGNMENT
+    // BOOTSTRAP SUPERADMIN ROLE ASSIGNMENT
     // ============================================================
 
     private async Task
@@ -944,56 +972,199 @@ public sealed class TitanMdmSeeder
     }
 
     // ============================================================
-    // ORGANIZATION SCOPE
+    // SUPERADMIN ORGANIZATION SCOPE RECONCILIATION
     // ============================================================
 
     private async Task
-        EnsureOrganizationScopeAsync(
-            Organization organization,
-            User user,
+        EnsureSystemSuperAdminScopesAsync(
             CancellationToken cancellationToken)
     {
         /*
-         * El administrador bootstrap recibe scope completo
-         * únicamente dentro de SU organización.
+         * ========================================================
+         * REGLA DE SEGURIDAD
+         * ========================================================
          *
-         * No existe bypass global por nombre/rol.
+         * Todo usuario:
+         *
+         *   - activo;
+         *   - con rol SuperAdmin activo;
+         *   - con rol de sistema;
+         *   - perteneciente a la misma organización del rol;
+         *
+         * obtiene explícitamente:
+         *
+         * AuthorizationScopeType.Organization
+         *
+         * NO hay bypass en Controllers.
+         * NO hay bypass por email.
+         * NO hay bypass dentro del AuthorizationHandler.
+         *
+         * El acceso global se representa mediante un registro
+         * persistido en UserScopeGrants.
+         *
+         * Esto corrige usuarios corporativos como:
+         *
+         * esosa@cesariglesias.com.do
+         *
+         * que tienen SuperAdmin + permisos, pero anteriormente
+         * no recibían Organization Scope.
+         * ========================================================
          */
 
-        var organizationScopeExists =
-            await _dbContext
-                .UserScopeGrants
-                .AnyAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organization.Id
-                        &&
-                        x.UserId ==
-                            user.Id
-                        &&
-                        x.ScopeType ==
-                            AuthorizationScopeType
-                                .Organization
-                        &&
-                        x.ScopeId ==
-                            organization.Id,
-                    cancellationToken);
+        var superAdmins =
+            await (
+                from userRole
+                    in _dbContext
+                        .UserRoles
+                        .AsNoTracking()
 
-        if (organizationScopeExists)
+                join user
+                    in _dbContext
+                        .Users
+                        .AsNoTracking()
+
+                    on userRole.UserId
+                    equals user.Id
+
+                join role
+                    in _dbContext
+                        .Roles
+                        .AsNoTracking()
+
+                    on userRole.RoleId
+                    equals role.Id
+
+                where
+                    user.IsActive
+                    &&
+                    role.IsActive
+                    &&
+                    role.IsSystemRole
+                    &&
+                    role.Name ==
+                        SuperAdminRoleName
+                    &&
+                    role.OrganizationId ==
+                        user.OrganizationId
+
+                select new
+                {
+                    UserId =
+                        user.Id,
+
+                    OrganizationId =
+                        user.OrganizationId
+                }
+            )
+            .Distinct()
+            .ToArrayAsync(
+                cancellationToken);
+
+        if (
+            superAdmins.Length ==
+                0)
         {
             return;
         }
 
-        _dbContext
-            .UserScopeGrants
-            .Add(
-                new UserScopeGrant(
-                    organization.Id,
-                    user.Id,
-                    AuthorizationScopeType
-                        .Organization,
-                    organization.Id,
-                    null));
+        var superAdminUserIds =
+            superAdmins
+                .Select(
+                    x =>
+                        x.UserId)
+                .Distinct()
+                .ToArray();
+
+        /*
+         * Consultamos únicamente los Organization Scope existentes
+         * para los SuperAdmin detectados.
+         */
+
+        var existingScopes =
+            await _dbContext
+                .UserScopeGrants
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        superAdminUserIds.Contains(
+                            x.UserId)
+                        &&
+                        x.ScopeType ==
+                            AuthorizationScopeType
+                                .Organization)
+                .Select(
+                    x =>
+                        new
+                        {
+                            x.UserId,
+                            x.OrganizationId,
+                            x.ScopeId
+                        })
+                .ToArrayAsync(
+                    cancellationToken);
+
+        var existingScopeKeys =
+            existingScopes
+                .Select(
+                    x =>
+                        (
+                            x.UserId,
+                            x.OrganizationId,
+                            x.ScopeId
+                        ))
+                .ToHashSet();
+
+        var changes =
+            0;
+
+        foreach (
+            var superAdmin
+            in superAdmins)
+        {
+            /*
+             * Para Organization Scope:
+             *
+             * OrganizationId = organización del usuario.
+             * ScopeId        = misma organización.
+             */
+
+            var key =
+                (
+                    superAdmin.UserId,
+                    superAdmin.OrganizationId,
+                    superAdmin.OrganizationId
+                );
+
+            if (
+                existingScopeKeys.Contains(
+                    key))
+            {
+                continue;
+            }
+
+            _dbContext
+                .UserScopeGrants
+                .Add(
+                    new UserScopeGrant(
+                        superAdmin.OrganizationId,
+                        superAdmin.UserId,
+                        AuthorizationScopeType
+                            .Organization,
+                        superAdmin.OrganizationId,
+                        null));
+
+            existingScopeKeys.Add(
+                key);
+
+            changes++;
+        }
+
+        if (
+            changes ==
+                0)
+        {
+            return;
+        }
 
         await _dbContext
             .SaveChangesAsync(

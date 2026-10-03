@@ -5,20 +5,35 @@ namespace TitanMDM.Application.Devices.Naming;
 public static partial class DeviceNameParser
 {
     /*
-     * Ejemplos:
+     * ============================================================
+     * NOMENCLATURA CORPORATIVA
+     * ============================================================
+     *
+     * Ejemplos soportados:
      *
      * CILSPMCEDI01
      * CIDSPMFACT01
+     * CILSPMCEDITI
      *
-     * Org     = CI
-     * Type    = L / D
-     * City    = SPM
-     * Area    = CEDI / FACT
-     * Number  = 01
+     * CI    = organización
+     * L/D   = tipo de equipo
+     * SPM   = ciudad
+     *
+     * Segmento restante:
+     *
+     * CEDI01
+     * FACT01
+     * CEDITI
+     *
+     * La interpretación de AREA + SUFFIX se realiza contra
+     * DeviceNamingOptions.Areas.
+     *
+     * Esto evita depender de longitudes rígidas.
+     * ============================================================
      */
 
     [GeneratedRegex(
-        @"^(?<org>[A-Z]{2})(?<type>[A-Z])(?<city>[A-Z]{3})(?<area>[A-Z]{2,12})(?<number>\d{2,4})$",
+        @"^(?<org>[A-Z]{2})(?<type>[A-Z])(?<city>[A-Z]{3})(?<rest>[A-Z0-9]{2,20})$",
         RegexOptions.IgnoreCase |
         RegexOptions.CultureInvariant)]
     private static partial Regex
@@ -29,6 +44,9 @@ public static partial class DeviceNameParser
             string? deviceName,
             DeviceNamingOptions options)
     {
+        ArgumentNullException.ThrowIfNull(
+            options);
+
         if (
             !options.Enabled
             ||
@@ -50,7 +68,8 @@ public static partial class DeviceNameParser
                 .Match(
                     normalized);
 
-        if (!match.Success)
+        if (
+            !match.Success)
         {
             return DeviceNameParseResult
                 .NotMatched(
@@ -69,13 +88,13 @@ public static partial class DeviceNameParser
             match.Groups["city"]
                 .Value;
 
-        var area =
-            match.Groups["area"]
+        var remainder =
+            match.Groups["rest"]
                 .Value;
 
-        var numberText =
-            match.Groups["number"]
-                .Value;
+        // ========================================================
+        // ORGANIZATION
+        // ========================================================
 
         if (
             !organization.Equals(
@@ -87,6 +106,10 @@ public static partial class DeviceNameParser
                     normalized,
                     $"Prefijo de organización no válido: {organization}.");
         }
+
+        // ========================================================
+        // DEVICE TYPE
+        // ========================================================
 
         if (
             !options.DeviceTypes
@@ -100,29 +123,158 @@ public static partial class DeviceNameParser
                     $"Tipo de equipo desconocido: {type}.");
         }
 
-        options.Cities.TryGetValue(
-            city,
-            out var cityName);
+        // ========================================================
+        // CITY
+        // ========================================================
 
-        options.Areas.TryGetValue(
-            area,
-            out var areaMapping);
+        options.Cities
+            .TryGetValue(
+                city,
+                out var cityName);
+
+        // ========================================================
+        // AREA
+        // ========================================================
+
+        var matchedArea =
+            options.Areas
+                .Keys
+                .Where(
+                    key =>
+                        remainder.StartsWith(
+                            key,
+                            StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(
+                    key =>
+                        key.Length)
+                .FirstOrDefault();
+
+        if (
+            string.IsNullOrWhiteSpace(
+                matchedArea))
+        {
+            return DeviceNameParseResult
+                .Invalid(
+                    normalized,
+                    $"No fue posible identificar un área configurada dentro de '{remainder}'.");
+        }
+
+        var areaCode =
+            matchedArea
+                .ToUpperInvariant();
+
+        options.Areas
+            .TryGetValue(
+                areaCode,
+                out var areaMapping);
+
+        var suffix =
+            remainder[
+                areaCode.Length..];
+
+        // ========================================================
+        // SUFFIX
+        // ========================================================
+
+        int? sequence =
+            null;
+
+        string?
+            qualifier =
+                null;
+
+        if (
+            !string.IsNullOrWhiteSpace(
+                suffix))
+        {
+            if (
+                int.TryParse(
+                    suffix,
+                    out var parsedSequence))
+            {
+                sequence =
+                    parsedSequence;
+            }
+            else
+            {
+                qualifier =
+                    suffix
+                        .Trim()
+                        .ToUpperInvariant();
+            }
+        }
+
+        /*
+         * ========================================================
+         * LOCALIDAD
+         * ========================================================
+         *
+         * Si el Area mapping define SiteLocationName,
+         * se usa normalmente.
+         *
+         * Si el hostname contiene un qualifier alfabético,
+         * este puede funcionar como sublocalidad.
+         *
+         * Ejemplo:
+         *
+         * CILSPMCEDITI
+         *
+         * area      = CEDI
+         * qualifier = TI
+         *
+         * El qualifier se expone como SuggestedSiteLocationName
+         * solamente cuando el mapping no trae otra localización.
+         * ========================================================
+         */
+
+        var suggestedLocation =
+            !string.IsNullOrWhiteSpace(
+                areaMapping?
+                    .SiteLocationName)
+                ? areaMapping!
+                    .SiteLocationName
+                : qualifier;
 
         return new DeviceNameParseResult(
-            true,
-            true,
-            normalized,
-            organization,
-            type,
-            deviceType,
-            city,
-            cityName,
-            area,
-            areaMapping?.SiteName,
-            areaMapping?.SiteLocationName,
-            int.Parse(
-                numberText),
-            null);
+            Matched:
+                true,
+
+            Valid:
+                true,
+
+            DeviceName:
+                normalized,
+
+            OrganizationCode:
+                organization,
+
+            DeviceTypeCode:
+                type,
+
+            DeviceType:
+                deviceType,
+
+            CityCode:
+                city,
+
+            City:
+                cityName,
+
+            AreaCode:
+                areaCode,
+
+            SuggestedSiteName:
+                areaMapping?
+                    .SiteName,
+
+            SuggestedSiteLocationName:
+                suggestedLocation,
+
+            Sequence:
+                sequence,
+
+            Error:
+                null);
     }
 }
 
@@ -146,19 +298,44 @@ public sealed record DeviceNameParseResult(
             string? name)
     {
         return new(
-            false,
-            false,
-            name,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "El nombre no coincide con la nomenclatura corporativa.");
+            Matched:
+                false,
+
+            Valid:
+                false,
+
+            DeviceName:
+                name,
+
+            OrganizationCode:
+                null,
+
+            DeviceTypeCode:
+                null,
+
+            DeviceType:
+                null,
+
+            CityCode:
+                null,
+
+            City:
+                null,
+
+            AreaCode:
+                null,
+
+            SuggestedSiteName:
+                null,
+
+            SuggestedSiteLocationName:
+                null,
+
+            Sequence:
+                null,
+
+            Error:
+                "El nombre no coincide con la nomenclatura corporativa.");
     }
 
     public static DeviceNameParseResult
@@ -167,18 +344,43 @@ public sealed record DeviceNameParseResult(
             string error)
     {
         return new(
-            true,
-            false,
-            name,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            error);
+            Matched:
+                true,
+
+            Valid:
+                false,
+
+            DeviceName:
+                name,
+
+            OrganizationCode:
+                null,
+
+            DeviceTypeCode:
+                null,
+
+            DeviceType:
+                null,
+
+            CityCode:
+                null,
+
+            City:
+                null,
+
+            AreaCode:
+                null,
+
+            SuggestedSiteName:
+                null,
+
+            SuggestedSiteLocationName:
+                null,
+
+            Sequence:
+                null,
+
+            Error:
+                error);
     }
 }

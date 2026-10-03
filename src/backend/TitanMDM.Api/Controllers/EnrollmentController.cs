@@ -133,8 +133,23 @@ public async Task<IActionResult> RegisterDevice(
                 "SERIAL_ALREADY_REGISTERED" =>
                     StatusCodes.Status409Conflict,
 
+                "RECOVERY_ORGANIZATION_MISMATCH" =>
+                    StatusCodes.Status409Conflict,
+
+                "RECOVERY_PLATFORM_MISMATCH" =>
+                    StatusCodes.Status409Conflict,
+
+                "RECOVERY_DEVICE_NAME_MISMATCH" =>
+                    StatusCodes.Status409Conflict,
+
+                "RECOVERY_DEVICE_STILL_ACTIVE" =>
+                    StatusCodes.Status409Conflict,
+
                 _ =>
                     StatusCodes.Status400BadRequest
+
+                
+            
             };
 
         return StatusCode(

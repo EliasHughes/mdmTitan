@@ -17,6 +17,7 @@ using TitanMDM.Application.Commands.Agent;
 using TitanMDM.Application.Dashboard.Interfaces;
 using TitanMDM.Application.Devices;
 using TitanMDM.Application.Devices.Agent;
+using TitanMDM.Application.Devices.Naming;
 using TitanMDM.Application.Enrollment;
 using TitanMDM.Application.Enrollment.DeviceRegistration;
 using TitanMDM.Application.Groups;
@@ -27,6 +28,7 @@ using TitanMDM.Application.LostMode;
 using TitanMDM.Application.Policies;
 using TitanMDM.Application.Reports;
 using TitanMDM.Application.Security;
+using TitanMDM.Application.Sites;
 
 using TitanMDM.Domain.Entities;
 
@@ -51,28 +53,28 @@ using TitanMDM.Infrastructure.Persistence.Seed;
 using TitanMDM.Infrastructure.Policies;
 using TitanMDM.Infrastructure.Reports;
 using TitanMDM.Infrastructure.Security;
-using TitanMDM.Application.Sites;
 using TitanMDM.Infrastructure.Sites;
-using TitanMDM.Application.Devices.Naming;
-using TitanMDM.Infrastructure.Devices;
 
 namespace TitanMDM.Infrastructure.DependencyInjection;
 
 public static class InfrastructureServiceExtensions
 {
-    public static IServiceCollection AddTitanMdmInfrastructure(
-        this IServiceCollection services,
-        IConfiguration configuration)
+    public static IServiceCollection
+        AddTitanMdmInfrastructure(
+            this IServiceCollection services,
+            IConfiguration configuration)
     {
         // ============================================================
         // DATABASE
         // ============================================================
 
         var connectionString =
-            configuration.GetConnectionString(
-                "TitanMdmDatabase");
+            configuration
+                .GetConnectionString(
+                    "TitanMdmDatabase");
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 connectionString))
         {
             throw new InvalidOperationException(
@@ -83,67 +85,81 @@ public static class InfrastructureServiceExtensions
             .AddOptions<DatabaseOptions>()
             .Bind(
                 configuration.GetSection(
-                    DatabaseOptions.SectionName));
+                    DatabaseOptions
+                        .SectionName));
 
         var databaseOptions =
             configuration
                 .GetSection(
-                    DatabaseOptions.SectionName)
+                    DatabaseOptions
+                        .SectionName)
                 .Get<DatabaseOptions>()
-            ?? new DatabaseOptions();
+            ??
+            new DatabaseOptions();
 
-        services.AddDbContext<
-            TitanMdmDbContext>(
-                options =>
-                {
-                    options.UseSqlServer(
-                        connectionString,
-                        sqlOptions =>
-                        {
-                            sqlOptions.CommandTimeout(
-                                Math.Max(
-                                    30,
-                                    databaseOptions
-                                        .CommandTimeoutSeconds));
-
-                            sqlOptions.EnableRetryOnFailure(
-                                maxRetryCount:
-                                    Math.Max(
-                                        0,
-                                        databaseOptions
-                                            .MaxRetryCount),
-                                maxRetryDelay:
-                                    TimeSpan.FromSeconds(
+        services
+            .AddDbContext<
+                TitanMdmDbContext>(
+                    options =>
+                    {
+                        options.UseSqlServer(
+                            connectionString,
+                            sqlOptions =>
+                            {
+                                sqlOptions
+                                    .CommandTimeout(
                                         Math.Max(
-                                            1,
+                                            30,
                                             databaseOptions
-                                                .MaxRetryDelaySeconds)),
-                                errorNumbersToAdd:
-                                    null);
-                        });
-                });
+                                                .CommandTimeoutSeconds));
+
+                                sqlOptions
+                                    .EnableRetryOnFailure(
+                                        maxRetryCount:
+                                            Math.Max(
+                                                0,
+                                                databaseOptions
+                                                    .MaxRetryCount),
+
+                                        maxRetryDelay:
+                                            TimeSpan
+                                                .FromSeconds(
+                                                    Math.Max(
+                                                        1,
+                                                        databaseOptions
+                                                            .MaxRetryDelaySeconds)),
+
+                                        errorNumbersToAdd:
+                                            null);
+                            });
+                    });
 
         // ============================================================
-        // JWT / AUTHENTICATION
+        // JWT
         // ============================================================
 
         services.Configure<
             JwtOptions>(
                 configuration.GetSection(
-                    JwtOptions.SectionName));
+                    JwtOptions
+                        .SectionName));
 
         var jwtOptions =
             configuration
                 .GetSection(
-                    JwtOptions.SectionName)
+                    JwtOptions
+                        .SectionName)
                 .Get<JwtOptions>()
-            ?? throw new InvalidOperationException(
+            ??
+            throw new InvalidOperationException(
                 "JWT configuration was not found.");
 
-        if (string.IsNullOrWhiteSpace(
+        if (
+            string.IsNullOrWhiteSpace(
                 jwtOptions.SigningKey)
             ||
-            jwtOptions.SigningKey.Length < 32)
+            jwtOptions.SigningKey.Length <
+                32)
         {
             throw new InvalidOperationException(
                 "JWT signing key must contain at least 32 characters.");
@@ -156,38 +172,40 @@ public static class InfrastructureServiceExtensions
             .AddJwtBearer(
                 options =>
                 {
-                    options.TokenValidationParameters =
-                        new TokenValidationParameters
-                        {
-                            ValidateIssuer =
-                                true,
+                    options
+                        .TokenValidationParameters =
+                            new TokenValidationParameters
+                            {
+                                ValidateIssuer =
+                                    true,
 
-                            ValidIssuer =
-                                jwtOptions.Issuer,
+                                ValidIssuer =
+                                    jwtOptions.Issuer,
 
-                            ValidateAudience =
-                                true,
+                                ValidateAudience =
+                                    true,
 
-                            ValidAudience =
-                                jwtOptions.Audience,
+                                ValidAudience =
+                                    jwtOptions.Audience,
 
-                            ValidateIssuerSigningKey =
-                                true,
+                                ValidateIssuerSigningKey =
+                                    true,
 
-                            IssuerSigningKey =
-                                new SymmetricSecurityKey(
-                                    Encoding.UTF8.GetBytes(
-                                        jwtOptions
-                                            .SigningKey)),
+                                IssuerSigningKey =
+                                    new SymmetricSecurityKey(
+                                        Encoding.UTF8
+                                            .GetBytes(
+                                                jwtOptions
+                                                    .SigningKey)),
 
-                            ValidateLifetime =
-                                true,
+                                ValidateLifetime =
+                                    true,
 
-                            ClockSkew =
-                                TimeSpan
-                                    .FromSeconds(
-                                        30)
-                        };
+                                ClockSkew =
+                                    TimeSpan
+                                        .FromSeconds(
+                                            30)
+                            };
 
                     options.Events =
                         new JwtBearerEvents
@@ -208,25 +226,29 @@ public static class InfrastructureServiceExtensions
                                             .Request
                                             .Path;
 
-                                    if (!string.IsNullOrWhiteSpace(
+                                    if (
+                                        !string.IsNullOrWhiteSpace(
                                             accessToken)
                                         &&
-                                        path.StartsWithSegments(
-                                            "/hubs/remote-support"))
+                                        path
+                                            .StartsWithSegments(
+                                                "/hubs/remote-support"))
                                     {
                                         context.Token =
                                             accessToken;
                                     }
 
-                                    return Task.CompletedTask;
+                                    return Task
+                                        .CompletedTask;
                                 }
                         };
                 });
 
-        services.AddAuthorization();
+        services
+            .AddAuthorization();
 
         // ============================================================
-        // IDENTITY / AUTH
+        // IDENTITY / AUTHENTICATION
         // ============================================================
 
         services.AddScoped<
@@ -276,11 +298,33 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IDeviceQueryService,
             DeviceQueryService>();
-        
+
+        services.AddScoped<
+            WindowsInventoryResultProcessor>();
+
+        // ============================================================
+        // CORPORATE DEVICE NAMING
+        // ============================================================
+
+        services
+            .AddOptions<
+                DeviceNamingOptions>()
+            .Bind(
+                configuration.GetSection(
+                    DeviceNamingOptions
+                        .SectionName));
+
+        services.AddScoped<
+            DeviceNamingResolver>();
+
+        // ============================================================
+        // SITES
+        // ============================================================
+
         services.AddScoped<
             ISiteService,
             SiteService>();
-        
+
         services.AddScoped<
             ISiteAssignmentService,
             SiteAssignmentService>();
@@ -322,7 +366,7 @@ public static class InfrastructureServiceExtensions
             PolicyService>();
 
         // ============================================================
-        // GOOGLE ANDROID MANAGEMENT
+        // ANDROID MANAGEMENT
         // ============================================================
 
         services
@@ -340,10 +384,6 @@ public static class InfrastructureServiceExtensions
         services.AddHttpClient<
             AndroidManagementClient>();
 
-        // ============================================================
-        // ANDROID ENTERPRISE
-        // ============================================================
-
         services.AddScoped<
             IAndroidEnterpriseService,
             AndroidEnterpriseService>();
@@ -351,10 +391,6 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             IAndroidDeviceSyncService,
             AndroidDeviceSyncService>();
-
-        // ============================================================
-        // ANDROID POLICY ENGINE
-        // ============================================================
 
         services.AddScoped<
             IAndroidPolicyCompiler,
@@ -377,7 +413,7 @@ public static class InfrastructureServiceExtensions
             SecurityPostureService>();
 
         // ============================================================
-        // DEVICE GROUPS / FLEET MANAGEMENT
+        // DEVICE GROUPS
         // ============================================================
 
         services.AddScoped<
@@ -385,23 +421,19 @@ public static class InfrastructureServiceExtensions
             DeviceGroupService>();
 
         // ============================================================
-        // AUTOMATION ENGINE
+        // AUTOMATION
         // ============================================================
 
         services.AddScoped<
             IAutomationService,
             AutomationService>();
 
-        services
-            .AddOptions<DeviceNamingOptions>()
-            .Bind(
-                configuration.GetSection(
-                    DeviceNamingOptions.SectionName));
-
         services.AddScoped<
-            DeviceNamingResolver>();
+            IAutomationEventDispatcher,
+            AutomationEventDispatcher>();
+
         // ============================================================
-        // LOST MODE / LOCATION / GEOFENCING
+        // LOCATION / LOST MODE
         // ============================================================
 
         services.AddScoped<
@@ -412,20 +444,20 @@ public static class InfrastructureServiceExtensions
             ILostModeService,
             LostModeService>();
 
-        services.AddScoped<
-            IAutomationEventDispatcher,
-            AutomationEventDispatcher>();
-
         services.AddHostedService<
             DeviceOfflineMonitor>();
 
         // ============================================================
-        // AUDIT / REPORTING
+        // AUDIT / REPORTS
         // ============================================================
 
         services.AddScoped<
             IAuditQueryService,
             AuditQueryService>();
+
+        services.AddScoped<
+            IAdministrativeAuditWriter,
+            AdministrativeAuditWriter>();
 
         services.AddScoped<
             IReportsService,
@@ -449,28 +481,20 @@ public static class InfrastructureServiceExtensions
         services.AddScoped<
             HelpdeskEmailImportService>();
 
-        services.AddScoped<
-            IAuthorizationScopeService,
-            AuthorizationScopeService>();
-
-        services.AddScoped<
-            IAdministrativeAuditWriter,
-            AdministrativeAuditWriter>();
+        // ============================================================
+        // AUTHORIZATION / SCOPES
+        // ============================================================
 
         services.AddScoped<
             IAuthorizationScopeService,
             AuthorizationScopeService>();
-
-        services.AddScoped<
-            IAdministrativeAuditWriter,
-            AdministrativeAuditWriter>();
 
         services.AddScoped<
             IScopeAccessService,
             ScopeAccessService>();
 
         // ============================================================
-        // DATABASE BOOTSTRAP / SEED
+        // DATABASE BOOTSTRAP
         // ============================================================
 
         services.AddScoped<
