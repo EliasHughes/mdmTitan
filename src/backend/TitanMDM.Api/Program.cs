@@ -3,6 +3,7 @@ using Microsoft.AspNetCore.DataProtection;
 using Microsoft.AspNetCore.HttpOverrides;
 using Microsoft.EntityFrameworkCore;
 
+using TitanMDM.Api.AI;
 using TitanMDM.Api.Hubs;
 using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Security;
@@ -112,6 +113,28 @@ builder.Services.AddSignalR(
                 ?? 30);
     });
 
+
+
+// ================================================================
+// OPENROUTER / AI
+// ================================================================
+
+builder.Services.AddTitanOpenRouter(
+    configuration);
+
+// ================================================================
+// HELPDESK BACKGROUND SERVICES
+// ================================================================
+
+builder.Services.AddHostedService<
+    HelpdeskMonitoringService>();
+
+builder.Services.AddHostedService<
+    HelpdeskRoutingWorker>();
+
+builder.Services.AddHostedService<
+    HelpdeskMailWorker>();
+
 // ================================================================
 // TITAN SERVICES
 // ================================================================
@@ -156,8 +179,14 @@ builder.Services.AddHostedService<
 builder.Services.AddHostedService<
     HelpdeskMailWorker>();
 
+builder.Services.AddHostedService<
+    HelpdeskOutboundEmailWorker>();
+
 builder.Services.AddTitanMdmInfrastructure(
     configuration);
+
+builder.Services.AddTitanMdmInfrastructure(
+    configuration);   
 
 builder.Services.AddScoped<
     RbacAuditFilter>();

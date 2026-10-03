@@ -1,149 +1,199 @@
 .hrt {
-  padding: 18px;
-  border: 1px solid #ddd6fe;
-  border-radius: 18px;
-  background: #faf8ff;
+  box-sizing: border-box;
+  width: 100%;
 }
 
-.hrt h3 {
-  margin: 0 0 8px;
-  color: #334155;
-}
-
-.hrt > p,
-.hrt-heading p {
-  color: #64748b;
-  line-height: 1.5;
-}
-
-.hrt-heading {
+.hrt--compact {
   display: flex;
+  flex-direction: column;
   gap: 12px;
-  justify-content: space-between;
-  align-items: flex-start;
-  flex-wrap: wrap;
+
+  margin-bottom: 16px;
 }
 
-.hrt-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-  margin: 12px 0;
-}
-
-.hrt .hrt-card {
-  display: flex;
-  flex-direction: column;
-  text-align: left;
-  gap: 8px;
-  padding: 16px;
-  border: 1px solid #e2e8f0;
-  border-radius: 14px;
-  background: #fff;
-  color: #334155;
-  cursor: pointer;
-}
-
-.hrt .hrt-card span {
-  font-size: 13px;
-  color: #64748b;
-  line-height: 1.5;
-}
-
-.hrt .hrt-card--selected {
-  border-color: #7656d6;
-  background: #f5f3ff;
-  box-shadow: 0 3px 12px #7656d618;
-}
-
-.hrt-fields {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  margin-top: 18px;
-}
-
-.hrt-fields label {
+.hrt-template-selector {
   display: flex;
   flex-direction: column;
   gap: 7px;
 }
 
-.hrt-fields input,
-.hrt-fields textarea,
-.hrt-fields select {
+.hrt-template-selector > span {
+  color: #334155;
+  font-weight: 600;
+}
+
+.hrt-template-selector select {
   box-sizing: border-box;
   width: 100%;
-  padding: 12px;
-  border: 1px solid #cbd5e1;
-  border-radius: 10px;
-  background: #fff;
-  color: #0f172a;
-  font: inherit;
+
+  min-height: 42px;
+
+  padding:
+    9px
+    12px;
+
+  border:
+    1px solid
+    #cbd5e1;
+
+  border-radius:
+    10px;
+
+  background:
+    #fff;
+
+  color:
+    #0f172a;
+
+  font:
+    inherit;
 }
 
-.hrt-fields textarea {
-  resize: vertical;
+.hrt-template-panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+
+  padding:
+    14px;
+
+  border:
+    1px solid
+    #ddd6fe;
+
+  border-radius:
+    12px;
+
+  background:
+    #faf8ff;
 }
 
-.hrt-fields > button {
-  align-self: flex-start;
+.hrt-template-panel label {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+
+  color:
+    #334155;
+
+  font-weight:
+    600;
 }
 
-.hrt-fields small {
-  color: #64748b;
-  line-height: 1.6;
+.hrt-template-panel input,
+.hrt-template-panel textarea {
+  box-sizing:
+    border-box;
+
+  width:
+    100%;
+
+  padding:
+    10px
+    12px;
+
+  border:
+    1px solid
+    #cbd5e1;
+
+  border-radius:
+    10px;
+
+  background:
+    #fff;
+
+  color:
+    #0f172a;
+
+  font:
+    inherit;
 }
 
-.hrt-confirm {
-  border: 1px solid #ddd6fe;
-  background: #fff;
-  padding: 14px;
-  border-radius: 12px;
+.hrt-template-panel textarea {
+  resize:
+    vertical;
+
+  min-height:
+    70px;
 }
 
-.hrt-confirm p {
-  line-height: 1.5;
-  color: #475569;
+.hrt-template-description {
+  margin:
+    0;
+
+  color:
+    #64748b;
+
+  font-size:
+    13px;
+
+  line-height:
+    1.5;
 }
 
-.hrt-confirm button {
-  margin-right: 8px;
-  margin-bottom: 6px;
+.hrt-template-footer {
+  display:
+    flex;
+
+  align-items:
+    center;
+
+  justify-content:
+    space-between;
+
+  gap:
+    12px;
+
+  flex-wrap:
+    wrap;
 }
 
-.hrt button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
+.hrt-template-footer small {
+  color:
+    #64748b;
 }
 
-.hrt button:focus-visible,
+.hrt select:focus-visible,
 .hrt input:focus-visible,
-.hrt textarea:focus-visible,
-.hrt select:focus-visible {
-  outline: 3px solid #a78bfa;
-  outline-offset: 3px;
+.hrt textarea:focus-visible {
+  outline:
+    3px solid
+    #a78bfa;
+
+  outline-offset:
+    2px;
 }
 
-.hrt .hrt-checkbox {
-  flex-direction: row;
-  align-items: center;
+.hrt button:disabled,
+.hrt input:disabled,
+.hrt textarea:disabled,
+.hrt select:disabled {
+  cursor:
+    not-allowed;
+
+  opacity:
+    0.65;
 }
 
-.hrt .hrt-checkbox input {
-  width: auto;
-}
+@media (
+  max-width:
+    620px
+) {
+  .hrt-template-panel {
+    padding:
+      12px;
+  }
 
-.hrt-error {
-  color: #b91c1c;
-}
+  .hrt-template-footer {
+    align-items:
+      stretch;
 
-.hrt-fields > div > button {
-  margin: 6px 6px 0 0;
-}
+    flex-direction:
+      column;
+  }
 
-@media (max-width: 540px) {
-  .hrt-grid {
-    grid-template-columns: 1fr;
+  .hrt-template-footer button {
+    width:
+      100%;
   }
 }

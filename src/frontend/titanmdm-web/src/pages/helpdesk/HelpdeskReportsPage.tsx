@@ -4,17 +4,26 @@ import {
   useMemo,
   useState,
 } from 'react'
-import { Link } from 'react-router-dom'
+
 import {
+  Activity,
   AlertTriangle,
   ArrowLeft,
-  BarChart3,
+  Bot,
+  CheckCircle2,
   Clock3,
   Download,
+  Gauge,
+  MapPin,
   RefreshCw,
+  RotateCcw,
   Ticket,
+  Timer,
   UserRoundX,
+  Users,
+  Workflow,
 } from 'lucide-react'
+
 import {
   Bar,
   BarChart,
@@ -30,7 +39,11 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+
+import { Link } from 'react-router-dom'
+
 import apiClient from '../../api/apiClient'
+
 import './HelpdeskPages.css'
 import './HelpdeskReportsPage.css'
 
@@ -39,47 +52,105 @@ interface Count {
   count: number
 }
 
+interface SiteCount extends Count {
+  resolved: number
+}
+
 interface AgentCount extends Count {
   resolved: number
+  active: number
+  resolutionRate: number
+  slaBreached: number
 }
 
 interface DailyCount {
   date: string
-  count: number
+  created: number
+  resolved: number
+}
+
+interface SlaMetric {
+  evaluated: number
+  met: number
+  breached: number
+  compliancePercent: number
+}
+
+interface AutomationMetrics {
+  autoAssigned: number
+  autoHandovers: number
+  classifications: number
+  classificationReviews: number
+  escalations: number
+  reminders: number
+  overdueAlerts: number
+  reopened: number
 }
 
 interface Summary {
   from: string
   to: string
+
   total: number
+  resolved: number
   unresolved: number
+  currentBacklog: number
   unassigned: number
+  pendingUser: number
+
   overdueFirstResponse: number
   overdueResolution: number
-  averageFirstResponseHours: number | null
-  averageResolutionHours: number | null
+
+  averageFirstResponseHours:
+    | number
+    | null
+
+  medianFirstResponseHours:
+    | number
+    | null
+
+  averageResolutionHours:
+    | number
+    | null
+
+  medianResolutionHours:
+    | number
+    | null
+
+  firstResponseSla: SlaMetric
+  resolutionSla: SlaMetric
+
   byStatus: Count[]
   byPriority: Count[]
   byCategory: Count[]
   bySource: Count[]
+
+  bySite: SiteCount[]
   byAgent: AgentCount[]
+
+  backlogAging: Count[]
+
   daily: DailyCount[]
+
+  automation: AutomationMetrics
+
   generatedAtUtc: string
 }
 
 const COLORS = [
-  '#648fee',
-  '#81c7ae',
-  '#ad98ee',
-  '#e7b76e',
-  '#e78383',
-  '#78b9dc',
+  '#5575ee',
+  '#23a978',
+  '#8b6be8',
+  '#e7a83e',
+  '#e15c64',
+  '#3fa8d9',
 ]
 
 const STATUS: Record<string, string> = {
   new: 'Nuevo',
-  open: 'En proceso',
-  pendinguser: 'En espera del usuario',
+  open: 'Abierto',
+  inprogress: 'En proceso',
+  pendinguser: 'Espera usuario',
   resolved: 'Resuelto',
   closed: 'Cerrado',
 }
@@ -91,88 +162,206 @@ const PRIORITY: Record<string, string> = {
   urgent: 'Urgente',
 }
 
-function dateInput(date: Date) {
+const SOURCE: Record<string, string> = {
+  console: 'TitanMDM',
+  email: 'Correo',
+  portal: 'Portal',
+  api: 'API',
+}
+
+function dateInput(
+  date: Date,
+) {
   return [
     date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, '0'),
-    String(date.getDate()).padStart(2, '0'),
+    String(
+      date.getMonth() + 1,
+    ).padStart(
+      2,
+      '0',
+    ),
+    String(
+      date.getDate(),
+    ).padStart(
+      2,
+      '0',
+    ),
   ].join('-')
 }
 
 function initialFrom() {
-  const date = new Date()
-  date.setDate(date.getDate() - 29)
-  return dateInput(date)
+  const date =
+    new Date()
+
+  date.setDate(
+    date.getDate() -
+      29,
+  )
+
+  return dateInput(
+    date,
+  )
 }
 
 function localized(
   data: Count[],
-  labels: Record<string, string>,
+  labels: Record<
+    string,
+    string
+  >,
 ) {
-  return data.map((item) => ({
-    ...item,
-    label:
-      labels[item.label] ?? item.label,
-  }))
+  return data.map(
+    item => ({
+      ...item,
+
+      label:
+        labels[
+          item.label
+        ] ??
+        item.label,
+    }),
+  )
 }
 
-function DistributionChart({
+function hours(
+  value:
+    | number
+    | null,
+) {
+  if (
+    value ===
+    null
+  ) {
+    return '—'
+  }
+
+  if (
+    value <
+    1
+  ) {
+    return `${Math.round(
+      value * 60,
+    )} min`
+  }
+
+  return `${value.toFixed(
+    1,
+  )} h`
+}
+
+function percent(
+  value: number,
+) {
+  return `${value.toFixed(
+    1,
+  )}%`
+}
+
+function SlaCard({
+  title,
+  metric,
+}: {
+  title: string
+  metric: SlaMetric
+}) {
+  const width =
+    Math.max(
+      0,
+      Math.min(
+        100,
+        metric
+          .compliancePercent,
+      ),
+    )
+
+  return (
+    <article className="hd-kpi__sla-card">
+      <div className="hd-kpi__sla-head">
+        <div>
+          <span>
+            {title}
+          </span>
+
+          <strong>
+            {percent(
+              metric
+                .compliancePercent,
+            )}
+          </strong>
+        </div>
+
+        <Gauge
+          size={25}
+        />
+      </div>
+
+      <div className="hd-kpi__progress">
+        <span
+          style={{
+            width:
+              `${width}%`,
+          }}
+        />
+      </div>
+
+      <div className="hd-kpi__sla-foot">
+        <span>
+          <b>
+            {
+              metric.met
+            }
+          </b>{' '}
+          dentro de SLA
+        </span>
+
+        <span>
+          <b>
+            {
+              metric.breached
+            }
+          </b>{' '}
+          vencidos
+        </span>
+
+        <span>
+          {
+            metric.evaluated
+          }{' '}
+          evaluados
+        </span>
+      </div>
+    </article>
+  )
+}
+
+function HorizontalChart({
   title,
   description,
   data,
-  type = 'bar',
 }: {
   title: string
   description: string
   data: Count[]
-  type?: 'bar' | 'donut'
 }) {
   return (
-    <section className="hd-report__chart-card">
+    <section className="hd-kpi__panel">
       <header>
-        <h2>{title}</h2>
-        <p>{description}</p>
+        <h2>
+          {title}
+        </h2>
+
+        <p>
+          {description}
+        </p>
       </header>
 
-      <div className="hd-report__chart">
-        {data.length === 0 ? (
-          <div className="hd-report__empty">
-            Sin datos en el período
-            seleccionado.
+      <div className="hd-kpi__chart hd-kpi__chart--bar">
+        {data.length ===
+        0 ? (
+          <div className="hd-kpi__empty">
+            No hay información
+            para este período.
           </div>
-        ) : type === 'donut' ? (
-          <ResponsiveContainer
-            width="100%"
-            height="100%"
-          >
-            <PieChart>
-              <Pie
-                data={data}
-                dataKey="count"
-                nameKey="label"
-                innerRadius={65}
-                outerRadius={105}
-                paddingAngle={3}
-              >
-                {data.map((item, index) => (
-                  <Cell
-                    key={`${item.label}-${index}`}
-                    fill={
-                      COLORS[
-                        index % COLORS.length
-                      ]
-                    }
-                  />
-                ))}
-              </Pie>
-
-              <Tooltip />
-              <Legend
-                verticalAlign="bottom"
-                height={36}
-              />
-            </PieChart>
-          </ResponsiveContainer>
         ) : (
           <ResponsiveContainer
             width="100%"
@@ -180,31 +369,31 @@ function DistributionChart({
           >
             <BarChart
               data={data}
+              layout="vertical"
               margin={{
-                top: 12,
-                right: 15,
-                bottom: 24,
-                left: 0,
+                top: 8,
+                right: 25,
+                bottom: 8,
+                left: 12,
               }}
             >
               <CartesianGrid
-                stroke="#e9eef7"
-                strokeDasharray="3 3"
-                vertical={false}
+                stroke="#edf1f7"
+                horizontal={false}
               />
 
               <XAxis
-                dataKey="label"
-                tick={{ fontSize: 10 }}
-                interval={0}
-                angle={-18}
-                textAnchor="end"
-                height={60}
+                type="number"
+                allowDecimals={false}
               />
 
               <YAxis
-                allowDecimals={false}
-                tick={{ fontSize: 11 }}
+                type="category"
+                dataKey="label"
+                width={135}
+                tick={{
+                  fontSize: 11,
+                }}
               />
 
               <Tooltip />
@@ -212,8 +401,13 @@ function DistributionChart({
               <Bar
                 dataKey="count"
                 name="Tickets"
-                fill="#7198ee"
-                radius={[7, 7, 0, 0]}
+                fill="#5979ef"
+                radius={[
+                  0,
+                  7,
+                  7,
+                  0,
+                ]}
               />
             </BarChart>
           </ResponsiveContainer>
@@ -223,168 +417,489 @@ function DistributionChart({
   )
 }
 
+function DistributionChart({
+  title,
+  description,
+  data,
+}: {
+  title: string
+  description: string
+  data: Count[]
+}) {
+  return (
+    <section className="hd-kpi__panel">
+      <header>
+        <h2>
+          {title}
+        </h2>
+
+        <p>
+          {description}
+        </p>
+      </header>
+
+      <div className="hd-kpi__chart">
+        {data.length ===
+        0 ? (
+          <div className="hd-kpi__empty">
+            Sin datos.
+          </div>
+        ) : (
+          <ResponsiveContainer
+            width="100%"
+            height="100%"
+          >
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="count"
+                nameKey="label"
+                innerRadius={75}
+                outerRadius={112}
+                paddingAngle={2}
+              >
+                {data.map(
+                  (
+                    item,
+                    index,
+                  ) => (
+                    <Cell
+                      key={
+                        `${item.label}-${index}`
+                      }
+                      fill={
+                        COLORS[
+                          index %
+                            COLORS.length
+                        ]
+                      }
+                    />
+                  ),
+                )}
+              </Pie>
+
+              <Tooltip />
+
+              <Legend
+                verticalAlign="bottom"
+                height={42}
+              />
+            </PieChart>
+          </ResponsiveContainer>
+        )}
+      </div>
+    </section>
+  )
+}
+
 export function HelpdeskReportsPage() {
   const [from, setFrom] =
-    useState(initialFrom)
-  const [to, setTo] = useState(() =>
-    dateInput(new Date()),
-  )
-  const [summary, setSummary] =
-    useState<Summary | null>(null)
-  const [loading, setLoading] =
-    useState(true)
-  const [exporting, setExporting] =
-    useState(false)
-  const [error, setError] = useState('')
+    useState(
+      initialFrom,
+    )
+
+  const [to, setTo] =
+    useState(
+      () =>
+        dateInput(
+          new Date(),
+        ),
+    )
+
+  const [
+    summary,
+    setSummary,
+  ] =
+    useState<
+      Summary | null
+    >(
+      null,
+    )
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(
+      true,
+    )
+
+  const [
+    exporting,
+    setExporting,
+  ] =
+    useState(
+      false,
+    )
+
+  const [
+    error,
+    setError,
+  ] =
+    useState(
+      '',
+    )
 
   const validRange =
-    Boolean(from && to) && from <= to
+    Boolean(
+      from &&
+        to,
+    )
+    &&
+    from <= to
 
-  const load = useCallback(async () => {
-    if (!validRange) {
-      setError(
-        'Selecciona un rango de fechas válido.',
-      )
-      return
-    }
+  const load =
+    useCallback(
+      async () => {
+        if (
+          !validRange
+        ) {
+          setError(
+            'Selecciona un rango de fechas válido.',
+          )
 
-    setLoading(true)
-    setError('')
+          return
+        }
 
-    try {
-      const response =
-        await apiClient.get<Summary>(
-          '/helpdesk/reports/summary',
-          {
-            params: { from, to },
-          },
+        setLoading(
+          true,
         )
 
-      setSummary(response.data)
-    } catch {
-      setSummary(null)
-      setError(
-        'No se pudieron cargar los indicadores.',
-      )
-    } finally {
-      setLoading(false)
-    }
-  }, [from, to, validRange])
+        setError(
+          '',
+        )
 
-  useEffect(() => {
-    void load()
-  }, [load])
+        try {
+          const response =
+            await apiClient.get<Summary>(
+              '/helpdesk/reports/summary',
+              {
+                params: {
+                  from,
+                  to,
+                },
+              },
+            )
+
+          setSummary(
+            response.data,
+          )
+        } catch {
+          setSummary(
+            null,
+          )
+
+          setError(
+            'No se pudieron cargar los KPI de Helpdesk.',
+          )
+        } finally {
+          setLoading(
+            false,
+          )
+        }
+      },
+      [
+        from,
+        to,
+        validRange,
+      ],
+    )
+
+  useEffect(
+    () => {
+      void load()
+    },
+    [
+      load,
+    ],
+  )
 
   async function exportCsv() {
     if (
-      !validRange ||
-      exporting ||
+      !validRange
+      ||
+      exporting
+      ||
       !summary
     ) {
       return
     }
 
-    setExporting(true)
-    setError('')
+    setExporting(
+      true,
+    )
+
+    setError(
+      '',
+    )
 
     try {
       const response =
         await apiClient.get<Blob>(
           '/helpdesk/reports/tickets.csv',
           {
-            params: { from, to },
-            responseType: 'blob',
+            params: {
+              from,
+              to,
+            },
+
+            responseType:
+              'blob',
           },
         )
 
-      const url = URL.createObjectURL(
-        response.data,
-      )
+      const url =
+        URL.createObjectURL(
+          response.data,
+        )
 
       const anchor =
-        document.createElement('a')
+        document.createElement(
+          'a',
+        )
 
-      anchor.href = url
+      anchor.href =
+        url
+
       anchor.download =
         `titanmdm-helpdesk-${from}-${to}.csv`
 
-      document.body.appendChild(anchor)
+      document.body
+        .appendChild(
+          anchor,
+        )
+
       anchor.click()
+
       anchor.remove()
 
       window.setTimeout(
-        () => URL.revokeObjectURL(url),
+        () =>
+          URL.revokeObjectURL(
+            url,
+          ),
         1000,
       )
     } catch {
       setError(
-        'No se pudo descargar el reporte CSV.',
+        'No se pudo descargar el reporte.',
       )
     } finally {
-      setExporting(false)
+      setExporting(
+        false,
+      )
     }
   }
 
-  const metrics = useMemo(() => {
-    if (!summary) return []
+  const statusData =
+    summary
+      ? localized(
+          summary.byStatus,
+          STATUS,
+        )
+      : []
 
-    return [
-      {
-        title: 'Tickets creados',
-        value: summary.total,
-        icon: Ticket,
-        tone: 'blue',
-      },
-      {
-        title: 'Sin resolver',
-        value: summary.unresolved,
-        icon: Clock3,
-        tone: 'violet',
-      },
-      {
-        title: 'Sin asignar',
-        value: summary.unassigned,
-        icon: UserRoundX,
-        tone: 'amber',
-      },
-      {
-        title: 'SLA vencidos',
-        value:
-          summary.overdueFirstResponse +
-          summary.overdueResolution,
-        icon: AlertTriangle,
-        tone: 'red',
-      },
-    ]
-  }, [summary])
+  const priorityData =
+    summary
+      ? localized(
+          summary.byPriority,
+          PRIORITY,
+        )
+      : []
 
-  const statusData = summary
-    ? localized(summary.byStatus, STATUS)
-    : []
+  const sourceData =
+    summary
+      ? localized(
+          summary.bySource,
+          SOURCE,
+        )
+      : []
 
-  const priorityData = summary
-    ? localized(
-        summary.byPriority,
-        PRIORITY,
-      )
-    : []
+  const mainMetrics =
+    useMemo(
+      () => {
+        if (
+          !summary
+        ) {
+          return []
+        }
+
+        return [
+          {
+            title:
+              'Tickets período',
+
+            value:
+              summary.total,
+
+            detail:
+              `${summary.resolved} resueltos`,
+
+            icon:
+              Ticket,
+
+            tone:
+              'blue',
+          },
+
+          {
+            title:
+              'Backlog actual',
+
+            value:
+              summary.currentBacklog,
+
+            detail:
+              `${summary.unassigned} sin técnico`,
+
+            icon:
+              Activity,
+
+            tone:
+              'violet',
+          },
+
+          {
+            title:
+              'Sin asignar',
+
+            value:
+              summary.unassigned,
+
+            detail:
+              'Requieren routing',
+
+            icon:
+              UserRoundX,
+
+            tone:
+              'amber',
+          },
+
+          {
+            title:
+              'SLA vencidos',
+
+            value:
+              summary
+                .overdueFirstResponse
+              +
+              summary
+                .overdueResolution,
+
+            detail:
+              'Requieren atención',
+
+            icon:
+              AlertTriangle,
+
+            tone:
+              'red',
+          },
+
+          {
+            title:
+              'En espera usuario',
+
+            value:
+              summary.pendingUser,
+
+            detail:
+              'SLA pausado',
+
+            icon:
+              Clock3,
+
+            tone:
+              'cyan',
+          },
+
+          {
+            title:
+              'Autoasignados',
+
+            value:
+              summary
+                .automation
+                .autoAssigned,
+
+            detail:
+              'Asignados por TitanMDM',
+
+            icon:
+              Workflow,
+
+            tone:
+              'green',
+          },
+
+          {
+            title:
+              'Escalados',
+
+            value:
+              summary
+                .automation
+                .escalations,
+
+            detail:
+              'Automatización SLA',
+
+            icon:
+              Bot,
+
+            tone:
+              'purple',
+          },
+
+          {
+            title:
+              'Reabiertos',
+
+            value:
+              summary
+                .automation
+                .reopened,
+
+            detail:
+              'Casos reactivados',
+
+            icon:
+              RotateCcw,
+
+            tone:
+              'slate',
+          },
+        ]
+      },
+      [
+        summary,
+      ],
+    )
 
   return (
-    <main className="titan-page helpdesk-page hd-report">
-      <header className="hd-report__header">
+    <main className="titan-page helpdesk-page hd-kpi">
+      <header className="hd-kpi__hero">
         <div>
-          <span className="helpdesk-inbox__eyebrow">
-            <BarChart3 size={16} />
-            Mesa de ayuda · Análisis
+          <span className="hd-kpi__eyebrow">
+            <Gauge
+              size={15}
+            />
+            TITANMDM SERVICE INTELLIGENCE
           </span>
 
-          <h1>Gráficos y KPI</h1>
+          <h1>
+            KPI y rendimiento
+          </h1>
 
           <p>
-            Indicadores de tickets creados
-            en el período seleccionado.
-            Las fechas del servidor se
-            evalúan en UTC.
+            Analiza volumen,
+            cumplimiento SLA,
+            tiempos de atención,
+            carga por localidad,
+            desempeño técnico
+            y automatizaciones
+            ejecutadas.
           </p>
         </div>
 
@@ -392,33 +907,44 @@ export function HelpdeskReportsPage() {
           to="/helpdesk?workspace=helpdesk"
           className="helpdesk-ui-button helpdesk-ui-button--secondary"
         >
-          <ArrowLeft size={16} />
-          Volver a la bandeja
+          <ArrowLeft
+            size={16}
+          />
+          Bandeja TIC
         </Link>
       </header>
 
-      <section
-        className="hd-report__filters"
-        aria-label="Período del reporte"
-      >
+      <section className="hd-kpi__filters">
         <label>
           Desde
+
           <input
             type="date"
             value={from}
-            onChange={(event) =>
-              setFrom(event.target.value)
+            onChange={
+              event =>
+                setFrom(
+                  event
+                    .target
+                    .value,
+                )
             }
           />
         </label>
 
         <label>
           Hasta
+
           <input
             type="date"
             value={to}
-            onChange={(event) =>
-              setTo(event.target.value)
+            onChange={
+              event =>
+                setTo(
+                  event
+                    .target
+                    .value,
+                )
             }
           />
         </label>
@@ -426,12 +952,21 @@ export function HelpdeskReportsPage() {
         <button
           type="button"
           className="helpdesk-ui-button helpdesk-ui-button--primary"
-          disabled={loading || !validRange}
-          onClick={() => void load()}
+          disabled={
+            loading ||
+            !validRange
+          }
+          onClick={
+            () =>
+              void load()
+          }
         >
-          <RefreshCw size={16} />
+          <RefreshCw
+            size={16}
+          />
+
           {loading
-            ? 'Cargando…'
+            ? 'Actualizando…'
             : 'Actualizar'}
         </button>
 
@@ -440,12 +975,17 @@ export function HelpdeskReportsPage() {
           className="helpdesk-ui-button helpdesk-ui-button--secondary"
           disabled={
             exporting ||
-            !summary ||
-            !validRange
+            !summary
           }
-          onClick={() => void exportCsv()}
+          onClick={
+            () =>
+              void exportCsv()
+          }
         >
-          <Download size={16} />
+          <Download
+            size={16}
+          />
+
           {exporting
             ? 'Exportando…'
             : 'Exportar CSV'}
@@ -461,211 +1001,418 @@ export function HelpdeskReportsPage() {
         </div>
       )}
 
-      {loading && !summary && (
-        <p role="status">
-          Cargando indicadores…
-        </p>
-      )}
-
       {summary && (
         <>
-          <section
-            className="hd-report__metrics"
-            aria-label="Indicadores"
-          >
-            {metrics.map((metric) => {
-              const Icon = metric.icon
+          <section className="hd-kpi__metrics">
+            {mainMetrics.map(
+              metric => {
+                const Icon =
+                  metric.icon
 
-              return (
-                <article
-                  key={metric.title}
-                  className={
-                    `hd-report__metric ` +
-                    `hd-report__metric--${metric.tone}`
-                  }
-                >
-                  <span>
-                    <Icon size={20} />
-                  </span>
+                return (
+                  <article
+                    key={
+                      metric.title
+                    }
+                    className={
+                      `hd-kpi__metric hd-kpi__metric--${metric.tone}`
+                    }
+                  >
+                    <span className="hd-kpi__metric-icon">
+                      <Icon
+                        size={20}
+                      />
+                    </span>
 
-                  <strong>
-                    {metric.value}
-                  </strong>
+                    <div>
+                      <small>
+                        {
+                          metric.title
+                        }
+                      </small>
 
-                  <small>
-                    {metric.title}
-                  </small>
-                </article>
-              )
-            })}
+                      <strong>
+                        {
+                          metric.value
+                        }
+                      </strong>
+
+                      <p>
+                        {
+                          metric.detail
+                        }
+                      </p>
+                    </div>
+                  </article>
+                )
+              },
+            )}
           </section>
 
-          <section
-            className="hd-report__timing"
-            aria-label="Tiempos promedio"
-          >
+          <section className="hd-kpi__sla-grid">
+            <SlaCard
+              title="SLA primera respuesta"
+              metric={
+                summary.firstResponseSla
+              }
+            />
+
+            <SlaCard
+              title="SLA resolución"
+              metric={
+                summary.resolutionSla
+              }
+            />
+          </section>
+
+          <section className="hd-kpi__time-grid">
             <article>
+              <Timer
+                size={20}
+              />
+
               <span>
-                Primera respuesta
+                Promedio primera respuesta
               </span>
 
               <strong>
-                {summary
-                  .averageFirstResponseHours ===
-                null
-                  ? '—'
-                  : `${
-                      summary.averageFirstResponseHours
-                    } h`}
+                {hours(
+                  summary
+                    .averageFirstResponseHours,
+                )}
               </strong>
             </article>
 
             <article>
+              <Clock3
+                size={20}
+              />
+
               <span>
-                Resolución
+                Mediana primera respuesta
               </span>
 
               <strong>
-                {summary
-                  .averageResolutionHours ===
-                null
-                  ? '—'
-                  : `${
-                      summary.averageResolutionHours
-                    } h`}
+                {hours(
+                  summary
+                    .medianFirstResponseHours,
+                )}
+              </strong>
+            </article>
+
+            <article>
+              <Timer
+                size={20}
+              />
+
+              <span>
+                Promedio resolución
+              </span>
+
+              <strong>
+                {hours(
+                  summary
+                    .averageResolutionHours,
+                )}
+              </strong>
+            </article>
+
+            <article>
+              <CheckCircle2
+                size={20}
+              />
+
+              <span>
+                Mediana resolución
+              </span>
+
+              <strong>
+                {hours(
+                  summary
+                    .medianResolutionHours,
+                )}
               </strong>
             </article>
           </section>
 
-          <div className="hd-report__grid">
-            <DistributionChart
-              title="Por prioridad"
-              description="Nivel asignado al crear el caso"
-              data={priorityData}
-              type="donut"
-            />
-
-            <DistributionChart
-              title="Por estado"
-              description="Situación actual de las solicitudes"
-              data={statusData}
-              type="donut"
-            />
-
-            <DistributionChart
-              title="Por categoría"
-              description="Casos más frecuentes"
-              data={summary.byCategory}
-            />
-
-            <DistributionChart
-              title="Por origen"
-              description="Canal de creación"
-              data={summary.bySource}
-            />
-          </div>
-
-          <section className="hd-report__chart-card hd-report__chart-card--wide">
+          <section className="hd-kpi__panel hd-kpi__panel--wide">
             <header>
               <h2>
-                Tendencia de solicitudes
+                Flujo de tickets
               </h2>
+
               <p>
-                Tickets creados por día
+                Creación versus resolución
+                diaria. Permite identificar
+                crecimiento real del backlog.
               </p>
             </header>
 
-            <div className="hd-report__chart">
-              {summary.daily.length ===
-              0 ? (
-                <div className="hd-report__empty">
-                  Sin datos para
-                  este período.
-                </div>
-              ) : (
-                <ResponsiveContainer
-                  width="100%"
-                  height="100%"
+            <div className="hd-kpi__chart hd-kpi__chart--trend">
+              <ResponsiveContainer
+                width="100%"
+                height="100%"
+              >
+                <LineChart
+                  data={
+                    summary.daily
+                  }
+                  margin={{
+                    top: 15,
+                    right: 24,
+                    bottom: 10,
+                    left: 0,
+                  }}
                 >
-                  <LineChart
-                    data={summary.daily}
-                    margin={{
-                      top: 14,
-                      right: 18,
-                      bottom: 18,
-                      left: 0,
+                  <CartesianGrid
+                    stroke="#edf1f7"
+                    strokeDasharray="4 4"
+                    vertical={false}
+                  />
+
+                  <XAxis
+                    dataKey="date"
+                    tick={{
+                      fontSize: 10,
                     }}
-                  >
-                    <CartesianGrid
-                      stroke="#e9eef7"
-                      strokeDasharray="3 3"
-                      vertical={false}
-                    />
+                  />
 
-                    <XAxis
-                      dataKey="date"
-                      tick={{
-                        fontSize: 10,
-                      }}
-                    />
+                  <YAxis
+                    allowDecimals={false}
+                  />
 
-                    <YAxis
-                      allowDecimals={
-                        false
-                      }
-                    />
+                  <Tooltip />
 
-                    <Tooltip />
+                  <Legend />
 
-                    <Line
-                      dataKey="count"
-                      name="Tickets"
-                      type="monotone"
-                      stroke="#4d79e5"
-                      strokeWidth={3}
-                      dot={false}
-                      activeDot={{
-                        r: 5,
-                      }}
-                    />
-                  </LineChart>
-                </ResponsiveContainer>
-              )}
+                  <Line
+                    type="monotone"
+                    dataKey="created"
+                    name="Creados"
+                    stroke="#5476ee"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{
+                      r: 5,
+                    }}
+                  />
+
+                  <Line
+                    type="monotone"
+                    dataKey="resolved"
+                    name="Resueltos"
+                    stroke="#28a879"
+                    strokeWidth={3}
+                    dot={false}
+                    activeDot={{
+                      r: 5,
+                    }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
             </div>
           </section>
 
-          <section className="hd-report__agents">
+          <div className="hd-kpi__two">
+            <DistributionChart
+              title="Estado de la mesa"
+              description="Distribución de los tickets del período"
+              data={
+                statusData
+              }
+            />
+
+            <DistributionChart
+              title="Canales de entrada"
+              description="Cómo están llegando las solicitudes"
+              data={
+                sourceData
+              }
+            />
+          </div>
+
+          <div className="hd-kpi__two">
+            <HorizontalChart
+              title="Categorías con mayor demanda"
+              description="Permite identificar áreas que consumen más soporte"
+              data={
+                summary.byCategory
+              }
+            />
+
+            <HorizontalChart
+              title="Antigüedad del backlog"
+              description="Edad actual de todos los tickets abiertos"
+              data={
+                summary.backlogAging
+              }
+            />
+          </div>
+
+          <div className="hd-kpi__two">
+            <HorizontalChart
+              title="Tickets por localidad"
+              description="Distribución Multi-Site de la demanda"
+              data={
+                summary.bySite
+              }
+            />
+
+            <DistributionChart
+              title="Prioridad"
+              description="Distribución por criticidad"
+              data={
+                priorityData
+              }
+            />
+          </div>
+
+          <section className="hd-kpi__panel hd-kpi__panel--wide">
             <header>
               <h2>
-                Actividad por agente
+                Automatización TitanMDM
               </h2>
+
               <p>
-                Asignaciones del período
-                y tickets resueltos
-                o cerrados
+                Acciones realizadas automáticamente
+                durante el período seleccionado.
               </p>
             </header>
 
-            {summary.byAgent.length ===
-            0 ? (
-              <div className="hd-report__empty">
-                No hay asignaciones
-                en el período.
-              </div>
-            ) : (
-              <div className="hd-report__table-wrap">
-                <table>
-                  <thead>
-                    <tr>
-                      <th>Agente</th>
-                      <th>Asignados</th>
-                      <th>Resueltos</th>
-                    </tr>
-                  </thead>
+            <div className="hd-kpi__automation">
+              <article>
+                <Workflow />
+                <strong>
+                  {
+                    summary
+                      .automation
+                      .autoAssigned
+                  }
+                </strong>
+                <span>
+                  Autoasignaciones
+                </span>
+              </article>
 
-                  <tbody>
-                    {summary.byAgent.map(
-                      (agent) => (
+              <article>
+                <Users />
+                <strong>
+                  {
+                    summary
+                      .automation
+                      .autoHandovers
+                  }
+                </strong>
+                <span>
+                  Relevos
+                </span>
+              </article>
+
+              <article>
+                <Bot />
+                <strong>
+                  {
+                    summary
+                      .automation
+                      .classifications
+                  }
+                </strong>
+                <span>
+                  Clasificaciones IA
+                </span>
+              </article>
+
+              <article>
+                <AlertTriangle />
+                <strong>
+                  {
+                    summary
+                      .automation
+                      .escalations
+                  }
+                </strong>
+                <span>
+                  Escalamientos SLA
+                </span>
+              </article>
+
+              <article>
+                <Clock3 />
+                <strong>
+                  {
+                    summary
+                      .automation
+                      .reminders
+                  }
+                </strong>
+                <span>
+                  Recordatorios
+                </span>
+              </article>
+
+              <article>
+                <RotateCcw />
+                <strong>
+                  {
+                    summary
+                      .automation
+                      .reopened
+                  }
+                </strong>
+                <span>
+                  Reaperturas
+                </span>
+              </article>
+            </div>
+          </section>
+
+          <section className="hd-kpi__panel hd-kpi__panel--wide">
+            <header>
+              <h2>
+                Rendimiento por técnico
+              </h2>
+
+              <p>
+                Volumen atendido, resolución
+                y eventos de incumplimiento SLA.
+              </p>
+            </header>
+
+            <div className="hd-kpi__table-wrap">
+              <table>
+                <thead>
+                  <tr>
+                    <th>
+                      Técnico
+                    </th>
+
+                    <th>
+                      Asignados
+                    </th>
+
+                    <th>
+                      Activos
+                    </th>
+
+                    <th>
+                      Resueltos
+                    </th>
+
+                    <th>
+                      Tasa resolución
+                    </th>
+
+                    <th>
+                      SLA vencidos
+                    </th>
+                  </tr>
+                </thead>
+
+                <tbody>
+                  {summary
+                    .byAgent
+                    .map(
+                      agent => (
                         <tr
                           key={
                             agent.label
@@ -685,17 +1432,47 @@ export function HelpdeskReportsPage() {
 
                           <td>
                             {
+                              agent.active
+                            }
+                          </td>
+
+                          <td>
+                            {
                               agent.resolved
+                            }
+                          </td>
+
+                          <td>
+                            {percent(
+                              agent.resolutionRate,
+                            )}
+                          </td>
+
+                          <td>
+                            {
+                              agent.slaBreached
                             }
                           </td>
                         </tr>
                       ),
                     )}
-                  </tbody>
-                </table>
-              </div>
-            )}
+                </tbody>
+              </table>
+            </div>
           </section>
+
+          <footer className="hd-kpi__footer">
+            <MapPin
+              size={14}
+            />
+
+            Datos generados por
+            TitanMDM a las{' '}
+
+            {new Date(
+              summary.generatedAtUtc,
+            ).toLocaleString()}
+          </footer>
         </>
       )}
     </main>
