@@ -2,6 +2,7 @@ using System.Net;
 using System.Net.Http.Headers;
 using System.Net.Http.Json;
 using System.Text.Json;
+
 using Microsoft.Extensions.Options;
 
 namespace TitanMDM.Api.AI;
@@ -18,121 +19,103 @@ public sealed class OpenRouterAiService
         IOptions<OpenRouterOptions> options,
         ILogger<OpenRouterAiService> logger)
     {
-        _httpClient = httpClient;
-        _options = options.Value;
-        _logger = logger;
+        _httpClient =
+            httpClient
+            ?? throw new ArgumentNullException(
+                nameof(httpClient));
+
+        _options =
+            options?.Value
+            ?? throw new ArgumentNullException(
+                nameof(options));
+
+        _logger =
+            logger
+            ?? throw new ArgumentNullException(
+                nameof(logger));
     }
 
+    // ============================================================
+    // AVAILABILITY
+    // ============================================================
+
+    public bool IsEnabled =>
+        _options.Enabled
+        &&
+        !string.IsNullOrWhiteSpace(
+            _options.ApiKey);
+
+    // ============================================================
+    // COMPLETION
+    // ============================================================
+
     public async Task<string> CompleteAsync(
-        string systemPrompt,
-        string userPrompt,
-        string? model = null,
+        OpenRouterRequest request,
         CancellationToken cancellationToken = default)
     {
+        ArgumentNullException.ThrowIfNull(
+            request);
+
         if (!_options.Enabled)
         {
-            throw new InvalidOperationException(
+            throw new OpenRouterUnavailableException(
                 "OpenRouter está deshabilitado.");
         }
 
         if (string.IsNullOrWhiteSpace(
                 _options.ApiKey))
         {
-            throw new InvalidOperationException(
+            throw new OpenRouterUnavailableException(
                 "AI:OpenRouter:ApiKey no está configurada.");
         }
 
         if (string.IsNullOrWhiteSpace(
-                userPrompt))
+                request.UserPrompt))
         {
             throw new ArgumentException(
-                "El prompt de usuario es obligatorio.",
-                nameof(userPrompt));
+                "El prompt del usuario es obligatorio.",
+                nameof(request));
         }
 
-        var selectedModel =
-            string.IsNullOrWhiteSpace(model)
-                ? _options.ResolveAssistantModel()
-                : model.Trim();
-
-        var request =
-            new OpenRouterRequest
-            {
-                Model = selectedModel,
-                Temperature =
-                    _options.Temperature,
-                MaxTokens =
-                    _options.MaxTokens,
-                Messages =
-                [
-                    new OpenRouterMessage
-                    {
-                        Role = "system",
-                        Content =
-                            systemPrompt
-                            ?? string.Empty
-                    },
-
-                    new OpenRouterMessage
-                    {
-                        Role = "user",
-                        Content =
-                            userPrompt
-                    }
-                ]
-            };
-
-        using var httpRequest =
-            new HttpRequestMessage(
-                HttpMethod.Post,
-                "chat/completions");
-
-        httpRequest.Headers.Authorization =
-            new AuthenticationHeaderValue(
-                "Bearer",
-                _options.ApiKey.Trim());
-
-        if (!string.IsNullOrWhiteSpace(
-                _options.SiteUrl))
-        {
-            httpRequest.Headers.TryAddWithoutValidation(
-                "HTTP-Referer",
-                _options.SiteUrl.Trim());
-        }
-
-        var title =
-            !string.IsNullOrWhiteSpace(
-                _options.ApplicationTitle)
-                ? _options.ApplicationTitle
-                : _options.AppName;
-
-        if (!string.IsNullOrWhiteSpace(
-                title))
-        {
-            httpRequest.Headers.TryAddWithoutValidation(
-                "X-Title",
-                title.Trim());
-        }
-
-        httpRequest.Content =
-            JsonContent.Create(
+        var model =
+            ResolveModel(
                 request);
 
-        var attempts =
+        var temperature =
+            request.Temperature
+            ??
+            _options.Temperature;
+
+        var maxTokens =
+            request.MaxTokens
+            ??
+            _options.MaxTokens;
+
+        var maxAttempts =
             Math.Max(
                 1,
                 _options.MaxRetries + 1);
 
-        Exception? lastException =
+        Exception? lastFailure =
             null;
 
         for (
             var attempt = 1;
-            attempt <= attempts;
+            attempt <= maxAttempts;
             attempt++)
         {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
             try
             {
+                using var httpRequest =
+                    CreateHttpRequest(
+                        request,
+                        model,
+                        temperature,
+                        maxTokens);
+
                 using var response =
                     await _httpClient.SendAsync(
                         httpRequest,
@@ -151,114 +134,239 @@ public sealed class OpenRouterAiService
                         body);
                 }
 
+                var statusCode =
+                    (int)response.StatusCode;
+
                 if (!ShouldRetry(
-                        response.StatusCode)
-                    ||
-                    attempt >= attempts)
+                        response.StatusCode))
                 {
-                    throw new InvalidOperationException(
-                        $"OpenRouter respondió HTTP {(int)response.StatusCode}. " +
-                        body);
+                    throw new OpenRouterUnavailableException(
+                        BuildFailureMessage(
+                            statusCode,
+                            body));
+                }
+
+                lastFailure =
+                    new OpenRouterUnavailableException(
+                        BuildFailureMessage(
+                            statusCode,
+                            body));
+
+                if (attempt >= maxAttempts)
+                {
+                    break;
                 }
 
                 _logger.LogWarning(
                     "OpenRouter respondió HTTP {StatusCode}. " +
-                    "Intento {Attempt}/{Attempts}.",
-                    (int)response.StatusCode,
+                    "Reintento {Attempt}/{MaxAttempts}.",
+                    statusCode,
                     attempt,
-                    attempts);
+                    maxAttempts);
             }
             catch (
                 OperationCanceledException)
-                when (!cancellationToken
-                    .IsCancellationRequested)
+                when (
+                    !cancellationToken
+                        .IsCancellationRequested)
             {
-                lastException =
+                lastFailure =
                     new TimeoutException(
-                        "OpenRouter excedió el tiempo de espera.");
+                        "OpenRouter excedió el tiempo máximo de espera.");
 
-                if (attempt >= attempts)
+                if (attempt >= maxAttempts)
                 {
-                    throw lastException;
+                    break;
                 }
+
+                _logger.LogWarning(
+                    "Timeout comunicando con OpenRouter. " +
+                    "Reintento {Attempt}/{MaxAttempts}.",
+                    attempt,
+                    maxAttempts);
             }
-            catch (HttpRequestException ex)
+            catch (
+                HttpRequestException ex)
             {
-                lastException =
+                lastFailure =
                     ex;
 
-                if (attempt >= attempts)
+                if (attempt >= maxAttempts)
                 {
-                    throw;
+                    break;
                 }
 
                 _logger.LogWarning(
                     ex,
-                    "Fallo HTTP temporal contra OpenRouter. " +
-                    "Intento {Attempt}/{Attempts}.",
+                    "Error de comunicación con OpenRouter. " +
+                    "Reintento {Attempt}/{MaxAttempts}.",
                     attempt,
-                    attempts);
+                    maxAttempts);
+            }
+            catch (
+                JsonException ex)
+            {
+                throw new OpenRouterUnavailableException(
+                    "OpenRouter devolvió una respuesta JSON inválida.",
+                    ex);
             }
 
             var delay =
-                TimeSpan.FromMilliseconds(
-                    Math.Min(
-                        5000,
-                        Math.Max(
-                            250,
-                            _options
-                                .RetryBaseDelayMilliseconds)
-                        *
-                        attempt));
+                CalculateRetryDelay(
+                    attempt);
 
             await Task.Delay(
                 delay,
                 cancellationToken);
-
-            /*
-             * HttpRequestMessage no puede reutilizarse
-             * después del primer SendAsync.
-             *
-             * Por eso, si llegamos a un retry,
-             * reconstruimos la petición.
-             */
-            httpRequest.Dispose();
-
-            throw new InvalidOperationException(
-                "La implementación de retry necesita " +
-                "una nueva instancia HttpRequestMessage por intento.");
         }
 
-        throw lastException
-            ?? new InvalidOperationException(
-                "OpenRouter no devolvió respuesta.");
+        throw new OpenRouterUnavailableException(
+            "OpenRouter no estuvo disponible después de varios intentos.",
+            lastFailure
+            ??
+            new InvalidOperationException(
+                "No se recibió una respuesta válida."));
     }
 
-    private static bool ShouldRetry(
-        HttpStatusCode statusCode)
+    // ============================================================
+    // HTTP REQUEST
+    // ============================================================
+
+    private HttpRequestMessage CreateHttpRequest(
+        OpenRouterRequest request,
+        string model,
+        double temperature,
+        int maxTokens)
     {
-        return statusCode ==
-                   HttpStatusCode.RequestTimeout
-               ||
-               statusCode ==
-                   (HttpStatusCode)429
-               ||
-               (int)statusCode >= 500;
+        var payload =
+            new Dictionary<string, object?>
+            {
+                ["model"] =
+                    model,
+
+                ["messages"] =
+                    new object[]
+                    {
+                        new
+                        {
+                            role =
+                                "system",
+
+                            content =
+                                request.SystemPrompt
+                                ??
+                                string.Empty
+                        },
+
+                        new
+                        {
+                            role =
+                                "user",
+
+                            content =
+                                request.UserPrompt
+                        }
+                    },
+
+                ["temperature"] =
+                    temperature,
+
+                ["max_tokens"] =
+                    Math.Max(
+                        1,
+                        maxTokens)
+            };
+
+        if (request.JsonMode)
+        {
+            payload[
+                "response_format"] =
+                new
+                {
+                    type =
+                        "json_object"
+                };
+        }
+
+        var httpRequest =
+            new HttpRequestMessage(
+                HttpMethod.Post,
+                "chat/completions");
+
+        httpRequest.Headers.Authorization =
+            new AuthenticationHeaderValue(
+                "Bearer",
+                _options.ApiKey.Trim());
+
+        if (!string.IsNullOrWhiteSpace(
+                _options.SiteUrl))
+        {
+            httpRequest.Headers
+                .TryAddWithoutValidation(
+                    "HTTP-Referer",
+                    _options.SiteUrl.Trim());
+        }
+
+        var title =
+            !string.IsNullOrWhiteSpace(
+                _options.ApplicationTitle)
+                ? _options
+                    .ApplicationTitle
+                    .Trim()
+                : _options
+                    .AppName
+                    .Trim();
+
+        if (!string.IsNullOrWhiteSpace(
+                title))
+        {
+            httpRequest.Headers
+                .TryAddWithoutValidation(
+                    "X-Title",
+                    title);
+        }
+
+        httpRequest.Content =
+            JsonContent.Create(
+                payload);
+
+        return httpRequest;
     }
+
+    // ============================================================
+    // MODEL RESOLUTION
+    // ============================================================
+
+    private string ResolveModel(
+        OpenRouterRequest request)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                request.Model))
+        {
+            return request.Model.Trim();
+        }
+
+        return _options
+            .ResolveAssistantModel();
+    }
+
+    // ============================================================
+    // RESPONSE
+    // ============================================================
 
     private static string ExtractContent(
-        string json)
+        string body)
     {
         if (string.IsNullOrWhiteSpace(
-                json))
+                body))
         {
-            throw new InvalidOperationException(
+            throw new OpenRouterUnavailableException(
                 "OpenRouter devolvió una respuesta vacía.");
         }
 
         using var document =
             JsonDocument.Parse(
-                json);
+                body);
 
         var root =
             document.RootElement;
@@ -272,8 +380,8 @@ public sealed class OpenRouterAiService
             ||
             choices.GetArrayLength() == 0)
         {
-            throw new InvalidOperationException(
-                "OpenRouter no devolvió choices válidos.");
+            throw new OpenRouterUnavailableException(
+                "OpenRouter no devolvió ninguna respuesta utilizable.");
         }
 
         var firstChoice =
@@ -283,41 +391,100 @@ public sealed class OpenRouterAiService
                 "message",
                 out var message))
         {
-            throw new InvalidOperationException(
-                "OpenRouter no devolvió message.");
+            throw new OpenRouterUnavailableException(
+                "OpenRouter no devolvió el objeto message.");
         }
 
         if (!message.TryGetProperty(
                 "content",
                 out var content))
         {
-            throw new InvalidOperationException(
-                "OpenRouter no devolvió content.");
+            throw new OpenRouterUnavailableException(
+                "OpenRouter no devolvió contenido.");
         }
 
-        return content.GetString()
-               ?? string.Empty;
+        var result =
+            content.GetString();
+
+        if (string.IsNullOrWhiteSpace(
+                result))
+        {
+            throw new OpenRouterUnavailableException(
+                "OpenRouter devolvió contenido vacío.");
+        }
+
+        return result.Trim();
     }
 
-    private sealed class OpenRouterRequest
+    // ============================================================
+    // RETRY POLICY
+    // ============================================================
+
+    private static bool ShouldRetry(
+        HttpStatusCode statusCode)
     {
-        public string Model { get; init; } =
-            string.Empty;
-
-        public List<OpenRouterMessage> Messages { get; init; } =
-            [];
-
-        public double Temperature { get; init; }
-
-        public int MaxTokens { get; init; }
+        return statusCode
+                   is HttpStatusCode
+                       .RequestTimeout
+               ||
+               statusCode ==
+                   (HttpStatusCode)429
+               ||
+               (int)statusCode >=
+                   500;
     }
 
-    private sealed class OpenRouterMessage
+    private TimeSpan CalculateRetryDelay(
+        int attempt)
     {
-        public string Role { get; init; } =
-            string.Empty;
+        var baseDelay =
+            Math.Max(
+                250,
+                _options
+                    .RetryBaseDelayMilliseconds);
 
-        public string Content { get; init; } =
-            string.Empty;
+        var multiplier =
+            Math.Pow(
+                2,
+                Math.Max(
+                    0,
+                    attempt - 1));
+
+        var milliseconds =
+            Math.Min(
+                10_000,
+                baseDelay *
+                multiplier);
+
+        return TimeSpan
+            .FromMilliseconds(
+                milliseconds);
+    }
+
+    // ============================================================
+    // SAFE ERROR
+    // ============================================================
+
+    private static string BuildFailureMessage(
+        int statusCode,
+        string responseBody)
+    {
+        var safeBody =
+            string.IsNullOrWhiteSpace(
+                responseBody)
+                ? "Sin detalle."
+                : responseBody.Trim();
+
+        if (safeBody.Length >
+            800)
+        {
+            safeBody =
+                safeBody[..800]
+                +
+                "...";
+        }
+
+        return
+            $"OpenRouter respondió HTTP {statusCode}. {safeBody}";
     }
 }

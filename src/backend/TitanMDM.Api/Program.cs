@@ -123,17 +123,13 @@ builder.Services.AddTitanOpenRouter(
     configuration);
 
 // ================================================================
-// HELPDESK BACKGROUND SERVICES
+// TITAN INFRASTRUCTURE
 // ================================================================
 
-builder.Services.AddHostedService<
-    HelpdeskMonitoringService>();
+builder.Services.AddTitanMdmInfrastructure(
+    configuration);
 
-builder.Services.AddHostedService<
-    HelpdeskRoutingWorker>();
-
-builder.Services.AddHostedService<
-    HelpdeskMailWorker>();
+builder.Services.AddTitanAuthorization();
 
 // ================================================================
 // TITAN SERVICES
@@ -170,6 +166,10 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     RemoteControlLeaseService>();
 
+// ================================================================
+// BACKGROUND SERVICES
+// ================================================================
+
 builder.Services.AddHostedService<
     HelpdeskMonitoringService>();
 
@@ -182,16 +182,6 @@ builder.Services.AddHostedService<
 builder.Services.AddHostedService<
     HelpdeskOutboundEmailWorker>();
 
-builder.Services.AddTitanMdmInfrastructure(
-    configuration);
-
-builder.Services.AddTitanMdmInfrastructure(
-    configuration);   
-
-builder.Services.AddScoped<
-    RbacAuditFilter>();
-
-builder.Services.AddTitanAuthorization();
 // ================================================================
 // ENTRA ID
 // ================================================================
