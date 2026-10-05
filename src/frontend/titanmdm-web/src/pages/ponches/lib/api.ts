@@ -1,5 +1,5 @@
 import axios, { type AxiosResponse } from 'axios'
-import apiClient from '../../api/apiClient'
+import apiClient from '../../../api/apiClient'
 
 function asResponse(
   result: AxiosResponse<ArrayBuffer>,
@@ -38,7 +38,7 @@ export async function authFetch(
     !path.startsWith('/api/') ||
     path.startsWith('/api//')
   ) {
-    throw new Error('Ruta inválida de Ponches')
+    throw new Error('Ruta invÃ¡lida de Ponches')
   }
 
   const relative = path.slice('/api/'.length)
@@ -57,12 +57,12 @@ export async function authFetch(
     parsed.origin !== 'https://titan.invalid' ||
     invalidSegments
   ) {
-    throw new Error('Ruta inválida de Ponches')
+    throw new Error('Ruta invÃ¡lida de Ponches')
   }
 
   const headers = new Headers(init.headers)
 
-  // La identidad proviene de la sesión de TitanMDM.
+  // La identidad proviene de la sesiÃ³n de TitanMDM.
   headers.delete('Authorization')
 
   const form =
@@ -94,7 +94,7 @@ export async function authFetch(
         signal: init.signal ?? undefined,
 
         // Axios mantiene su manejo normal de errores.
-        // Así el interceptor puede renovar la sesión ante 401.
+        // AsÃ­ el interceptor puede renovar la sesiÃ³n ante 401.
       })
 
     return asResponse(result)
@@ -141,7 +141,7 @@ export async function authFetch(
 
     throw new Error(
       'No se pudo conectar con Ponches. ' +
-      'Revisa que TitanMDM esté activo.',
+      'Revisa que TitanMDM estÃ© activo.',
       {
         cause: error,
       },

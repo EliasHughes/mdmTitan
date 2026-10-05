@@ -13,6 +13,11 @@ using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Bootstrap;
 
+
+
+using TitanMDM.Api.Ponches;
+
+
 var builder = WebApplication.CreateBuilder(args);
 
 // ================================================================
@@ -363,6 +368,34 @@ builder.Services.Configure<
                     .XForwardedFor |
                 ForwardedHeaders
                     .XForwardedProto;
+        });
+
+// ============================================================
+// PONCHES / BIOMETRIC EDGE SERVICE
+// ============================================================
+
+builder.Services
+    .AddOptions<PonchesOptions>()
+    .Bind(
+        configuration.GetSection(
+            PonchesOptions.SectionName));
+
+builder.Services
+    .AddHttpClient<IPonchesGateway, PonchesGateway>(
+        client =>
+        {
+            /*
+             * El timeout lo controla PonchesGateway mediante
+             * CancellationTokenSource para poder distinguir
+             * consultas normales de operaciones ZKTeco.
+             */
+            client.Timeout =
+                Timeout.InfiniteTimeSpan;
+
+            client.DefaultRequestHeaders
+                .UserAgent
+                .ParseAdd(
+                    "TitanMDM-PonchesGateway/1.0");
         });
 
 // ================================================================

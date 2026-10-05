@@ -6,56 +6,56 @@ import {
 } from 'react-router-dom'
 
 import { useAuth } from '../../auth/AuthContext'
-import '../../ponches-original/ponches-original.css'
+import './PonchesModule.css'
 
 const screens = {
   mirror: lazy(
-    () => import('../../ponches-original/pages/ClockMirror'),
+    () => import('./modules/ClockMirror'),
   ),
   dashboard: lazy(
-    () => import('../../ponches-original/pages/Dashboard'),
+    () => import('./modules/Dashboard'),
   ),
   records: lazy(
-    () => import('../../ponches-original/pages/Records'),
+    () => import('./modules/Records'),
   ),
   'db-records': lazy(
-    () => import('../../ponches-original/pages/SqlHistory'),
+    () => import('./modules/SqlHistory'),
   ),
   'remote-punch': lazy(
-    () => import('../../ponches-original/pages/RemotePunch'),
+    () => import('./modules/RemotePunch'),
   ),
   devices: lazy(
-    () => import('../../ponches-original/pages/Devices'),
+    () => import('./modules/Devices'),
   ),
   employees: lazy(
-    () => import('../../ponches-original/pages/Employees'),
+    () => import('./modules/Employees'),
   ),
   collaborators: lazy(
-    () => import('../../ponches-original/pages/Collaborators'),
+    () => import('./modules/Collaborators'),
   ),
   schedules: lazy(
-    () => import('../../ponches-original/pages/Schedules'),
+    () => import('./modules/Schedules'),
   ),
   biometric: lazy(
-    () => import('../../ponches-original/pages/Inventory'),
+    () => import('./modules/Inventory'),
   ),
   bulk: lazy(
-    () => import('../../ponches-original/pages/BulkOps'),
+    () => import('./modules/BulkOps'),
   ),
   reports: lazy(
-    () => import('../../ponches-original/pages/Overtime'),
+    () => import('./modules/Overtime'),
   ),
   export: lazy(
-    () => import('../../ponches-original/pages/DataExport'),
+    () => import('./modules/DataExport'),
   ),
   'sync-history': lazy(
-    () => import('../../ponches-original/pages/SyncHistory'),
+    () => import('./modules/SyncHistory'),
   ),
   settings: lazy(
-    () => import('../../ponches-original/pages/Settings'),
+    () => import('./modules/Settings'),
   ),
   'advanced-reports': lazy(
-    () => import('../../ponches-original/pages/AdvancedReports'),
+    () => import('./modules/AdvancedReports'),
   ),
 } as const
 
@@ -115,7 +115,7 @@ const sections: Section[] = [
   },
   {
     id: 'biometric',
-    label: 'Inventario biométrico',
+    label: 'Inventario biomÃ©trico',
     permission: 'ponches.inventory.view',
   },
   {
@@ -145,7 +145,7 @@ const sections: Section[] = [
   },
   {
     id: 'settings',
-    label: 'Configuración',
+    label: 'ConfiguraciÃ³n',
     permission: 'ponches.settings.view',
   },
   {
@@ -191,13 +191,13 @@ export function PonchesPage() {
     : null
 
   return (
-    <div className="ponches-original min-h-full">
+    <div className="ponches-module min-h-full">
       <nav
         className={
           'flex flex-wrap gap-2 border-b ' +
           'border-rose-100 bg-white px-5 py-3'
         }
-        aria-label="Módulos de Ponches"
+        aria-label="MÃ³dulos de Ponches"
       >
         {allowed.map(({ id, label }) => (
           <button
@@ -228,7 +228,7 @@ export function PonchesPage() {
           <Suspense
             fallback={
               <p className="text-zinc-500">
-                Cargando módulo…
+                Cargando mÃ³duloâ€¦
               </p>
             }
           >
@@ -248,7 +248,7 @@ export function PonchesPage() {
 
             <p className="mt-2 text-sm text-zinc-600">
               Tu rol no tiene acceso a esta pantalla.
-              Selecciona una opción disponible.
+              Selecciona una opciÃ³n disponible.
             </p>
 
             {fallback && (
