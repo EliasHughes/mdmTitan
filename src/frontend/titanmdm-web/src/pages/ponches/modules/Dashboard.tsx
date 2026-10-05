@@ -1,827 +1,1321 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+} from 'react'
+
 import {
   Activity,
   AlertTriangle,
+  ArrowDownRight,
+  ArrowRight,
   ArrowUpRight,
+  Building2,
   CheckCircle2,
   Clock3,
-  Download,
+  Database,
+  Gauge,
+  LogIn,
+  LogOut,
+  MonitorSmartphone,
   Pause,
-  Play,
-  RefreshCw,
   Radio,
+  RefreshCw,
   Search,
-  Shield,
-  Smartphone,
+  Server,
   Users,
+  Wifi,
   WifiOff,
-  TrendingUp,
-} from "lucide-react";
-import { authFetch } from "../lib/api";
-import { Btn, PageHeader, Panel } from "../ui/kit";
+} from 'lucide-react'
 
-type Summary = {
-  total_hoy: number;
-  con_entrada: number;
-  con_salida: number;
-  empleados_hoy: number;
-  dispositivos_hoy: number;
-  database?: { status?: string; detail?: string };
-};
+import {
+  useSearchParams,
+} from 'react-router-dom'
 
-type Stats = {
-  by_device: { name: string; total: number }[];
-  by_day: { dia: string; total: number }[];
-  by_hour: { hora: number; total: number }[];
-  activity: { timestamp: string; actor: string; action: string; target: string }[];
-};
+import {
+  loadDashboardSnapshot,
+  type DashboardSnapshot,
+} from '../lib/dashboardApi'
 
-type Overview = {
-  today: { total: number; empleados: number; relojes: number; sin_salida: number };
-  yesterday: { total: number; empleados: number };
-  open_shifts: {
-    codigo: string;
-    nombre?: string;
-    dispositivo_origen?: string;
-    entrada?: string;
-  }[];
-  by_dept: { depto: string; total: number }[];
-  sql_online?: boolean;
-  error?: string;
-};
+import {
+  Btn,
+  PageHeader,
+} from '../ui/kit'
 
-type HealthItem = {
-  name: string;
-  online?: boolean;
-  latency_ms?: number | null;
-  punches_today?: number;
-};
-
-type Health = {
-  total: number;
-  online: number;
-  offline: number;
-  items: HealthItem[];
-};
-
-type PunchRow = {
-  id: number;
-  codigo: string;
-  nombre: string | null;
-  departamento?: string | null;
-  entrada: string | null;
-  salida?: string | null;
-  dispositivo_origen: string | null;
-};
-
-type Combined = {
-  summary?: Summary;
-  overview?: Overview;
-  stats?: Stats;
-  recent?: PunchRow[];
-  timestamp?: string;
-};
-
-function delta(now: number, prev: number) {
-  if (!prev) return "Sin referencia ayer";
-  const pct = Math.round(((now - prev) / prev) * 100);
-  return `${pct > 0 ? "+" : ""}${pct}% vs ayer`;
+type CardProps = {
+  label: string
+  value: string | number
+  subtitle: string
+  icon: React.ReactNode
+  tone?:
+    | 'default'
+    | 'green'
+    | 'amber'
+    | 'red'
+    | 'blue'
 }
 
-function clamp(value: number, min = 0, max = 100) {
-  return Math.min(max, Math.max(min, value));
-}
+function MetricCard({
+  label,
+  value,
+  subtitle,
+  icon,
+  tone = 'default',
+}: CardProps) {
+  const tones = {
+    default:
+      'bg-white border-zinc-200',
 
-export default function Dashboard() {
-  const navigate = useNavigate();
-  const nav = (path: string) =>
-    navigate(`/ponches?section=${encodeURIComponent(path.slice(1))}`);
+    green:
+      'bg-emerald-50/50 border-emerald-100',
 
-  const [summary, setSummary] = useState<Summary | null>(null);
-  const [stats, setStats] = useState<Stats | null>(null);
-  const [overview, setOverview] = useState<Overview | null>(null);
-  const [recent, setRecent] = useState<PunchRow[]>([]);
-  const [health, setHealth] = useState<Health | null>(null);
+    amber:
+      'bg-amber-50/60 border-amber-100',
 
-  const [err, setErr] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [lastUpdated, setLastUpdated] = useState("");
-  const [autoRefresh, setAutoRefresh] = useState(true);
-  const [searchTerm, setSearchTerm] = useState("");
+    red:
+      'bg-rose-50/60 border-rose-100',
 
-  const loadDashboardData = useCallback(async () => {
-    setLoading(true);
-    setErr("");
-
-    try {
-      /*
-       * The combined endpoint is useful, but the current backend implementation
-       * references helper functions that are not defined in records_query.py.
-       * We therefore keep a resilient client-side fallback and always obtain
-       * device health from its dedicated endpoint.
-       */
-      const combinedRes = await authFetch("/api/records/dashboard-combined");
-
-      if (combinedRes.ok) {
-        const data: Combined = await combinedRes.json();
-        setSummary(data.summary || null);
-        setOverview(data.overview || null);
-        setStats(data.stats || null);
-        setRecent(data.recent || []);
-        setLastUpdated(data.timestamp || new Date().toLocaleTimeString());
-      } else {
-        const [s, st, r, o] = await Promise.all([
-          authFetch("/api/records/summary"),
-          authFetch("/api/records/stats"),
-          authFetch("/api/records/recent?limit=10"),
-          authFetch("/api/records/ops-overview"),
-        ]);
-
-        if (s.ok) setSummary(await s.json());
-        if (st.ok) setStats(await st.json());
-        if (r.ok) setRecent((await r.json()).items || []);
-        if (o.ok) setOverview(await o.json());
-
-        setLastUpdated(new Date().toLocaleTimeString());
-      }
-
-      const h = await authFetch("/api/records/device-health");
-      if (h.ok) {
-        setHealth(await h.json());
-      }
-    } catch {
-      setErr("No fue posible actualizar el Centro de Control.");
-    } finally {
-      setLoading(false);
-      setInitialLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    const timer = window.setTimeout(() => void loadDashboardData(), 0);
-    if (!autoRefresh) return () => window.clearTimeout(timer);
-
-    const interval = window.setInterval(loadDashboardData, 30000);
-    return () => {
-      window.clearTimeout(timer);
-      window.clearInterval(interval);
-    };
-  }, [loadDashboardData, autoRefresh]);
-
-  const presentes = overview?.today.empleados ?? summary?.empleados_hoy ?? 0;
-  const ponches = overview?.today.total ?? summary?.total_hoy ?? 0;
-  const abiertos = overview?.today.sin_salida ?? 0;
-  const online = health?.online ?? 0;
-  const offline = health?.offline ?? 0;
-  const totalDev = health?.total ?? 0;
-  const onlinePct = totalDev > 0 ? Math.round((online / totalDev) * 100) : 0;
-
-  const status = useMemo(() => {
-    const employeeBase = Math.max(presentes, 1);
-    const openRatio = abiertos / employeeBase;
-
-    if (offline > 0 && offline >= Math.max(3, Math.ceil(totalDev * 0.25))) {
-      return {
-        label: "Crítico",
-        description: "Hay una degradación importante en la red biométrica.",
-        pct: 45,
-        cls: "bg-rose-600 text-white",
-      };
-    }
-
-    if (offline > 0 || openRatio > 0.35) {
-      return {
-        label: "Atención",
-        description: "Existen incidencias que conviene revisar.",
-        pct: 72,
-        cls: "bg-amber-500 text-white",
-      };
-    }
-
-    return {
-      label: "Normal",
-      description: "La operación se encuentra estable.",
-      pct: 96,
-      cls: "bg-emerald-600 text-white",
-    };
-  }, [offline, abiertos, presentes, totalDev]);
-
-  const healthScore = useMemo(() => {
-    const deviceScore = totalDev ? onlinePct : 50;
-    const dbScore = summary?.database?.status === "online" || summary ? 100 : 40;
-    const attendanceScore = presentes > 0
-      ? clamp(100 - Math.min(60, (abiertos / presentes) * 100))
-      : 80;
-
-    return Math.round(deviceScore * 0.45 + dbScore * 0.30 + attendanceScore * 0.25);
-  }, [onlinePct, totalDev, summary, presentes, abiertos]);
-
-  const peakHour = useMemo(() => {
-    const rows = stats?.by_hour || [];
-    if (!rows.length) return "—";
-    const top = [...rows].sort((a, b) => b.total - a.total)[0];
-    return `${String(top.hora).padStart(2, "0")}:00`;
-  }, [stats]);
-
-  const maxDay = useMemo(
-    () => Math.max(1, ...(stats?.by_day || []).map((d) => d.total)),
-    [stats]
-  );
-
-  const maxHour = useMemo(
-    () => Math.max(1, ...(stats?.by_hour || []).map((d) => d.total)),
-    [stats]
-  );
-
-  const maxDept = useMemo(
-    () => Math.max(1, ...(overview?.by_dept || []).map((d) => d.total)),
-    [overview]
-  );
-
-  const filteredRecent = useMemo(() => {
-    const term = searchTerm.trim().toLowerCase();
-    if (!term) return recent;
-
-    return recent.filter((p) =>
-      [p.nombre, p.codigo, p.dispositivo_origen, p.departamento]
-        .filter(Boolean)
-        .some((value) => String(value).toLowerCase().includes(term))
-    );
-  }, [recent, searchTerm]);
-
-  const alerts = useMemo(() => {
-    const items: { tone: "rose" | "amber" | "sky"; label: string; to: string }[] = [];
-
-    if (offline > 0) {
-      items.push({
-        tone: "rose",
-        label: `${offline} reloj${offline === 1 ? "" : "es"} fuera de línea`,
-        to: "/devices",
-      });
-    }
-
-    if (abiertos > 0) {
-      items.push({
-        tone: "amber",
-        label: `${abiertos} turno${abiertos === 1 ? "" : "s"} abierto${abiertos === 1 ? "" : "s"}`,
-        to: "/records",
-      });
-    }
-
-    if (overview?.error) {
-      items.push({
-        tone: "sky",
-        label: "El backend reportó una incidencia operativa",
-        to: "/records",
-      });
-    }
-
-    return items;
-  }, [offline, abiertos, overview?.error]);
-
-  if (initialLoading) {
-    return (
-      <div className="min-h-[60vh] flex flex-col items-center justify-center gap-3">
-        <RefreshCw size={32} className="animate-spin text-zinc-400" />
-        <p className="text-sm font-medium text-zinc-500">
-          Cargando Centro de Control Operativo...
-        </p>
-      </div>
-    );
+    blue:
+      'bg-sky-50/60 border-sky-100',
   }
 
   return (
-    <div className="relative space-y-5 page-enter overflow-hidden">
-      {/* Mascota opcional: si el asset no existe, desaparece sin afectar el Dashboard. */}
-      <div className="fiorella-dashboard-mascot" aria-hidden="true">
-        <img
-          src="/fiorella/fiorella.png"
-          alt=""
-          onError={(e) => {
-            e.currentTarget.parentElement?.remove();
-          }}
-        />
-        <span className="fiorella-bubble">Todo bajo control.</span>
+    <article
+      className={
+        `rounded-2xl border p-4 shadow-sm ${tones[tone]}`
+      }
+    >
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
+            {label}
+          </p>
+
+          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
+            {value}
+          </p>
+
+          <p className="mt-1 text-xs text-zinc-500">
+            {subtitle}
+          </p>
+        </div>
+
+        <div className="rounded-xl bg-white p-2.5 text-[#c8102e] shadow-sm ring-1 ring-black/5">
+          {icon}
+        </div>
       </div>
+    </article>
+  )
+}
 
-      <style>{`
-        .fiorella-dashboard-mascot {
-          position: absolute;
-          right: 14px;
-          top: 74px;
-          z-index: 5;
-          pointer-events: none;
-          animation: fiorellaFloat 3.8s ease-in-out infinite;
-        }
-        .fiorella-dashboard-mascot img {
-          width: 74px;
-          height: 74px;
-          object-fit: contain;
-          filter: drop-shadow(0 8px 12px rgba(0,0,0,.12));
-        }
-        .fiorella-bubble {
-          position: absolute;
-          right: 52px;
-          top: -8px;
-          width: max-content;
-          max-width: 150px;
-          padding: 6px 9px;
-          border-radius: 10px 10px 2px 10px;
-          background: white;
-          border: 1px solid #e4e4e7;
-          box-shadow: 0 6px 18px rgba(0,0,0,.08);
-          font-size: 10px;
-          color: #3f3f46;
-          white-space: nowrap;
-        }
-        @keyframes fiorellaFloat {
-          0%, 100% { transform: translate3d(0,0,0) rotate(-1deg); }
-          50% { transform: translate3d(-5px,-7px,0) rotate(1deg); }
-        }
-        @media (prefers-reduced-motion: reduce) {
-          .fiorella-dashboard-mascot { animation: none; }
-        }
-        @media (max-width: 900px) {
-          .fiorella-dashboard-mascot { display: none; }
-        }
-      `}</style>
+function percentChange(
+  current: number,
+  previous: number,
+) {
+  if (
+    previous <= 0
+  ) {
+    return null
+  }
 
+  return Math.round(
+    (
+      (current - previous) /
+      previous
+    ) * 100,
+  )
+}
+
+function formatTime(
+  value?: string | null,
+) {
+  if (
+    !value
+  ) {
+    return '—'
+  }
+
+  const date =
+    new Date(value)
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value
+  }
+
+  return date
+    .toLocaleString()
+}
+
+export default function Dashboard() {
+  const [
+    ,
+    setSearchParams,
+  ] =
+    useSearchParams()
+
+  const [
+    snapshot,
+    setSnapshot,
+  ] =
+    useState<DashboardSnapshot | null>(
+      null,
+    )
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(true)
+
+  const [
+    refreshing,
+    setRefreshing,
+  ] =
+    useState(false)
+
+  const [
+    autoRefresh,
+    setAutoRefresh,
+  ] =
+    useState(true)
+
+  const [
+    error,
+    setError,
+  ] =
+    useState('')
+
+  const [
+    search,
+    setSearch,
+  ] =
+    useState('')
+
+  const open =
+    useCallback(
+      (
+        section: string,
+      ) => {
+        setSearchParams({
+          section,
+        })
+      },
+      [
+        setSearchParams,
+      ],
+    )
+
+  const load =
+    useCallback(
+      async (
+        initial = false,
+      ) => {
+        if (
+          initial
+        ) {
+          setLoading(
+            true,
+          )
+        } else {
+          setRefreshing(
+            true,
+          )
+        }
+
+        setError('')
+
+        try {
+          const result =
+            await loadDashboardSnapshot()
+
+          setSnapshot(
+            result,
+          )
+        } catch (
+          exception
+        ) {
+          console.error(
+            exception,
+          )
+
+          setError(
+            'No fue posible actualizar el Centro Operativo de Ponches.',
+          )
+        } finally {
+          setLoading(
+            false,
+          )
+
+          setRefreshing(
+            false,
+          )
+        }
+      },
+      [],
+    )
+
+  useEffect(
+    () => {
+      void load(true)
+    },
+    [
+      load,
+    ],
+  )
+
+  useEffect(
+    () => {
+      if (
+        !autoRefresh
+      ) {
+        return
+      }
+
+      const interval =
+        window.setInterval(
+          () => {
+            void load()
+          },
+          30_000,
+        )
+
+      return () =>
+        window.clearInterval(
+          interval,
+        )
+    },
+    [
+      autoRefresh,
+      load,
+    ],
+  )
+
+  const onlinePercent =
+    snapshot &&
+    snapshot.devicesTotal >
+      0
+      ? Math.round(
+          (
+            snapshot.devicesOnline /
+            snapshot.devicesTotal
+          ) *
+            100,
+        )
+      : 0
+
+  const attendanceDelta =
+    snapshot
+      ? percentChange(
+          snapshot.punchesToday,
+          snapshot.punchesYesterday,
+        )
+      : null
+
+  const employeeDelta =
+    snapshot
+      ? percentChange(
+          snapshot.employeesToday,
+          snapshot.employeesYesterday,
+        )
+      : null
+
+  const peakHour =
+    useMemo(
+      () => {
+        const rows =
+          snapshot?.byHour ??
+          []
+
+        if (
+          rows.length === 0
+        ) {
+          return null
+        }
+
+        return [
+          ...rows,
+        ].sort(
+          (
+            a,
+            b,
+          ) =>
+            b.total -
+            a.total,
+        )[0]
+      },
+      [
+        snapshot,
+      ],
+    )
+
+  const maxHour =
+    Math.max(
+      1,
+      ...(
+        snapshot?.byHour ??
+        []
+      ).map(
+        item =>
+          item.total,
+      ),
+    )
+
+  const maxDepartment =
+    Math.max(
+      1,
+      ...(
+        snapshot?.byDepartment ??
+        []
+      ).map(
+        item =>
+          item.total,
+      ),
+    )
+
+  const filteredPunches =
+    useMemo(
+      () => {
+        const term =
+          search
+            .trim()
+            .toLowerCase()
+
+        if (
+          !term
+        ) {
+          return (
+            snapshot?.recentPunches ??
+            []
+          )
+        }
+
+        return (
+          snapshot?.recentPunches ??
+          []
+        ).filter(
+          item =>
+            [
+              item.codigo,
+              item.nombre,
+              item.departamento,
+              item.dispositivo_origen,
+            ]
+              .filter(
+                Boolean,
+              )
+              .some(
+                value =>
+                  String(
+                    value,
+                  )
+                    .toLowerCase()
+                    .includes(
+                      term,
+                    ),
+              ),
+        )
+      },
+      [
+        snapshot,
+        search,
+      ],
+    )
+
+  if (
+    loading
+  ) {
+    return (
+      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+        <RefreshCw
+          size={34}
+          className="animate-spin text-[#c8102e]"
+        />
+
+        <div className="text-center">
+          <p className="font-semibold text-zinc-800">
+            Preparando Centro Operativo
+          </p>
+
+          <p className="mt-1 text-sm text-zinc-500">
+            Consultando BioTime, relojes y actividad reciente.
+          </p>
+        </div>
+      </div>
+    )
+  }
+
+  return (
+    <div className="space-y-5">
       <PageHeader
-        kicker="Centro de control operativo"
-        title="Dashboard General"
-        subtitle={`Última actualización: ${lastUpdated || "—"}`}
+        kicker="Ponches · Centro Operativo"
+        title="Resumen General"
+        subtitle={
+          snapshot
+            ? `Última actualización: ${formatTime(
+                snapshot.generatedAt,
+              )}`
+            : 'Información operacional del módulo biométrico.'
+        }
         actions={
-          <div className="flex flex-wrap items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setAutoRefresh((value) => !value)}
-              className={`px-3 py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 border transition-colors ${
-                autoRefresh
-                  ? "bg-emerald-50 border-emerald-200 text-emerald-700"
-                  : "bg-zinc-100 border-zinc-200 text-zinc-600"
-              }`}
-              title="Actualizar automáticamente cada 30 segundos"
+          <div className="flex flex-wrap gap-2">
+            <Btn
+              tone="ghost"
+              onClick={() =>
+                setAutoRefresh(
+                  value =>
+                    !value,
+                )
+              }
             >
-              {autoRefresh ? (
-                <Radio size={14} className="animate-pulse" />
-              ) : (
-                <Pause size={14} />
-              )}
-              {autoRefresh ? "En vivo" : "Pausado"}
-            </button>
+              {autoRefresh
+                ? (
+                  <Radio
+                    size={16}
+                  />
+                )
+                : (
+                  <Pause
+                    size={16}
+                  />
+                )}
 
-            <Btn tone="ghost" onClick={() => nav("/export")}>
-              <Download size={16} /> Exportar
+              {autoRefresh
+                ? 'En vivo'
+                : 'Pausado'}
             </Btn>
 
-            <Btn tone="primary" onClick={loadDashboardData} disabled={loading}>
-              <RefreshCw size={16} className={loading ? "animate-spin" : ""} />
+            <Btn
+              tone="primary"
+              disabled={
+                refreshing
+              }
+              onClick={() =>
+                void load()
+              }
+            >
+              <RefreshCw
+                size={16}
+                className={
+                  refreshing
+                    ? 'animate-spin'
+                    : ''
+                }
+              />
+
               Actualizar
             </Btn>
           </div>
         }
       />
 
-      {err && (
-        <div className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800 flex items-center gap-2">
-          <AlertTriangle size={16} />
-          {err}
+      {error && (
+        <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+          <AlertTriangle
+            size={18}
+          />
+
+          {error}
         </div>
       )}
 
-      {/* Estado global */}
-      <section className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
-        <div className="flex flex-col gap-3 lg:flex-row lg:items-center">
-          <div className="min-w-[180px]">
-            <div className="flex items-center gap-2">
-              <span className={`text-xs font-bold px-3 py-1 rounded-full ${status.cls}`}>
-                {status.label}
-              </span>
-              <span className="text-xs font-semibold text-zinc-700">
-                Estado operativo
-              </span>
-            </div>
-            <p className="text-[11px] text-zinc-500 mt-1">{status.description}</p>
-          </div>
-
-          <div className="flex-1">
-            <div className="flex justify-between text-[10px] uppercase tracking-wider font-bold text-zinc-400 mb-1">
-              <span>Salud operacional</span>
-              <span>{healthScore}/100</span>
-            </div>
-            <div className="h-2.5 rounded-full bg-zinc-100 overflow-hidden">
-              <div
-                className={`h-full rounded-full transition-all duration-700 ${
-                  healthScore >= 85
-                    ? "bg-emerald-500"
-                    : healthScore >= 70
-                    ? "bg-amber-500"
-                    : "bg-rose-500"
-                }`}
-                style={{ width: `${healthScore}%` }}
+      {snapshot &&
+        snapshot.warnings.length >
+          0 && (
+          <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
+            <div className="mb-3 flex items-center gap-2 font-semibold text-amber-900">
+              <AlertTriangle
+                size={18}
               />
-            </div>
-          </div>
 
-          <div className="text-right text-xs text-zinc-500">
-            <span className="font-semibold text-zinc-800">{onlinePct}%</span> de relojes online
-          </div>
-        </div>
+              Atención operativa
+            </div>
+
+            <div className="grid gap-2 md:grid-cols-2">
+              {snapshot.warnings.map(
+                warning => (
+                  <div
+                    key={
+                      warning
+                    }
+                    className="rounded-xl bg-white px-3 py-2 text-sm text-zinc-700 ring-1 ring-amber-100"
+                  >
+                    {warning}
+                  </div>
+                ),
+              )}
+            </div>
+          </section>
+        )}
+
+      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <MetricCard
+          label="Ponches hoy"
+          value={
+            snapshot?.punchesToday ??
+            0
+          }
+          subtitle={
+            attendanceDelta == null
+              ? 'Sin referencia anterior'
+              : `${attendanceDelta >= 0 ? '+' : ''}${attendanceDelta}% vs ayer`
+          }
+          icon={
+            attendanceDelta != null &&
+            attendanceDelta <
+              0
+              ? (
+                <ArrowDownRight
+                  size={20}
+                />
+              )
+              : (
+                <ArrowUpRight
+                  size={20}
+                />
+              )
+          }
+          tone="blue"
+        />
+
+        <MetricCard
+          label="Colaboradores"
+          value={
+            snapshot?.employeesToday ??
+            0
+          }
+          subtitle={
+            employeeDelta == null
+              ? 'Personas registradas hoy'
+              : `${employeeDelta >= 0 ? '+' : ''}${employeeDelta}% vs ayer`
+          }
+          icon={
+            <Users
+              size={20}
+            />
+          }
+        />
+
+        <MetricCard
+          label="Entradas"
+          value={
+            snapshot?.entriesToday ??
+            0
+          }
+          subtitle="Entradas registradas"
+          icon={
+            <LogIn
+              size={20}
+            />
+          }
+          tone="green"
+        />
+
+        <MetricCard
+          label="Salidas"
+          value={
+            snapshot?.exitsToday ??
+            0
+          }
+          subtitle="Salidas registradas"
+          icon={
+            <LogOut
+              size={20}
+            />
+          }
+        />
+
+        <MetricCard
+          label="Turnos abiertos"
+          value={
+            snapshot?.openShifts ??
+            0
+          }
+          subtitle="Sin salida o pendientes"
+          icon={
+            <Clock3
+              size={20}
+            />
+          }
+          tone={
+            (
+              snapshot?.openShifts ??
+              0
+            ) >
+            0
+              ? 'amber'
+              : 'green'
+          }
+        />
+
+        <MetricCard
+          label="Relojes online"
+          value={
+            snapshot?.devicesOnline ??
+            0
+          }
+          subtitle={`${onlinePercent}% disponible`}
+          icon={
+            <Wifi
+              size={20}
+            />
+          }
+          tone="green"
+        />
+
+        <MetricCard
+          label="Relojes offline"
+          value={
+            snapshot?.devicesOffline ??
+            0
+          }
+          subtitle={`de ${snapshot?.devicesTotal ?? 0} configurados`}
+          icon={
+            <WifiOff
+              size={20}
+            />
+          }
+          tone={
+            (
+              snapshot?.devicesOffline ??
+              0
+            ) >
+            0
+              ? 'red'
+              : 'default'
+          }
+        />
+
+        <MetricCard
+          label="Hora pico"
+          value={
+            peakHour
+              ? `${String(
+                  peakHour.hour,
+                ).padStart(
+                  2,
+                  '0',
+                )}:00`
+              : '—'
+          }
+          subtitle={
+            peakHour
+              ? `${peakHour.total} registros`
+              : 'Sin datos suficientes'
+          }
+          icon={
+            <Gauge
+              size={20}
+            />
+          }
+        />
       </section>
 
-      {/* KPIs */}
-      <div className="grid sm:grid-cols-2 xl:grid-cols-4 gap-3">
-        {[
-          {
-            label: "Colaboradores hoy",
-            value: presentes,
-            hint: delta(presentes, overview?.yesterday.empleados || 0),
-            to: "/collaborators",
-            cls: "kpi-red",
-            icon: Users,
-          },
-          {
-            label: "Ponches hoy",
-            value: ponches,
-            hint: delta(ponches, overview?.yesterday.total || 0),
-            to: "/records",
-            cls: "kpi-violet",
-            icon: Activity,
-          },
-          {
-            label: "Turnos abiertos",
-            value: abiertos,
-            hint: "Entrada sin salida",
-            to: "/records",
-            cls: "kpi-amber",
-            icon: Clock3,
-          },
-          {
-            label: "Relojes online",
-            value: online,
-            hint: `${offline} fuera de línea`,
-            to: "/devices",
-            cls: "kpi-sky",
-            icon: Smartphone,
-          },
-        ].map((k) => (
-          <button
-            key={k.label}
-            type="button"
-            onClick={() => nav(k.to)}
-            className={`kpi-tile btn-modern ${k.cls} text-left group`}
-          >
-            <span className="shine" />
-            <div className="flex items-center justify-between text-white/80">
-              <span className="text-[11px] uppercase tracking-wider font-bold">
-                {k.label}
-              </span>
-              <k.icon size={18} className="group-hover:scale-110 transition-transform" />
-            </div>
-            <p className="text-3xl font-black mt-2 tracking-tight">{k.value}</p>
-            <div className="flex items-center justify-between mt-1 text-xs text-white/80">
-              <span>{k.hint}</span>
-              <ArrowUpRight
-                size={14}
-                className="opacity-0 group-hover:opacity-100 transition-opacity"
-              />
-            </div>
-          </button>
-        ))}
-      </div>
+      <section className="grid gap-4 lg:grid-cols-[1.4fr_.8fr]">
+        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="font-semibold text-zinc-900">
+                Actividad por hora
+              </h2>
 
-      {/* Alertas + tendencia */}
-      <div className="grid lg:grid-cols-5 gap-4">
-        <Panel className="lg:col-span-2">
-          <div className="flex items-center justify-between mb-3">
-            <h3 className="font-bold text-sm text-zinc-800 flex items-center gap-2">
-              <AlertTriangle size={16} className="text-rose-600" />
-              Atención operativa
-            </h3>
-            <span className="text-[10px] uppercase tracking-wider text-zinc-400 font-bold">
-              {alerts.length} alertas
-            </span>
+              <p className="text-sm text-zinc-500">
+                Distribución de ponches durante el día.
+              </p>
+            </div>
+
+            <Activity className="text-[#c8102e]" />
           </div>
 
-          <div className="space-y-2">
-            {alerts.length ? (
-              alerts.map((item, index) => (
-                <button
-                  key={`${item.label}-${index}`}
-                  type="button"
-                  onClick={() => nav(item.to)}
-                  className={`w-full text-left rounded-xl px-3.5 py-2.5 border text-sm flex items-center justify-between transition-colors ${
-                    item.tone === "rose"
-                      ? "bg-rose-50 border-rose-100 hover:bg-rose-100 text-rose-900"
-                      : item.tone === "amber"
-                      ? "bg-amber-50 border-amber-100 hover:bg-amber-100 text-amber-900"
-                      : "bg-sky-50 border-sky-100 hover:bg-sky-100 text-sky-900"
-                  }`}
-                >
-                  <span className="font-medium">{item.label}</span>
-                  <ArrowUpRight size={14} />
-                </button>
-              ))
-            ) : (
-              <div className="p-4 rounded-xl bg-emerald-50 border border-emerald-100 text-emerald-800 text-sm flex items-center gap-2">
-                <CheckCircle2 size={18} />
-                <span>No hay incidencias operativas pendientes.</span>
+          <div className="flex h-52 items-end gap-2">
+            {(
+              snapshot?.byHour ??
+              []
+            ).length ===
+            0 ? (
+              <div className="flex h-full w-full items-center justify-center text-sm text-zinc-400">
+                Todavía no hay actividad suficiente.
               </div>
+            ) : (
+              snapshot?.byHour.map(
+                item => (
+                  <div
+                    key={
+                      item.hour
+                    }
+                    className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2"
+                  >
+                    <span className="text-[10px] font-semibold text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100">
+                      {item.total}
+                    </span>
+
+                    <div
+                      className="w-full rounded-t-lg bg-gradient-to-t from-[#991b2f] to-[#e11d48] transition-all hover:brightness-110"
+                      style={{
+                        height:
+                          `${Math.max(
+                            5,
+                            (
+                              item.total /
+                              maxHour
+                            ) *
+                              145,
+                          )}px`,
+                      }}
+                    />
+
+                    <span className="text-[10px] text-zinc-500">
+                      {String(
+                        item.hour,
+                      ).padStart(
+                        2,
+                        '0',
+                      )}
+                    </span>
+                  </div>
+                ),
+              )
             )}
           </div>
+        </article>
 
-          <div className="mt-4 pt-3 border-t border-zinc-100 flex justify-between items-center">
-            <span className="text-xs text-zinc-500">
-              Health Score <b className="text-zinc-800">{healthScore}/100</b>
-            </span>
-            <Shield size={15} className="text-zinc-400" />
-          </div>
-        </Panel>
+        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center gap-3">
+            <Server className="text-[#c8102e]" />
 
-        <Panel className="lg:col-span-3">
-          <div className="flex items-center justify-between mb-3">
             <div>
-              <h3 className="font-bold text-sm text-zinc-800">
-                Tendencia de ponches
-              </h3>
-              <p className="text-[11px] text-zinc-400">Últimos 14 días</p>
-            </div>
-            <div className="flex items-center gap-1 text-xs text-zinc-400">
-              <TrendingUp size={13} />
-              <span>Volumen diario</span>
+              <h2 className="font-semibold">
+                Salud del servicio
+              </h2>
+
+              <p className="text-sm text-zinc-500">
+                TitanMDM ↔ Python ↔ BioTime
+              </p>
             </div>
           </div>
 
-          <div className="flex items-end gap-2 h-40 pt-4">
-            {(stats?.by_day || []).map((d) => (
-              <button
-                type="button"
-                key={d.dia}
-                className="flex-1 flex flex-col items-center gap-1.5 h-full justify-end group"
-                onClick={() => nav("/records")}
-                title={`${d.dia}: ${d.total} ponches`}
-              >
-                <span className="text-[10px] text-zinc-500 font-mono opacity-0 group-hover:opacity-100 transition-opacity">
-                  {d.total}
-                </span>
-                <div
-                  className="w-full rounded-t-md bg-gradient-to-t from-rose-700 to-rose-400 group-hover:from-rose-600 group-hover:to-rose-300 transition-all"
-                  style={{
-                    height: `${Math.max(12, (d.total / maxDay) * 100)}%`,
-                  }}
+          <div className="space-y-3">
+            <StatusRow
+              label="Gateway Python"
+              online={
+                snapshot?.serviceOnline ??
+                false
+              }
+              icon={
+                <Server
+                  size={17}
                 />
-                <span className="text-[10px] text-zinc-400 font-medium truncate max-w-full">
-                  {d.dia.split("-").slice(1).join("/")}
-                </span>
-              </button>
-            ))}
-          </div>
-        </Panel>
-      </div>
+              }
+            />
 
-      {/* Salud biométrica + horas + departamentos */}
-      <div className="grid lg:grid-cols-3 gap-4">
-        <Panel>
-          <h3 className="font-bold text-sm mb-3 text-zinc-800">
-            Salud de relojes
-          </h3>
-          <div className="flex items-center gap-4">
-            <div
-              className="donut shrink-0"
-              style={{
-                background: `conic-gradient(#059669 0 ${onlinePct}%, #e4e4e7 ${onlinePct}% 100%)`,
-              }}
-            >
-              <div className="donut-hole">
-                <b className="text-xl text-zinc-800">{onlinePct}%</b>
-                <span className="text-[10px] text-zinc-400 uppercase tracking-wider font-bold">
-                  Online
-                </span>
-              </div>
-            </div>
-
-            <div className="text-xs space-y-2">
-              <p className="text-emerald-700 font-semibold flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                {online} en línea
-              </p>
-              <p className="text-rose-600 font-semibold flex items-center gap-1.5">
-                <WifiOff size={12} />
-                {offline} fuera de línea
-              </p>
-              <p className="text-zinc-500 text-[11px] pt-1 border-t border-zinc-100">
-                Total: {totalDev}
-              </p>
-            </div>
-          </div>
-        </Panel>
-
-        <Panel>
-          <h3 className="font-bold text-sm mb-3 text-zinc-800">
-            Tráfico por hora
-          </h3>
-          <div className="flex items-end gap-[2px] h-28 pt-2">
-            {Array.from({ length: 24 }, (_, h) => {
-              const total =
-                stats?.by_hour?.find((x) => x.hora === h)?.total || 0;
-
-              return (
-                <div
-                  key={h}
-                  className="flex-1 rounded-t bg-gradient-to-t from-sky-600 to-sky-400 hover:from-sky-500 hover:to-sky-300 transition-colors cursor-pointer"
-                  style={{
-                    height: `${Math.max(6, (total / maxHour) * 100)}%`,
-                  }}
-                  title={`${String(h).padStart(2, "0")}:00 — ${total} ponches`}
+            <StatusRow
+              label="Base de datos BioTime"
+              online={
+                snapshot?.databaseOnline ??
+                false
+              }
+              icon={
+                <Database
+                  size={17}
                 />
-              );
-            })}
-          </div>
-          <div className="flex justify-between text-[10px] text-zinc-400 mt-2 font-mono">
-            <span>00:00</span>
-            <span>12:00</span>
-            <span>23:00</span>
-          </div>
-          <p className="text-[11px] text-zinc-500 mt-2">
-            Hora pico detectada: <b className="text-zinc-800">{peakHour}</b>
-          </p>
-        </Panel>
+              }
+            />
 
-        <Panel>
-          <h3 className="font-bold text-sm mb-3 text-zinc-800">
-            Distribución por departamento
-          </h3>
-          <ul className="space-y-2.5">
-            {(overview?.by_dept || []).slice(0, 6).map((d) => (
-              <li key={d.depto}>
-                <div className="flex justify-between text-xs mb-1 font-medium">
-                  <span className="truncate text-zinc-700">{d.depto}</span>
-                  <span className="font-bold text-zinc-900">{d.total}</span>
-                </div>
-                <div className="h-2 bg-zinc-100 rounded-full overflow-hidden">
-                  <div
-                    className="h-full bg-violet-600 rounded-full transition-all duration-500"
-                    style={{ width: `${(d.total / maxDept) * 100}%` }}
-                  />
-                </div>
-              </li>
-            ))}
-          </ul>
-        </Panel>
-      </div>
+            <StatusRow
+              label="Red biométrica"
+              online={
+                (
+                  snapshot?.devicesOffline ??
+                  0
+                ) ===
+                0
+              }
+              icon={
+                <MonitorSmartphone
+                  size={17}
+                />
+              }
+            />
+          </div>
+        </article>
+      </section>
 
-      {/* Relojes + turnos abiertos + actividad */}
-      <div className="grid xl:grid-cols-3 gap-4">
-        <Panel>
-          <div className="flex justify-between items-center mb-3">
-            <h3 className="font-bold text-sm text-zinc-800">
-              Monitoreo de relojes
-            </h3>
+      <section className="grid gap-4 lg:grid-cols-2">
+        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold">
+                Ponches por departamento
+              </h2>
+
+              <p className="text-sm text-zinc-500">
+                Distribución de actividad registrada.
+              </p>
+            </div>
+
+            <Building2 className="text-[#c8102e]" />
+          </div>
+
+          <div className="space-y-4">
+            {(
+              snapshot?.byDepartment ??
+              []
+            ).slice(
+              0,
+              8,
+            ).map(
+              item => (
+                <div
+                  key={
+                    item.name
+                  }
+                >
+                  <div className="mb-1.5 flex items-center justify-between text-sm">
+                    <span className="truncate font-medium">
+                      {item.name}
+                    </span>
+
+                    <span className="text-zinc-500">
+                      {item.total}
+                    </span>
+                  </div>
+
+                  <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+                    <div
+                      className="h-full rounded-full bg-[#c8102e]"
+                      style={{
+                        width:
+                          `${Math.max(
+                            3,
+                            (
+                              item.total /
+                              maxDepartment
+                            ) *
+                              100,
+                          )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
+              ),
+            )}
+
+            {(
+              snapshot?.byDepartment ??
+              []
+            ).length ===
+              0 && (
+              <p className="py-10 text-center text-sm text-zinc-400">
+                No existen datos departamentales para mostrar.
+              </p>
+            )}
+          </div>
+        </article>
+
+        <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+          <div className="mb-5 flex items-center justify-between">
+            <div>
+              <h2 className="font-semibold">
+                Estado de relojes
+              </h2>
+
+              <p className="text-sm text-zinc-500">
+                Disponibilidad y latencia de los dispositivos.
+              </p>
+            </div>
+
             <button
               type="button"
-              className="text-xs text-[#c8102e] font-bold hover:underline"
-              onClick={() => nav("/devices")}
+              onClick={() =>
+                open(
+                  'devices',
+                )
+              }
+              className="flex items-center gap-1 text-sm font-semibold text-[#c8102e]"
             >
               Ver todos
+              <ArrowRight
+                size={15}
+              />
             </button>
           </div>
 
-          <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-            {(health?.items || []).slice(0, 10).map((d) => (
-              <li
-                key={d.name}
-                className="flex items-center justify-between text-xs py-1.5 border-b border-zinc-100 last:border-0"
-              >
-                <div className="min-w-0">
-                  <span className="truncate block font-medium text-zinc-700">
-                    {d.name}
-                  </span>
-                  {d.punches_today !== undefined && (
-                    <span className="text-[10px] text-zinc-400">
-                      {d.punches_today} ponches hoy
-                    </span>
-                  )}
-                </div>
-                <span
-                  className={`ml-2 shrink-0 px-2 py-0.5 rounded text-[10px] font-bold ${
-                    d.online
-                      ? "bg-emerald-50 text-emerald-700 border border-emerald-200"
-                      : "bg-rose-50 text-rose-700 border border-rose-200"
-                  }`}
+          <div className="divide-y divide-zinc-100">
+            {(
+              snapshot?.healthItems ??
+              []
+            ).slice(
+              0,
+              8,
+            ).map(
+              item => (
+                <div
+                  key={
+                    item.name
+                  }
+                  className="flex items-center justify-between gap-4 py-3"
                 >
-                  {d.online ? `${d.latency_ms ?? "—"} ms` : "OFFLINE"}
-                </span>
-              </li>
-            ))}
-          </ul>
-        </Panel>
+                  <div className="flex min-w-0 items-center gap-3">
+                    <div
+                      className={
+                        `rounded-xl p-2 ${
+                          item.online
+                            ? 'bg-emerald-50 text-emerald-600'
+                            : 'bg-rose-50 text-rose-600'
+                        }`
+                      }
+                    >
+                      {item.online
+                        ? (
+                          <Wifi
+                            size={17}
+                          />
+                        )
+                        : (
+                          <WifiOff
+                            size={17}
+                          />
+                        )}
+                    </div>
 
-        <Panel>
-          <div className="flex justify-between items-center mb-3">
-            <div>
-              <h3 className="font-bold text-sm text-zinc-800">
-                Turnos abiertos
-              </h3>
-              <p className="text-[11px] text-zinc-400">
-                Entradas sin salida registrada
-              </p>
-            </div>
-            <Clock3 size={16} className="text-amber-500" />
-          </div>
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold">
+                        {item.name}
+                      </p>
 
-          <ul className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-            {(overview?.open_shifts || []).slice(0, 8).map((p) => (
-              <li
-                key={`${p.codigo}-${p.entrada}`}
-                className="flex items-center justify-between gap-2 rounded-lg border border-amber-100 bg-amber-50/60 px-3 py-2"
-              >
-                <div className="min-w-0">
-                  <p className="text-xs font-bold text-zinc-800 truncate">
-                    {p.nombre || p.codigo}
-                  </p>
-                  <p className="text-[10px] text-zinc-500 truncate">
-                    {p.dispositivo_origen || "Biométrico"}
-                  </p>
-                </div>
-                <span className="font-mono text-[11px] font-semibold text-amber-800">
-                  {p.entrada || "—"}
-                </span>
-              </li>
-            ))}
-            {!overview?.open_shifts?.length && (
-              <li className="text-xs text-zinc-400 text-center py-8">
-                No hay turnos abiertos.
-              </li>
-            )}
-          </ul>
-        </Panel>
+                      <p className="text-xs text-zinc-500">
+                        {item.punchesToday} ponches hoy
+                      </p>
+                    </div>
+                  </div>
 
-        <Panel>
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
-            <div>
-              <h3 className="font-bold text-sm text-zinc-800">
-                Últimos registros
-              </h3>
-              <p className="text-[11px] text-zinc-400">
-                Actividad biométrica reciente
-              </p>
-            </div>
-            <div className="relative">
-              <Search
-                size={14}
-                className="absolute left-2.5 top-1/2 -translate-y-1/2 text-zinc-400"
-              />
-              <input
-                type="text"
-                placeholder="Buscar..."
-                value={searchTerm}
-                onChange={(e) => setSearchTerm(e.target.value)}
-                className="pl-8 pr-3 py-1.5 rounded-lg border border-zinc-200 text-xs w-full sm:w-40 focus:outline-none focus:border-zinc-400"
-              />
-            </div>
-          </div>
-
-          <ul className="space-y-2 max-h-64 overflow-y-auto pr-1">
-            {filteredRecent.length ? (
-              filteredRecent.map((p) => (
-                <li
-                  key={p.id}
-                  className="text-xs flex items-center justify-between gap-2 p-2 rounded-lg bg-zinc-50 border border-zinc-100 hover:bg-zinc-100 transition-colors"
-                >
-                  <div className="truncate">
-                    <p className="font-bold text-zinc-800 truncate">
-                      {p.nombre || p.codigo}
+                  <div className="text-right">
+                    <p
+                      className={
+                        `text-xs font-semibold ${
+                          item.online
+                            ? 'text-emerald-600'
+                            : 'text-rose-600'
+                        }`
+                      }
+                    >
+                      {item.online
+                        ? 'Online'
+                        : 'Offline'}
                     </p>
-                    <p className="text-[10px] text-zinc-400 truncate">
-                      {p.departamento || p.dispositivo_origen || "Biométrico"}
+
+                    <p className="text-xs text-zinc-400">
+                      {item.latencyMs == null
+                        ? '—'
+                        : `${item.latencyMs} ms`}
                     </p>
                   </div>
-                  <span className="font-mono text-[11px] text-zinc-600 font-semibold bg-white px-2 py-1 rounded border border-zinc-200">
-                    {p.entrada || "—"}
-                  </span>
-                </li>
-              ))
-            ) : (
-              <p className="text-xs text-zinc-400 text-center py-8">
-                No hay registros coincidentes.
+                </div>
+              ),
+            )}
+
+            {(
+              snapshot?.healthItems ??
+              []
+            ).length ===
+              0 && (
+              <p className="py-10 text-center text-sm text-zinc-400">
+                No existen relojes reportados.
               </p>
             )}
-          </ul>
-        </Panel>
+          </div>
+        </article>
+      </section>
+
+      <article className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
+        <div className="flex flex-col gap-4 border-b border-zinc-100 p-5 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h2 className="font-semibold">
+              Ponches recientes
+            </h2>
+
+            <p className="text-sm text-zinc-500">
+              Últimos registros recibidos desde BioTime.
+            </p>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <div className="relative">
+              <Search
+                size={16}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+              />
+
+              <input
+                value={
+                  search
+                }
+                onChange={
+                  event =>
+                    setSearch(
+                      event.target.value,
+                    )
+                }
+                placeholder="Buscar empleado..."
+                className="w-64 rounded-xl border border-zinc-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#c8102e]"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                open(
+                  'records',
+                )
+              }
+              className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
+            >
+              Ver historial
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          <table className="w-full min-w-[850px] text-left text-sm">
+            <thead className="bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500">
+              <tr>
+                <th className="px-5 py-3">
+                  Código
+                </th>
+
+                <th className="px-5 py-3">
+                  Colaborador
+                </th>
+
+                <th className="px-5 py-3">
+                  Departamento
+                </th>
+
+                <th className="px-5 py-3">
+                  Entrada
+                </th>
+
+                <th className="px-5 py-3">
+                  Salida
+                </th>
+
+                <th className="px-5 py-3">
+                  Dispositivo
+                </th>
+              </tr>
+            </thead>
+
+            <tbody className="divide-y divide-zinc-100">
+              {filteredPunches.map(
+                (
+                  punch,
+                  index,
+                ) => (
+                  <tr
+                    key={
+                      punch.id ??
+                      `${punch.codigo}-${index}`
+                    }
+                    className="hover:bg-zinc-50/70"
+                  >
+                    <td className="px-5 py-3 font-mono text-xs">
+                      {punch.codigo ||
+                        '—'}
+                    </td>
+
+                    <td className="px-5 py-3 font-semibold">
+                      {punch.nombre ||
+                        'Sin identificar'}
+                    </td>
+
+                    <td className="px-5 py-3 text-zinc-600">
+                      {punch.departamento ||
+                        'Sin departamento'}
+                    </td>
+
+                    <td className="px-5 py-3">
+                      {formatTime(
+                        punch.entrada,
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3">
+                      {formatTime(
+                        punch.salida,
+                      )}
+                    </td>
+
+                    <td className="px-5 py-3 text-zinc-500">
+                      {punch.dispositivo_origen ||
+                        '—'}
+                    </td>
+                  </tr>
+                ),
+              )}
+
+              {filteredPunches.length ===
+                0 && (
+                <tr>
+                  <td
+                    colSpan={
+                      6
+                    }
+                    className="px-5 py-12 text-center text-zinc-400"
+                  >
+                    No hay registros recientes para mostrar.
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </article>
+
+      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+        <QuickAction
+          title="Ver ponches"
+          description="Historial y búsqueda"
+          onClick={() =>
+            open(
+              'records',
+            )
+          }
+        />
+
+        <QuickAction
+          title="Relojes"
+          description="Estado de dispositivos"
+          onClick={() =>
+            open(
+              'devices',
+            )
+          }
+        />
+
+        <QuickAction
+          title="Colaboradores"
+          description="Personal biométrico"
+          onClick={() =>
+            open(
+              'collaborators',
+            )
+          }
+        />
+
+        <QuickAction
+          title="Modo espejo"
+          description="Sincronización de relojes"
+          onClick={() =>
+            open(
+              'mirror',
+            )
+          }
+        />
+
+        <QuickAction
+          title="Reportes"
+          description="Horas y resultados"
+          onClick={() =>
+            open(
+              'reports',
+            )
+          }
+        />
+      </section>
+    </div>
+  )
+}
+
+function StatusRow({
+  label,
+  online,
+  icon,
+}: {
+  label: string
+  online: boolean
+  icon: React.ReactNode
+}) {
+  return (
+    <div className="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50/70 px-3 py-3">
+      <div className="flex items-center gap-3">
+        <span className="text-zinc-500">
+          {icon}
+        </span>
+
+        <span className="text-sm font-medium">
+          {label}
+        </span>
       </div>
 
-      <footer className="flex flex-wrap items-center justify-between text-xs text-zinc-400 pt-2 border-t border-zinc-200/60">
-        <span className="inline-flex items-center gap-1.5">
-          <Shield size={14} className="text-zinc-500" />
-          Sistema de Control de Asistencia Enterprise
-        </span>
-        <span className="inline-flex items-center gap-1.5">
-          {autoRefresh ? <Play size={12} /> : <Pause size={12} />}
-          {autoRefresh ? "Actualización automática cada 30s" : "Actualización pausada"}
-        </span>
-      </footer>
+      <span
+        className={
+          `flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+            online
+              ? 'bg-emerald-100 text-emerald-700'
+              : 'bg-rose-100 text-rose-700'
+          }`
+        }
+      >
+        {online
+          ? (
+            <CheckCircle2
+              size={13}
+            />
+          )
+          : (
+            <AlertTriangle
+              size={13}
+            />
+          )}
+
+        {online
+          ? 'Operativo'
+          : 'Revisar'}
+      </span>
     </div>
-  );
+  )
+}
+
+function QuickAction({
+  title,
+  description,
+  onClick,
+}: {
+  title: string
+  description: string
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      onClick={
+        onClick
+      }
+      className="group rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-md"
+    >
+      <div className="flex items-center justify-between">
+        <Activity
+          size={18}
+          className="text-[#c8102e]"
+        />
+
+        <ArrowUpRight
+          size={16}
+          className="text-zinc-300 transition group-hover:text-[#c8102e]"
+        />
+      </div>
+
+      <p className="mt-4 text-sm font-semibold text-zinc-900">
+        {title}
+      </p>
+
+      <p className="mt-1 text-xs text-zinc-500">
+        {description}
+      </p>
+    </button>
+  )
 }

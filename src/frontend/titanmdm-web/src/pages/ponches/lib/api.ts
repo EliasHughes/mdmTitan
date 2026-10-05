@@ -1,4 +1,8 @@
-import axios, { type AxiosResponse } from 'axios'
+import axios, {
+  type AxiosRequestConfig,
+  type AxiosResponse,
+} from 'axios'
+
 import apiClient from '../../../api/apiClient'
 
 function asResponse(
@@ -18,10 +22,14 @@ function asResponse(
     }
   }
 
-  const empty = [204, 205, 304].includes(result.status)
+  const empty = [204, 205, 304].includes(
+    result.status,
+  )
 
   return new Response(
-    empty ? null : result.data,
+    empty
+      ? null
+      : result.data,
     {
       status: result.status,
       statusText: result.statusText,
@@ -30,121 +38,291 @@ function asResponse(
   )
 }
 
-export async function authFetch(
+function validateApiPath(
   path: string,
-  init: RequestInit = {},
-): Promise<Response> {
+): string {
   if (
     !path.startsWith('/api/') ||
     path.startsWith('/api//')
   ) {
-    throw new Error('Ruta invÃ¡lida de Ponches')
+    throw new Error(
+      'Ruta inválida de Ponches',
+    )
   }
 
-  const relative = path.slice('/api/'.length)
+  const relative =
+    path.slice('/api/'.length)
 
-  const parsed = new URL(
-    relative,
-    'https://titan.invalid/',
-  )
+  const parsed =
+    new URL(
+      relative,
+      'https://titan.invalid/',
+    )
 
-  const invalidSegments = relative
-    .split('?')[0]
-    .split('/')
-    .some(part => part === '..' || part === '.')
+  const invalidSegments =
+    relative
+      .split('?')[0]
+      .split('/')
+      .some(
+        part =>
+          part === '..' ||
+          part === '.',
+      )
 
   if (
-    parsed.origin !== 'https://titan.invalid' ||
+    parsed.origin !==
+      'https://titan.invalid' ||
     invalidSegments
   ) {
-    throw new Error('Ruta invÃ¡lida de Ponches')
+    throw new Error(
+      'Ruta inválida de Ponches',
+    )
   }
 
-  const headers = new Headers(init.headers)
+  return relative
+}
 
-  // La identidad proviene de la sesiÃ³n de TitanMDM.
-  headers.delete('Authorization')
+async function execute(
+  url: string,
+  init: RequestInit,
+): Promise<Response> {
+  const headers =
+    new Headers(
+      init.headers,
+    )
+
+  /*
+   * Nunca permitimos que una pantalla
+   * inyecte manualmente otro JWT.
+   *
+   * apiClient utiliza la sesión normal
+   * de TitanMDM.
+   */
+  headers.delete(
+    'Authorization',
+  )
 
   const form =
-    typeof FormData !== 'undefined' &&
-    init.body instanceof FormData
+    typeof FormData !==
+      'undefined' &&
+    init.body instanceof
+      FormData
 
   const raw =
-    typeof Blob !== 'undefined' &&
-    init.body instanceof Blob
+    typeof Blob !==
+      'undefined' &&
+    init.body instanceof
+      Blob
 
   const contentType =
-    headers.get('Content-Type') ??
-    (form || raw ? null : 'application/json')
+    headers.get(
+      'Content-Type',
+    ) ??
+    (
+      form || raw
+        ? null
+        : 'application/json'
+    )
+
+  const config: AxiosRequestConfig = {
+  url,
+
+  method:
+    init.method ??
+    'GET',
+
+  /*
+   * RequestInit.body puede ser:
+   *
+   * string
+   * Blob
+   * FormData
+   * ArrayBuffer
+   * ReadableStream
+   * null
+   *
+   * AxiosRequestConfig no debe restringirse a ArrayBuffer.
+   * ArrayBuffer se utiliza solamente como tipo de RESPUESTA.
+   */
+  data:
+    init.body ??
+    undefined,
+
+  headers: {
+    ...Object.fromEntries(
+      headers,
+    ),
+
+    ...(contentType
+      ? {
+          'Content-Type':
+            contentType,
+        }
+      : {}),
+  },
+
+  responseType:
+    'arraybuffer',
+
+  timeout:
+    200_000,
+
+  signal:
+    init.signal ??
+    undefined,
+}
+ 
 
   try {
     const result =
-      await apiClient.request<ArrayBuffer>({
-        url: '/ponches/legacy/' + relative,
-        method: init.method ?? 'GET',
-        data: init.body,
+      await apiClient
+        .request<ArrayBuffer>(
+          config,
+        )
 
-        headers: {
-          ...Object.fromEntries(headers),
-          'Content-Type': contentType,
-        },
-
-        responseType: 'arraybuffer',
-        timeout: 200_000,
-        signal: init.signal ?? undefined,
-
-        // Axios mantiene su manejo normal de errores.
-        // AsÃ­ el interceptor puede renovar la sesiÃ³n ante 401.
-      })
-
-    return asResponse(result)
+    return asResponse(
+      result,
+    )
   } catch (error) {
     if (
-      axios.isAxiosError<ArrayBuffer>(error) &&
+      axios.isAxiosError<ArrayBuffer>(
+        error,
+      ) &&
       error.response
     ) {
-      const response = asResponse(error.response)
+      const response =
+        asResponse(
+          error.response,
+        )
 
       try {
-        const text = await response.clone().text()
+        const text =
+          await response
+            .clone()
+            .text()
 
-        const data = JSON.parse(text) as {
-          detail?: unknown
-          message?: string
-        }
+        const data =
+          JSON.parse(
+            text,
+          ) as {
+            detail?: unknown
+            message?: string
+            code?: string
+          }
 
-        // Las pantallas originales utilizan "detail".
-        if (!data.detail && data.message) {
+        /*
+         * Las pantallas heredadas
+         * esperaban "detail".
+         *
+         * Lo conservamos mientras
+         * terminamos F3-F9.
+         */
+        if (
+          !data.detail &&
+          data.message
+        ) {
           return new Response(
             JSON.stringify({
               ...data,
-              detail: data.message,
+              detail:
+                data.message,
             }),
             {
-              status: response.status,
+              status:
+                response.status,
+
               headers: {
-                'Content-Type': 'application/json',
+                'Content-Type':
+                  'application/json',
               },
             },
           )
         }
       } catch {
-        // Exportaciones y algunos errores pueden no ser JSON.
+        /*
+         * Exportaciones PDF/Excel,
+         * descargas y algunos errores
+         * no necesariamente son JSON.
+         */
       }
 
       return response
     }
 
-    if (axios.isCancel(error)) {
+    if (
+      axios.isCancel(
+        error,
+      )
+    ) {
       throw error
     }
 
     throw new Error(
-      'No se pudo conectar con Ponches. ' +
-      'Revisa que TitanMDM estÃ© activo.',
+      'No se pudo conectar con TitanMDM.',
       {
-        cause: error,
+        cause:
+          error,
       },
     )
   }
+}
+
+/**
+ * API empresarial TitanMDM.
+ *
+ * Usar para las rutas definitivas:
+ *
+ * /api/ponches/dashboard
+ * /api/ponches/records
+ * /api/ponches/device-health
+ * /api/ponches/health
+ */
+export async function titanFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  validateApiPath(
+    path,
+  )
+
+  if (
+    !path.startsWith(
+      '/api/ponches/',
+    )
+  ) {
+    throw new Error(
+      'titanFetch solamente admite endpoints de /api/ponches.',
+    )
+  }
+
+  return execute(
+    path.replace(
+      /^\/api/,
+      '',
+    ),
+    init,
+  )
+}
+
+/**
+ * Bridge temporal para las pantallas
+ * heredadas del sistema original.
+ *
+ * F3-F9 irán eliminando gradualmente
+ * estas llamadas.
+ */
+export async function authFetch(
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const relative =
+    validateApiPath(
+      path,
+    )
+
+  return execute(
+    '/ponches/legacy/' +
+      relative,
+    init,
+  )
 }
