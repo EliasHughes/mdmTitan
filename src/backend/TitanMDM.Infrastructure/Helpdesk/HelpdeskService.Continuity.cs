@@ -129,56 +129,89 @@ public sealed partial class HelpdeskService
     }
 
     private async Task<bool> TechnicianHasActiveShiftAsync(
-        Guid org,
-        Guid userId,
-        string category,
-        DateTime now,
-        CancellationToken ct,
-        Guid? requestedTeamId = null)
+    Guid org,
+    Guid userId,
+    string category,
+    DateTime now,
+    CancellationToken ct,
+    Guid? requestedTeamId = null)
+{
+    if (!await EligibleTechnicians(org)
+            .AnyAsync(id => id == userId, ct))
     {
-        if (!await EligibleTechnicians(org).AnyAsync(id => id == userId, ct))
-            return false;
-
-        var teams = await _db.HelpdeskTeams.AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == org &&
-                x.IsActive &&
-                (!requestedTeamId.HasValue ||
-                 x.Id == requestedTeamId.Value))
-            .ToListAsync(ct);
-
-        var matching = teams
-            .Where(x =>
-                x.HandlesCategory(category) ||
-                (category == "general" &&
-                 string.IsNullOrWhiteSpace(x.Categories)))
-            .Select(x => x.Id)
-            .ToArray();
-
-        if (matching.Length == 0)
-            return false;
-
-        var available = await _db.HelpdeskTeamMembers.AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == org &&
-                x.UserId == userId &&
-                matching.Contains(x.TeamId) &&
-                x.IsAvailable &&
-                x.AcceptsAutomaticAssignments)
-            .Select(x => x.TeamId)
-            .ToArrayAsync(ct);
-
-        if (available.Length == 0)
-            return false;
-
-        var schedules = await _db.Set<HelpdeskTechnicianSchedule>()
-            .AsNoTracking()
-            .Where(x =>
-                x.OrganizationId == org &&
-                x.UserId == userId &&
-                available.Contains(x.TeamId))
-            .ToListAsync(ct);
-
-        return schedules.Any(x => x.IsOnDuty(now));
+        return false;
     }
+
+    var teams = await _db.HelpdeskTeams
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == org &&
+            x.IsActive &&
+            (!requestedTeamId.HasValue ||
+             x.Id == requestedTeamId.Value))
+        .ToListAsync(ct);
+
+    var matchingTeamIds = teams
+        .Where(x =>
+            x.HandlesCategory(category) ||
+            (
+                category == "general" &&
+                string.IsNullOrWhiteSpace(x.Categories)
+            ))
+        .Select(x => x.Id)
+        .ToArray();
+
+    if (matchingTeamIds.Length == 0)
+    {
+        return false;
+    }
+
+    var memberships = await _db.HelpdeskTeamMembers
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == org &&
+            x.UserId == userId &&
+            matchingTeamIds.Contains(x.TeamId) &&
+            x.IsAvailable &&
+            x.AcceptsAutomaticAssignments &&
+            x.MaxOpenTickets > 0)
+        .ToListAsync(ct);
+
+    if (memberships.Count == 0)
+    {
+        return false;
+    }
+
+    var membershipTeamIds = memberships
+        .Select(x => x.TeamId)
+        .Distinct()
+        .ToArray();
+
+    var schedules = await _db
+        .Set<HelpdeskTechnicianSchedule>()
+        .AsNoTracking()
+        .Where(x =>
+            x.OrganizationId == org &&
+            x.UserId == userId &&
+            membershipTeamIds.Contains(x.TeamId))
+        .ToListAsync(ct);
+
+    /*
+     * Regla coherente con EvaluateRoutingAsync:
+     *
+     * - Si NO existen horarios configurados:
+     *   IsAvailable controla la disponibilidad.
+     *
+     * - Si existen horarios:
+     *   al menos uno debe estar activo ahora.
+     */
+    if (schedules.Count == 0)
+    {
+        return true;
+    }
+
+    return schedules.Any(
+        schedule =>
+            schedule.IsOnDuty(now));
 }
+    }

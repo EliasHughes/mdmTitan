@@ -4,17 +4,36 @@ import {
   useState,
   type FormEvent,
 } from 'react'
-import { useNavigate, useParams } from 'react-router-dom'
+
+import {
+  useNavigate,
+  useParams,
+} from 'react-router-dom'
+
 import {
   ArrowLeft,
+  ArrowRight,
   Headphones,
   MessageSquare,
   Plus,
   Send,
+  Ticket,
 } from 'lucide-react'
-import axios from 'axios'
-import apiClient from '../../api/apiClient'
-import { HelpdeskCreateRequest } from './HelpdeskCreateRequest'
+
+import axios
+  from 'axios'
+
+import apiClient
+  from '../../api/apiClient'
+
+import {
+  useAuth,
+} from '../../auth/AuthContext'
+
+import {
+  helpdeskPermissions,
+} from '../../auth/helpdeskAccess'
+
 import './HelpdeskPages.css'
 
 interface MyTicket {
@@ -29,7 +48,8 @@ interface MyTicket {
   updatedAtUtc: string
 }
 
-interface MyTicketDetails extends MyTicket {
+interface MyTicketDetails
+  extends MyTicket {
   comments: {
     id: string
     authorUserId: string
@@ -37,6 +57,7 @@ interface MyTicketDetails extends MyTicket {
     body: string
     createdAtUtc: string
   }[]
+
   activity: {
     id: string
     eventType: string
@@ -45,218 +66,602 @@ interface MyTicketDetails extends MyTicket {
   }[]
 }
 
-const statusNames: Record<string, string> = {
-  new: 'Recibido',
-  open: 'En atención',
-  inprogress: 'En proceso',
-  pendinguser: 'Esperando tu respuesta',
-  resolved: 'Resuelto',
-  closed: 'Cerrado',
-}
+const statusNames:
+  Record<string, string> = {
+    new:
+      'Recibido',
 
-function formatDate(value: string) {
-  const date = new Date(
-    /(?:Z|[+-]\d{2}:?\d{2})$/i.test(value) ? value : value + 'Z',
+    open:
+      'En atención',
+
+    inprogress:
+      'En proceso',
+
+    pendinguser:
+      'Esperando tu respuesta',
+
+    resolved:
+      'Resuelto',
+
+    closed:
+      'Cerrado',
+  }
+
+function formatDate(
+  value: string,
+) {
+  const parsed =
+    new Date(
+      /(?:Z|[+-]\d{2}:?\d{2})$/i
+        .test(value)
+        ? value
+        : value + 'Z',
+    )
+
+  return Number.isNaN(
+    parsed.getTime(),
   )
-
-  return Number.isNaN(date.getTime())
     ? '—'
-    : new Intl.DateTimeFormat('es-DO', {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      }).format(date)
+    : new Intl
+        .DateTimeFormat(
+          'es-DO',
+          {
+            dateStyle:
+              'medium',
+
+            timeStyle:
+              'short',
+          },
+        )
+        .format(
+          parsed,
+        )
 }
 
-function errorMessage(error: unknown, fallback: string) {
-  return axios.isAxiosError(error) &&
-    typeof error.response?.data?.message === 'string'
-    ? error.response.data.message
+function errorMessage(
+  error: unknown,
+  fallback: string,
+) {
+  return (
+    axios.isAxiosError(
+      error,
+    )
+    &&
+    typeof error
+      .response
+      ?.data
+      ?.message ===
+      'string'
+  )
+    ? error
+        .response
+        ?.data
+        ?.message
     : fallback
 }
 
 export function MyHelpdeskPage() {
-  const { ticketId } = useParams()
-  const navigate = useNavigate()
+  const {
+    ticketId,
+  } =
+    useParams()
 
-  const [tickets, setTickets] = useState<MyTicket[]>([])
-  const [ticket, setTicket] = useState<MyTicketDetails | null>(null)
-  const [loading, setLoading] = useState(true)
-  const [saving, setSaving] = useState(false)
-  const [error, setError] = useState('')
-  const [showCreate, setShowCreate] = useState(false)
-  const [reply, setReply] = useState('')
+  const navigate =
+    useNavigate()
 
-  const load = useCallback(async (signal: AbortSignal) => {
-    setLoading(true)
-    setError('')
-    setTicket(null)
+  const {
+    hasPermission,
+  } =
+    useAuth()
 
-    try {
-      if (ticketId) {
-        const result = await apiClient.get<MyTicketDetails>(
-          `/my/helpdesk/tickets/${ticketId}`,
-          { signal },
+  const [
+    tickets,
+    setTickets,
+  ] =
+    useState<MyTicket[]>(
+      [],
+    )
+
+  const [
+    ticket,
+    setTicket,
+  ] =
+    useState<MyTicketDetails | null>(
+      null,
+    )
+
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(
+      true,
+    )
+
+  const [
+    saving,
+    setSaving,
+  ] =
+    useState(
+      false,
+    )
+
+  const [
+    error,
+    setError,
+  ] =
+    useState(
+      '',
+    )
+
+  const [
+    reply,
+    setReply,
+  ] =
+    useState(
+      '',
+    )
+
+  const canCreate =
+    hasPermission(
+      helpdeskPermissions
+        .requestCreate,
+    )
+    ||
+    hasPermission(
+      'tickets.create',
+    )
+
+  const canReply =
+    hasPermission(
+      helpdeskPermissions
+        .requestOwnComment,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions
+        .portalAccess,
+    )
+
+  const load =
+    useCallback(
+      async (
+        signal:
+          AbortSignal,
+      ) => {
+        setLoading(
+          true,
         )
 
-        if (!signal.aborted) setTicket(result.data)
-      } else {
-        const result = await apiClient.get<MyTicket[]>(
-          '/my/helpdesk/tickets',
-          { signal },
-        )
-
-        if (!signal.aborted) setTickets(result.data)
-      }
-    } catch (ex) {
-      if (!signal.aborted) {
         setError(
-          errorMessage(ex, 'No pudimos cargar tus solicitudes.'),
+          '',
         )
-      }
-    } finally {
-      if (!signal.aborted) setLoading(false)
-    }
-  }, [ticketId])
 
-  useEffect(() => {
-    const controller = new AbortController()
-    setReply('')
-    void load(controller.signal)
-    return () => controller.abort()
-  }, [load])
+        setTicket(
+          null,
+        )
 
-  async function sendReply(event: FormEvent<HTMLFormElement>) {
+        try {
+          if (
+            ticketId
+          ) {
+            /*
+             * IMPORTANTE:
+             * usuario común usa SIEMPRE
+             * /api/my/helpdesk.
+             */
+            const result =
+              await apiClient
+                .get<MyTicketDetails>(
+                  `/my/helpdesk/tickets/${ticketId}`,
+                  {
+                    signal,
+                  },
+                )
+
+            if (
+              !signal.aborted
+            ) {
+              setTicket(
+                result.data,
+              )
+            }
+          }
+          else {
+            const result =
+              await apiClient
+                .get<MyTicket[]>(
+                  '/my/helpdesk/tickets',
+                  {
+                    signal,
+                  },
+                )
+
+            if (
+              !signal.aborted
+            ) {
+              setTickets(
+                result.data,
+              )
+            }
+          }
+        }
+        catch (
+          exception
+        ) {
+          if (
+            !signal.aborted
+          ) {
+            setError(
+              errorMessage(
+                exception,
+                ticketId
+                  ? 'No pudimos cargar esta solicitud.'
+                  : 'No pudimos cargar tus solicitudes.',
+              ),
+            )
+          }
+        }
+        finally {
+          if (
+            !signal.aborted
+          ) {
+            setLoading(
+              false,
+            )
+          }
+        }
+      },
+      [
+        ticketId,
+      ],
+    )
+
+  useEffect(
+    () => {
+      const controller =
+        new AbortController()
+
+      setReply(
+        '',
+      )
+
+      void load(
+        controller.signal,
+      )
+
+      return () =>
+        controller.abort()
+    },
+    [
+      load,
+    ],
+  )
+
+  async function sendReply(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
     event.preventDefault()
 
-    if (!ticketId || !reply.trim() || saving) return
+    if (
+      !ticketId
+      ||
+      !reply.trim()
+      ||
+      saving
+    ) {
+      return
+    }
 
-    setSaving(true)
-    setError('')
+    setSaving(
+      true,
+    )
+
+    setError(
+      '',
+    )
 
     try {
-      const result = await apiClient.post<MyTicketDetails>(
-        `/my/helpdesk/tickets/${ticketId}/reply`,
-        { body: reply.trim() },
+      const result =
+        await apiClient
+          .post<MyTicketDetails>(
+            `/my/helpdesk/tickets/${ticketId}/reply`,
+            {
+              body:
+                reply.trim(),
+            },
+          )
+
+      setTicket(
+        result.data,
       )
 
-      setTicket(result.data)
-      setReply('')
-    } catch (ex) {
-      setError(
-        errorMessage(ex, 'No pudimos publicar tu respuesta.'),
+      setReply(
+        '',
       )
-    } finally {
-      setSaving(false)
+    }
+    catch (
+      exception
+    ) {
+      setError(
+        errorMessage(
+          exception,
+          'No pudimos publicar tu respuesta.',
+        ),
+      )
+    }
+    finally {
+      setSaving(
+        false,
+      )
     }
   }
 
-  const badge = (value: string) => (
-    <span
-      className={
-        `helpdesk-inbox__badge helpdesk-inbox__badge--${value}`
-      }
-    >
-      {statusNames[value] ?? value}
-    </span>
-  )
+  const badge =
+    (
+      value: string,
+    ) => (
+      <span
+        className={
+          `helpdesk-inbox__badge ` +
+          `helpdesk-inbox__badge--${value}`
+        }
+      >
+        {
+          statusNames[
+            value
+          ]
+          ??
+          value
+        }
+      </span>
+    )
 
-  if (ticketId) {
+  /*
+   * ============================================================
+   * DETAIL
+   * ============================================================
+   */
+
+  if (
+    ticketId
+  ) {
     return (
-      <main className="titan-page helpdesk-page my-helpdesk">
+      <main
+        className={
+          'titan-page ' +
+          'helpdesk-page ' +
+          'my-helpdesk'
+        }
+      >
         <button
           type="button"
           className="my-helpdesk__back"
-          onClick={() => navigate('/my-support?workspace=helpdesk')}
+          onClick={
+            () =>
+              navigate(
+                '/my-support?workspace=helpdesk',
+              )
+          }
         >
-          <ArrowLeft size={16} /> Mis solicitudes
+          <ArrowLeft
+            size={16}
+          />
+
+          Mis solicitudes
         </button>
 
         {error && (
-          <div className="helpdesk-inbox__error" role="alert">
+          <div
+            className="helpdesk-inbox__error"
+            role="alert"
+          >
             {error}
           </div>
         )}
 
         {loading && (
-          <section className="my-helpdesk__card">
+          <section
+            className="my-helpdesk__card"
+          >
             Cargando solicitud…
           </section>
         )}
 
-        {!loading && ticket && (
+        {!loading &&
+          !ticket &&
+          !error && (
+          <section
+            className="my-helpdesk__card"
+          >
+            La solicitud no
+            está disponible.
+          </section>
+        )}
+
+        {!loading &&
+          ticket && (
           <>
-            <header className="my-helpdesk__hero">
-              <span className="helpdesk-inbox__eyebrow">
-                <Headphones size={15} />
-                Solicitud {ticket.number}
+            <header
+              className="my-helpdesk__hero"
+            >
+              <span
+                className="helpdesk-inbox__eyebrow"
+              >
+                <Headphones
+                  size={15}
+                />
+
+                Solicitud{' '}
+                {
+                  ticket.number
+                }
               </span>
-              <h1>{ticket.subject}</h1>
-              <div className="my-helpdesk__meta">
-                {badge(ticket.status)}
+
+              <h1>
+                {
+                  ticket.subject
+                }
+              </h1>
+
+              <div
+                className="my-helpdesk__meta"
+              >
+                {badge(
+                  ticket.status,
+                )}
+
                 <span>
-                  Creada {formatDate(ticket.createdAtUtc)}
+                  Creada{' '}
+                  {formatDate(
+                    ticket.createdAtUtc,
+                  )}
                 </span>
               </div>
             </header>
 
-            <section className="my-helpdesk__card">
-              <h2>Tu solicitud</h2>
-              <p className="my-helpdesk__body">
-                {ticket.description}
+            <section
+              className="my-helpdesk__card"
+            >
+              <h2>
+                Tu solicitud
+              </h2>
+
+              <p
+                className="my-helpdesk__body"
+              >
+                {
+                  ticket.description
+                }
               </p>
             </section>
 
-            <section className="my-helpdesk__card">
-              <h2>Conversación</h2>
+            <section
+              className="my-helpdesk__card"
+            >
+              <h2>
+                Conversación
+              </h2>
 
-              {!ticket.comments.length ? (
-                <p className="my-helpdesk__muted">
-                  Aún no hay respuestas.
-                </p>
+              {!ticket
+                .comments
+                .length ? (
+                <div
+                  className="my-helpdesk__empty"
+                >
+                  <MessageSquare
+                    size={26}
+                  />
+
+                  <strong>
+                    Aún no hay respuestas
+                  </strong>
+
+                  <span>
+                    El equipo TIC
+                    responderá aquí.
+                  </span>
+                </div>
               ) : (
-                <div className="my-helpdesk__messages">
-                  {ticket.comments.map(item => (
-                    <article key={item.id}>
-                      <div>
-                        <strong>{item.authorName}</strong>
-                        <time>
-                          {formatDate(item.createdAtUtc)}
-                        </time>
-                      </div>
-                      <p className="my-helpdesk__body">
-                        {item.body}
-                      </p>
-                    </article>
-                  ))}
+                <div
+                  className="my-helpdesk__messages"
+                >
+                  {ticket.comments.map(
+                    item => (
+                      <article
+                        key={
+                          item.id
+                        }
+                      >
+                        <div>
+                          <strong>
+                            {
+                              item.authorName
+                            }
+                          </strong>
+
+                          <time>
+                            {formatDate(
+                              item.createdAtUtc,
+                            )}
+                          </time>
+                        </div>
+
+                        <p
+                          className="my-helpdesk__body"
+                        >
+                          {
+                            item.body
+                          }
+                        </p>
+                      </article>
+                    ),
+                  )}
                 </div>
               )}
 
-              {!['resolved', 'closed'].includes(ticket.status) && (
+              {canReply &&
+                ![
+                  'resolved',
+                  'closed',
+                ].includes(
+                  ticket.status,
+                ) && (
                 <form
                   className="my-helpdesk__form"
-                  onSubmit={event => void sendReply(event)}
+                  onSubmit={
+                    event =>
+                      void sendReply(
+                        event,
+                      )
+                  }
                 >
-                  <label htmlFor="my-helpdesk-reply">
-                    Responder al equipo TIC
+                  <label
+                    htmlFor="helpdesk-reply"
+                  >
+                    Responder al
+                    equipo TIC
                   </label>
 
                   <textarea
-                    id="my-helpdesk-reply"
-                    required
-                    maxLength={4000}
-                    rows={4}
-                    value={reply}
-                    disabled={saving}
-                    onChange={event => setReply(event.target.value)}
-                    placeholder="Escribe información adicional…"
+                    id="helpdesk-reply"
+                    value={
+                      reply
+                    }
+                    onChange={
+                      event =>
+                        setReply(
+                          event
+                            .target
+                            .value,
+                        )
+                    }
+                    placeholder={
+                      'Escribe información adicional…'
+                    }
                   />
 
                   <button
-                    className="helpdesk-ui-button helpdesk-ui-button--primary"
-                    disabled={saving || !reply.trim()}
+                    type="submit"
+                    className={
+                      'helpdesk-ui-button ' +
+                      'helpdesk-ui-button--primary'
+                    }
+                    disabled={
+                      saving ||
+                      !reply.trim()
+                    }
                   >
-                    <Send size={16} />
-                    {saving ? 'Enviando…' : 'Enviar respuesta'}
+                    <Send
+                      size={16}
+                    />
+
+                    {
+                      saving
+                        ? 'Enviando…'
+                        : 'Enviar respuesta'
+                    }
                   </button>
                 </form>
               )}
@@ -267,81 +672,187 @@ export function MyHelpdeskPage() {
     )
   }
 
-  return (
-    <main className="titan-page helpdesk-page my-helpdesk">
-      <header className="my-helpdesk__hero">
-        <span className="helpdesk-inbox__eyebrow">
-          <Headphones size={15} /> Mi centro de ayuda
-        </span>
+  /*
+   * ============================================================
+   * REQUESTER HOME
+   * ============================================================
+   */
 
-        <div className="my-helpdesk__heading">
+  return (
+    <main
+      className={
+        'titan-page ' +
+        'helpdesk-page ' +
+        'my-helpdesk'
+      }
+    >
+      <header
+        className="my-helpdesk__hero"
+      >
+        <div
+          className="my-helpdesk__heading"
+        >
           <div>
-            <h1>Mis solicitudes</h1>
-            <p>Consulta el progreso y comunícate con TIC.</p>
+            <span
+              className="helpdesk-inbox__eyebrow"
+            >
+              <Headphones
+                size={15}
+              />
+
+              PORTAL DE SOPORTE
+            </span>
+
+            <h1>
+              Mesa de Ayuda
+            </h1>
+
+            <p>
+              Crea solicitudes,
+              consulta su estado y
+              conversa con el equipo TIC.
+            </p>
           </div>
 
-          <button
-            type="button"
-            className="helpdesk-ui-button helpdesk-ui-button--primary"
-            onClick={() => setShowCreate(true)}
-          >
-            <Plus size={16} /> Nueva solicitud
-          </button>
+          {canCreate && (
+            <button
+              type="button"
+              className={
+                'helpdesk-ui-button ' +
+                'helpdesk-ui-button--primary'
+              }
+              onClick={
+                () =>
+                  navigate(
+                    '/my-support/new?workspace=helpdesk',
+                  )
+              }
+            >
+              <Plus
+                size={16}
+              />
+
+              Crear solicitud
+            </button>
+          )}
         </div>
       </header>
 
       {error && (
-        <div className="helpdesk-inbox__error" role="alert">
+        <div
+          className="helpdesk-inbox__error"
+          role="alert"
+        >
           {error}
         </div>
       )}
 
-      <section className="my-helpdesk__card">
-        <h2>Historial</h2>
+      <section
+        className="my-helpdesk__card"
+      >
+        <div
+          className="my-helpdesk__heading"
+        >
+          <div>
+            <h2>
+              Mis solicitudes
+            </h2>
+
+            <p>
+              Solo puedes ver
+              tus propios tickets.
+            </p>
+          </div>
+
+          <span
+            className="helpdesk-inbox__total"
+          >
+            {
+              tickets.length
+            } solicitudes
+          </span>
+        </div>
 
         {loading ? (
-          <p>Cargando solicitudes…</p>
+          <div
+            className="my-helpdesk__empty"
+          >
+            Cargando…
+          </div>
         ) : !tickets.length ? (
-          <div className="my-helpdesk__empty">
-            <MessageSquare size={26} />
-            <strong>Aún no tienes solicitudes</strong>
+          <div
+            className="my-helpdesk__empty"
+          >
+            <Ticket
+              size={28}
+            />
+
+            <strong>
+              No tienes solicitudes
+            </strong>
+
             <span>
-              Crea aquí tu primer caso cuando necesites ayuda.
+              Cuando necesites
+              soporte podrás crear
+              una solicitud aquí.
             </span>
           </div>
         ) : (
-          <div className="my-helpdesk__list">
-            {tickets.map(item => (
-              <button
-                type="button"
-                key={item.id}
-                onClick={() =>
-                  navigate(
-                    `/my-support/${item.id}?workspace=helpdesk`,
-                  )
-                }
-              >
-                <span>
-                  <small>{item.number}</small>
-                  <strong>{item.subject}</strong>
-                  <small>{formatDate(item.createdAtUtc)}</small>
-                </span>
-                {badge(item.status)}
-              </button>
-            ))}
+          <div
+            className="my-helpdesk__list"
+          >
+            {tickets.map(
+              item => (
+                <button
+                  type="button"
+                  key={
+                    item.id
+                  }
+                  onClick={
+                    () =>
+                      navigate(
+                        `/my-support/${item.id}?workspace=helpdesk`,
+                      )
+                  }
+                >
+                  <span>
+                    <small>
+                      {
+                        item.number
+                      }
+                    </small>
+
+                    <strong>
+                      {
+                        item.subject
+                      }
+                    </strong>
+
+                    <small>
+                      Actualizado{' '}
+                      {formatDate(
+                        item.updatedAtUtc,
+                      )}
+                    </small>
+                  </span>
+
+                  <span
+                    className="my-helpdesk__meta"
+                  >
+                    {badge(
+                      item.status,
+                    )}
+
+                    <ArrowRight
+                      size={17}
+                    />
+                  </span>
+                </button>
+              ),
+            )}
           </div>
         )}
       </section>
-
-      {showCreate && (
-        <HelpdeskCreateRequest
-          onCancel={() => setShowCreate(false)}
-          onCreated={id => {
-            setShowCreate(false)
-            navigate(`/my-support/${id}?workspace=helpdesk`)
-          }}
-        />
-      )}
     </main>
   )
 }

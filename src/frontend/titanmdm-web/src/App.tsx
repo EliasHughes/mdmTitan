@@ -179,6 +179,14 @@ import {
   PonchesPage,
 } from './pages/ponches/PonchesPage'
 
+import {
+  HelpdeskAnalyticsHome,
+} from './pages/helpdesk/HelpdeskAnalyticsHome'
+
+import {
+  HelpdeskAdminHome,
+} from './pages/helpdesk/HelpdeskAdminHome'
+
 interface ApplicationRoute {
   path: string
   page: ReactNode
@@ -442,7 +450,39 @@ const applicationRoutes:
 
       helpdeskConsole:
         true,
-    },
+    },{
+  path:
+    'helpdesk/analytics',
+
+  page:
+    <HelpdeskAnalyticsHome />,
+
+  permissions: [
+    helpdeskPermissions.slaView,
+    helpdeskPermissions.kpiView,
+    helpdeskPermissions.analyticsView,
+    helpdeskPermissions.reportsView,
+    helpdeskPermissions.adminAccess,
+  ],
+
+  helpdeskConsole:
+    true,
+},
+
+{
+  path:
+    'helpdesk/admin',
+
+  page:
+    <HelpdeskAdminHome />,
+
+  permissions: [
+    helpdeskPermissions.adminAccess,
+  ],
+
+  helpdeskConsole:
+    true,
+},
 
     {
       path:

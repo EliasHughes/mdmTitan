@@ -6,6 +6,7 @@ import {
   FileBarChart,
   Headphones,
   Inbox,
+  LayoutDashboard,
   MapPin,
   Monitor,
   Package,
@@ -14,7 +15,6 @@ import {
   Settings,
   Shield,
   Smartphone,
-  Sparkles,
   UserRound,
   Users,
   Workflow,
@@ -33,6 +33,7 @@ import {
 import {
   canCreateHelpdeskRequest,
   canManageHelpdesk,
+  canUseHelpdeskAnalytics,
   canUseHelpdeskConsole,
   helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
@@ -61,10 +62,6 @@ const link = (
   icon,
   permissions,
 })
-
-// ============================================================
-// WINDOWS
-// ============================================================
 
 const windowsLinks:
   ModuleLink[] = [
@@ -132,10 +129,6 @@ const windowsLinks:
     ),
   ]
 
-// ============================================================
-// ANDROID
-// ============================================================
-
 const androidLinks:
   ModuleLink[] = [
     link(
@@ -188,184 +181,72 @@ const androidLinks:
     ),
   ]
 
-// ============================================================
-// COLLABORATOR PORTAL
-//
-// SOLO DOS OPCIONES.
-// ============================================================
-
 const requesterLinks:
   ModuleLink[] = [
     link(
-      'Crear ticket',
-      '/my-support/new?workspace=helpdesk',
-      Plus,
-      helpdeskPermissions
-        .requestCreate,
+      'Mis solicitudes',
+      '/my-support?workspace=helpdesk',
+      Inbox,
+      helpdeskPermissions.requestOwnView,
     ),
 
     link(
-      'Mis tickets',
-      '/my-support?workspace=helpdesk',
-      Inbox,
-      helpdeskPermissions
-        .requestOwnView,
+      'Crear solicitud',
+      '/my-support/new?workspace=helpdesk',
+      Plus,
+      helpdeskPermissions.requestCreate,
     ),
   ]
 
-// ============================================================
-// HELP DESK TIC
-// ============================================================
-
-const helpdeskLinks:
+const helpdeskOperationLinks:
   ModuleLink[] = [
     link(
       'Mi trabajo',
       '/helpdesk?workspace=helpdesk',
       ClipboardList,
-      helpdeskPermissions
-        .inboxMyWork,
+      helpdeskPermissions.inboxMyWork,
     ),
 
     link(
       'Sin asignar',
       '/helpdesk?view=unassigned&workspace=helpdesk',
       Inbox,
-      helpdeskPermissions
-        .inboxUnassigned,
+      helpdeskPermissions.inboxUnassigned,
     ),
 
     link(
       'Todos',
       '/helpdesk?view=all&workspace=helpdesk',
       ClipboardList,
-      helpdeskPermissions
-        .inboxAll,
+      helpdeskPermissions.inboxAll,
     ),
 
     link(
       'Kanban',
       '/helpdesk?view=kanban&workspace=helpdesk',
       Workflow,
-      helpdeskPermissions
-        .kanbanView,
+      helpdeskPermissions.kanbanView,
     ),
 
     link(
       'Mis solicitudes',
       '/my-support?workspace=helpdesk',
       UserRound,
-      helpdeskPermissions
-        .requestOwnView,
-    ),
-
-    link(
-      'SLA',
-      '/helpdesk/seguimiento?workspace=helpdesk',
-      Headphones,
-      helpdeskPermissions
-        .slaView,
-    ),
-
-    link(
-      'KPI',
-      '/helpdesk/centro/kpis?workspace=helpdesk',
-      BarChart3,
-      helpdeskPermissions
-        .kpiView,
-    ),
-
-    link(
-      'Gráficos',
-      '/helpdesk/centro/graficos?workspace=helpdesk',
-      BarChart3,
-      helpdeskPermissions
-        .analyticsView,
-    ),
-
-    link(
-      'Automatización',
-      '/helpdesk/centro/alertas?workspace=helpdesk',
-      Sparkles,
-      helpdeskPermissions
-        .automationView,
-    ),
-
-    link(
-      'Reportes',
-      '/helpdesk/reportes?workspace=helpdesk',
-      FileBarChart,
-      helpdeskPermissions
-        .reportsView,
+      helpdeskPermissions.requestOwnView,
     ),
   ]
 
-// ============================================================
-// HELPDESK ADMINISTRATION
-// ============================================================
 
-const helpdeskAdminLinks:
+
+const helpdeskAdminEntry:
   ModuleLink[] = [
     link(
-      'Sites',
-      '/helpdesk/operations?tab=sites&workspace=helpdesk',
-      Building2,
-      helpdeskPermissions
-        .sitesView,
-    ),
-
-    link(
-      'Grupos',
-      '/helpdesk/especialidades?workspace=helpdesk',
-      Users,
-      helpdeskPermissions
-        .groupsView,
-    ),
-
-    link(
-      'Técnicos',
-      '/helpdesk/operations?tab=technicians&workspace=helpdesk',
-      Headphones,
-      helpdeskPermissions
-        .techniciansView,
-    ),
-
-    link(
-      'Turnos',
-      '/helpdesk/especialidades?tab=schedules&workspace=helpdesk',
-      Workflow,
-      helpdeskPermissions
-        .schedulesView,
-    ),
-
-    link(
-      'Categorías',
-      '/helpdesk/especialidades?tab=categories&workspace=helpdesk',
-      ClipboardList,
-      helpdeskPermissions
-        .categoriesView,
-    ),
-
-    link(
-      'Plantillas',
-      '/helpdesk/centro/configuracion?tab=templates&workspace=helpdesk',
-      FileBarChart,
-      helpdeskPermissions
-        .templatesView,
-    ),
-
-    link(
-      'Configuración',
-      '/helpdesk/centro/configuracion?workspace=helpdesk',
+      'Administración',
+      '/helpdesk/admin?workspace=helpdesk',
       Settings,
-      helpdeskPermissions
-        .adminAccess,
+      helpdeskPermissions.adminAccess,
     ),
   ]
-
-// ============================================================
-// TITAN ADMINISTRATION
-// ============================================================
 
 const adminLinks:
   ModuleLink[] = [
@@ -403,14 +284,6 @@ const adminLinks:
       ScrollText,
       'audit.view',
     ),
-
-    link(
-      'Entra ID',
-      '/helpdesk/entra?workspace=administration',
-      UserRound,
-      helpdeskPermissions
-        .adminAccess,
-    ),
   ]
 
 export function ModuleNavigation() {
@@ -444,7 +317,12 @@ export function ModuleNavigation() {
       hasPermission,
     )
 
-  const helpdeskAdmin =
+  const analytics =
+    canUseHelpdeskAnalytics(
+      hasPermission,
+    )
+
+  const admin =
     canManageHelpdesk(
       hasPermission,
     )
@@ -467,112 +345,110 @@ export function ModuleNavigation() {
         ? 'administration'
         : activeWorkspaceId
 
-  let config:
-    {
-      title: string
-      links: ModuleLink[]
-    }
-    | null =
-      null
+  let title =
+    ''
+
+  let links:
+    ModuleLink[] = []
 
   if (
     workspace ===
     'windows'
   ) {
-    config = {
-      title:
-        'Windows',
+    title =
+      'Windows'
 
-      links:
-        windowsLinks,
-    }
+    links =
+      windowsLinks
   }
   else if (
     workspace ===
     'android'
   ) {
-    config = {
-      title:
-        'Android',
+    title =
+      'Android'
 
-      links:
-        androidLinks,
-    }
-  }
-  else if (
-    workspace ===
-    'helpdesk'
-  ) {
-    if (
-      staff
-    ) {
-      config = {
-        title:
-          helpdeskAdmin
-            ? 'Mesa de ayuda · Administración'
-            : 'Mesa de ayuda · TIC',
-
-        links: [
-          ...helpdeskLinks,
-
-          ...(
-            helpdeskAdmin
-              ? helpdeskAdminLinks
-              : []
-          ),
-        ],
-      }
-    }
-    else {
-      config = {
-        title:
-          'Mesa de ayuda',
-
-        links:
-          requesterLinks,
-      }
-    }
+    links =
+      androidLinks
   }
   else if (
     workspace ===
     'administration'
   ) {
-    config = {
-      title:
-        'Configuración',
+    title =
+      'Configuración'
 
-      links:
-        adminLinks,
+    links =
+      adminLinks
+  }
+  else if (
+    workspace ===
+    'helpdesk'
+  ) {
+    /*
+     * ==========================================================
+     * COLABORADOR
+     * ==========================================================
+     */
+
+    if (
+      !staff
+    ) {
+      title =
+        'Mesa de ayuda'
+
+      links =
+        requesterLinks
+    }
+
+    /*
+     * ==========================================================
+     * TIC
+     * ==========================================================
+     */
+
+    if (
+      staff
+    ) {
+      title =
+        'Mesa de ayuda · TIC'
+
+      links = [
+        ...helpdeskOperationLinks,
+
+        ...(
+          analytics
+            ? [
+                link(
+                  'Analítica',
+                  '/helpdesk/analytics?workspace=helpdesk',
+                  LayoutDashboard,
+                ),
+              ]
+            : []
+        ),
+
+        ...(
+          admin
+            ? helpdeskAdminEntry
+            : []
+        ),
+      ]
     }
   }
 
-  if (
-    !config
-  ) {
-    return null
-  }
-
   const visible =
-    config.links
-      .filter(
-        item =>
-          !item.permissions
-            ?.length
-          ||
-          item.permissions
-            .some(
-              hasPermission,
-            ),
-      )
+    links.filter(
+      item =>
+        !item.permissions
+          ?.length
+        ||
+        item.permissions
+          .some(
+            hasPermission,
+          ),
+    )
 
-  /*
-   * Compatibilidad inicial:
-   *
-   * mientras asignamos los permisos nuevos
-   * en RolesPage, permitimos que el portal
-   * muestre Crear ticket cuando tenga
-   * tickets.create antiguo.
-   */
   if (
     workspace ===
       'helpdesk'
@@ -590,8 +466,8 @@ export function ModuleNavigation() {
         ),
     )
   ) {
-    visible.unshift(
-      requesterLinks[0],
+    visible.push(
+      requesterLinks[1],
     )
   }
 
@@ -605,13 +481,13 @@ export function ModuleNavigation() {
     <nav
       className="module-navigation"
       aria-label={
-        `Opciones de ${config.title}`
+        `Opciones de ${title}`
       }
     >
       <span
         className="module-navigation__title"
       >
-        {config.title}
+        {title}
       </span>
 
       <div
@@ -622,13 +498,55 @@ export function ModuleNavigation() {
             const Icon =
               item.icon
 
-            const pathname =
+            const basePath =
               item.path
                 .split('?')[0]
 
             const active =
               location.pathname ===
-              pathname
+                basePath
+              ||
+              (
+                basePath ===
+                  '/helpdesk/admin'
+                &&
+                location.pathname
+                  .startsWith(
+                    '/helpdesk/admin',
+                  )
+              )
+              ||
+              (
+                basePath ===
+                  '/helpdesk/analytics'
+                &&
+                (
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/analytics',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/centro/kpis',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/centro/graficos',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/reportes',
+                    )
+                  ||
+                  location.pathname
+                    .startsWith(
+                      '/helpdesk/seguimiento',
+                    )
+                )
+              )
 
             return (
               <NavLink

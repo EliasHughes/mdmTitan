@@ -1,176 +1,119 @@
 export const helpdeskPermissions = {
-  portalAccess:
-    'helpdesk.portal.access',
+  portalAccess: 'helpdesk.portal.access',
 
-  agentAccess:
-    'helpdesk.agent.access',
+  agentAccess: 'helpdesk.agent.access',
 
-  adminAccess:
-    'helpdesk.admin.access',
+  adminAccess: 'helpdesk.admin.access',
 
-  requestCreate:
-    'helpdesk.request.create',
+  requestCreate: 'helpdesk.request.create',
 
-  requestOwnView:
-    'helpdesk.request.own.view',
+  requestOwnView: 'helpdesk.request.own.view',
 
-  requestOwnComment:
-    'helpdesk.request.own.comment',
+  requestOwnComment: 'helpdesk.request.own.comment',
 
-  requestOwnReopen:
-    'helpdesk.request.own.reopen',
+  requestOwnReopen: 'helpdesk.request.own.reopen',
 
-  requestOwnConfirm:
-    'helpdesk.request.own.confirm',
+  requestOwnConfirm: 'helpdesk.request.own.confirm',
 
-  inboxMyWork:
-    'helpdesk.inbox.my-work',
+  inboxMyWork: 'helpdesk.inbox.my-work',
 
-  inboxUnassigned:
-    'helpdesk.inbox.unassigned',
+  inboxUnassigned: 'helpdesk.inbox.unassigned',
 
-  inboxAll:
-    'helpdesk.inbox.all',
+  inboxAll: 'helpdesk.inbox.all',
 
-  inboxEscalated:
-    'helpdesk.inbox.escalated',
+  inboxEscalated: 'helpdesk.inbox.escalated',
 
-  kanbanView:
-    'helpdesk.kanban.view',
+  kanbanView: 'helpdesk.kanban.view',
 
-  ticketDetails:
-    'helpdesk.ticket.details.view',
+  ticketDetails: 'helpdesk.ticket.details.view',
 
-  ticketComment:
-    'helpdesk.ticket.comment',
+  ticketComment: 'helpdesk.ticket.comment',
 
-  ticketInternalNote:
-    'helpdesk.ticket.internal-note',
+  ticketInternalNote: 'helpdesk.ticket.internal-note',
 
-  ticketTake:
-    'helpdesk.ticket.take',
+  ticketTake: 'helpdesk.ticket.take',
 
-  ticketAssign:
-    'helpdesk.ticket.assign',
+  ticketAssign: 'helpdesk.ticket.assign',
 
-  ticketTransfer:
-    'helpdesk.ticket.transfer',
+  ticketTransfer: 'helpdesk.ticket.transfer',
 
-  ticketTransition:
-    'helpdesk.ticket.transition',
+  ticketTransition: 'helpdesk.ticket.transition',
 
-  ticketResolve:
-    'helpdesk.ticket.resolve',
+  ticketResolve: 'helpdesk.ticket.resolve',
 
-  ticketClose:
-    'helpdesk.ticket.close',
+  ticketClose: 'helpdesk.ticket.close',
 
-  ticketReopen:
-    'helpdesk.ticket.reopen',
+  ticketReopen: 'helpdesk.ticket.reopen',
 
-  slaView:
-    'helpdesk.sla.view',
+  slaView: 'helpdesk.sla.view',
 
-  slaManage:
-    'helpdesk.sla.manage',
+  slaManage: 'helpdesk.sla.manage',
 
-  kpiView:
-    'helpdesk.kpi.view',
+  kpiView: 'helpdesk.kpi.view',
 
-  analyticsView:
-    'helpdesk.analytics.view',
+  analyticsView: 'helpdesk.analytics.view',
 
-  reportsView:
-    'helpdesk.reports.view',
+  reportsView: 'helpdesk.reports.view',
 
-  reportsExport:
-    'helpdesk.reports.export',
+  reportsExport: 'helpdesk.reports.export',
 
-  sitesView:
-    'helpdesk.sites.view',
+  sitesView: 'helpdesk.sites.view',
 
-  sitesManage:
-    'helpdesk.sites.manage',
+  sitesManage: 'helpdesk.sites.manage',
 
-  groupsView:
-    'helpdesk.groups.view',
+  groupsView: 'helpdesk.groups.view',
 
-  groupsManage:
-    'helpdesk.groups.manage',
+  groupsManage: 'helpdesk.groups.manage',
 
-  techniciansView:
-    'helpdesk.technicians.view',
+  techniciansView: 'helpdesk.technicians.view',
 
-  techniciansManage:
-    'helpdesk.technicians.manage',
+  techniciansManage: 'helpdesk.technicians.manage',
 
-  schedulesView:
-    'helpdesk.schedules.view',
+  schedulesView: 'helpdesk.schedules.view',
 
-  schedulesManage:
-    'helpdesk.schedules.manage',
+  schedulesManage: 'helpdesk.schedules.manage',
 
-  categoriesView:
-    'helpdesk.categories.view',
+  categoriesView: 'helpdesk.categories.view',
 
-  categoriesManage:
-    'helpdesk.categories.manage',
+  categoriesManage: 'helpdesk.categories.manage',
 
-  templatesView:
-    'helpdesk.templates.view',
+  templatesView: 'helpdesk.templates.view',
 
-  templatesManage:
-    'helpdesk.templates.manage',
+  templatesManage: 'helpdesk.templates.manage',
 
-  workflowsView:
-    'helpdesk.workflows.view',
+  workflowsView: 'helpdesk.workflows.view',
 
-  workflowsManage:
-    'helpdesk.workflows.manage',
+  workflowsManage: 'helpdesk.workflows.manage',
 
-  automationView:
-    'helpdesk.automation.view',
+  automationView: 'helpdesk.automation.view',
 
-  automationManage:
-    'helpdesk.automation.manage',
+  automationManage: 'helpdesk.automation.manage',
 
-  mailView:
-    'helpdesk.mail.view',
+  mailView: 'helpdesk.mail.view',
 
-  mailManage:
-    'helpdesk.mail.manage',
+  mailManage: 'helpdesk.mail.manage',
 
-  aiUse:
-    'helpdesk.ai.use',
+  aiUse: 'helpdesk.ai.use',
 
-  aiView:
-    'helpdesk.ai.view',
+  aiView: 'helpdesk.ai.view',
 
-  aiManage:
-    'helpdesk.ai.manage',
+  aiManage: 'helpdesk.ai.manage',
 } as const
 
 export const legacyHelpdeskPermissions = {
-  view:
-    'helpdesk.view',
+  view: 'helpdesk.view',
 
-  manage:
-    'helpdesk.manage',
+  manage: 'helpdesk.manage',
 
-  ticketView:
-    'tickets.view',
+  ticketView: 'tickets.view',
 
-  ticketCreate:
-    'tickets.create',
+  ticketCreate: 'tickets.create',
 
-  ticketAssign:
-    'tickets.assign',
+  ticketAssign: 'tickets.assign',
 
-  ticketComment:
-    'tickets.comment',
+  ticketComment: 'tickets.comment',
 
-  ticketClose:
-    'tickets.close',
+  ticketClose: 'tickets.close',
 } as const
 
 type PermissionEvaluator =
@@ -178,29 +121,31 @@ type PermissionEvaluator =
     permission: string,
   ) => boolean
 
+/*
+ * ============================================================
+ * PORTAL DEL COLABORADOR
+ * ============================================================
+ */
+
 export function canUseHelpdeskPortal(
   hasPermission:
     PermissionEvaluator,
 ): boolean {
   return (
     hasPermission(
-      helpdeskPermissions
-        .portalAccess,
+      helpdeskPermissions.portalAccess,
     )
     ||
     hasPermission(
-      helpdeskPermissions
-        .requestCreate,
+      helpdeskPermissions.requestCreate,
     )
     ||
     hasPermission(
-      helpdeskPermissions
-        .requestOwnView,
+      helpdeskPermissions.requestOwnView,
     )
     ||
     hasPermission(
-      legacyHelpdeskPermissions
-        .ticketCreate,
+      legacyHelpdeskPermissions.ticketCreate,
     )
   )
 }
@@ -211,13 +156,11 @@ export function canCreateHelpdeskRequest(
 ): boolean {
   return (
     hasPermission(
-      helpdeskPermissions
-        .requestCreate,
+      helpdeskPermissions.requestCreate,
     )
     ||
     hasPermission(
-      legacyHelpdeskPermissions
-        .ticketCreate,
+      legacyHelpdeskPermissions.ticketCreate,
     )
   )
 }
@@ -228,21 +171,31 @@ export function canViewOwnHelpdeskRequests(
 ): boolean {
   return (
     hasPermission(
-      helpdeskPermissions
-        .requestOwnView,
+      helpdeskPermissions.requestOwnView,
     )
     ||
     hasPermission(
-      helpdeskPermissions
-        .portalAccess,
+      helpdeskPermissions.portalAccess,
     )
     ||
     hasPermission(
-      legacyHelpdeskPermissions
-        .ticketCreate,
+      legacyHelpdeskPermissions.ticketCreate,
     )
   )
 }
+
+/*
+ * ============================================================
+ * CONSOLA TIC
+ *
+ * IMPORTANTE:
+ * tener tickets.view o helpdesk.view NO convierte a alguien
+ * automáticamente en agente.
+ *
+ * La puerta principal es helpdesk.agent.access.
+ * Mantenemos helpdesk.manage como compatibilidad administrativa.
+ * ============================================================
+ */
 
 export function canUseHelpdeskConsole(
   hasPermission:
@@ -250,31 +203,57 @@ export function canUseHelpdeskConsole(
 ): boolean {
   return (
     hasPermission(
-      helpdeskPermissions
-        .agentAccess,
+      helpdeskPermissions.agentAccess,
     )
     ||
     hasPermission(
-      helpdeskPermissions
-        .adminAccess,
+      helpdeskPermissions.adminAccess,
     )
     ||
     hasPermission(
-      legacyHelpdeskPermissions
-        .view,
-    )
-    ||
-    hasPermission(
-      legacyHelpdeskPermissions
-        .ticketView,
-    )
-    ||
-    hasPermission(
-      legacyHelpdeskPermissions
-        .manage,
+      legacyHelpdeskPermissions.manage,
     )
   )
 }
+
+/*
+ * ============================================================
+ * ANALÍTICA
+ * ============================================================
+ */
+
+export function canUseHelpdeskAnalytics(
+  hasPermission:
+    PermissionEvaluator,
+): boolean {
+  return (
+    hasPermission(
+      helpdeskPermissions.kpiView,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions.analyticsView,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions.reportsView,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions.slaView,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions.adminAccess,
+    )
+  )
+}
+
+/*
+ * ============================================================
+ * ADMINISTRACIÓN
+ * ============================================================
+ */
 
 export function canManageHelpdesk(
   hasPermission:
@@ -282,13 +261,11 @@ export function canManageHelpdesk(
 ): boolean {
   return (
     hasPermission(
-      helpdeskPermissions
-        .adminAccess,
+      helpdeskPermissions.adminAccess,
     )
     ||
     hasPermission(
-      legacyHelpdeskPermissions
-        .manage,
+      legacyHelpdeskPermissions.manage,
     )
     ||
     hasPermission(
@@ -296,6 +273,12 @@ export function canManageHelpdesk(
     )
   )
 }
+
+/*
+ * ============================================================
+ * LANDING
+ * ============================================================
+ */
 
 export function resolveHelpdeskLandingPath(
   hasPermission:
