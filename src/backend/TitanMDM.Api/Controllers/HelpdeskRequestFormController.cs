@@ -1,151 +1,373 @@
 using System.Security.Claims;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Application.Helpdesk;
+
 using TitanMDM.Infrastructure.Helpdesk;
 using TitanMDM.Infrastructure.Persistence;
 
 namespace TitanMDM.Api.Controllers;
 
-[ApiController, Authorize]
+[ApiController]
+[Authorize]
 [Route("api/my/helpdesk/request-form")]
-public sealed class HelpdeskRequestFormController(
-    TitanMdmDbContext db,
-    IHelpdeskService helpdesk) : ControllerBase
+public sealed class HelpdeskRequestFormController
+    : ControllerBase
 {
-    [HttpGet("groups")]
-    public async Task<IActionResult> Groups(CancellationToken ct)
+    private readonly TitanMdmDbContext
+        _db;
+
+    private readonly IHelpdeskService
+        _helpdesk;
+
+    public HelpdeskRequestFormController(
+        TitanMdmDbContext db,
+        IHelpdeskService helpdesk)
     {
-        if (!Identity(out var org, out var actor))
-            return Unauthorized();
+        _db =
+            db;
 
-        if (!await db.Users.AnyAsync(x =>
-            x.Id == actor &&
-            x.OrganizationId == org &&
-            x.IsActive, ct))
-        {
-            return Forbid();
-        }
-
-        var groups = await db.HelpdeskTeams.AsNoTracking()
-            .Where(x => x.OrganizationId == org && x.IsActive)
-            .OrderBy(x => x.Name)
-            .ToListAsync(ct);
-
-        return Ok(groups.Select(x => new
-        {
-            x.Id,
-            x.Name,
-            categories = (x.Categories ?? "").Split(
-                '|',
-                StringSplitOptions.RemoveEmptyEntries |
-                StringSplitOptions.TrimEntries)
-        }));
+        _helpdesk =
+            helpdesk;
     }
 
-    [HttpPost("tickets")]
-    public async Task<IActionResult> Create(
-        CreateRequest request,
-        CancellationToken ct)
+    // ============================================================
+    // GROUPS AVAILABLE TO REQUESTER
+    // ============================================================
+
+    [HttpGet("groups")]
+    public async Task<IActionResult>
+        Groups(
+            CancellationToken cancellationToken)
     {
-        if (!Identity(out var org, out var actor))
+        if (
+            !Identity(
+                out var organizationId,
+                out var actorUserId))
+        {
             return Unauthorized();
+        }
 
-        if (!Has("tickets.create"))
+        if (
+            !CanUsePortal())
+        {
             return Forbid();
+        }
 
-        if (helpdesk is not HelpdeskService service)
+        var activeUser =
+            await _db.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.Id ==
+                            actorUserId
+                        &&
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
+
+        if (!activeUser)
+        {
+            return Forbid();
+        }
+
+        /*
+         * Solo devolvemos grupos activos
+         * con al menos una categoría.
+         *
+         * No queremos enseñar al colaborador
+         * grupos internos o incompletos.
+         */
+        var groups =
+            await _db.HelpdeskTeams
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.IsActive)
+                .OrderBy(
+                    x =>
+                        x.Name)
+                .ToListAsync(
+                    cancellationToken);
+
+        var result =
+            groups
+                .Select(
+                    group =>
+                        new
+                        {
+                            group.Id,
+                            group.Name,
+
+                            categories =
+                                (group.Categories ?? "")
+                                    .Split(
+                                        '|',
+                                        StringSplitOptions
+                                            .RemoveEmptyEntries
+                                        |
+                                        StringSplitOptions
+                                            .TrimEntries)
+                                    .Distinct(
+                                        StringComparer
+                                            .OrdinalIgnoreCase)
+                                    .OrderBy(
+                                        x => x)
+                                    .ToArray()
+                        })
+                .Where(
+                    x =>
+                        x.categories.Length >
+                        0)
+                .ToArray();
+
+        return Ok(
+            result);
+    }
+
+    // ============================================================
+    // CREATE
+    // ============================================================
+
+    [HttpPost("tickets")]
+    public async Task<IActionResult>
+        Create(
+            [FromBody]
+            CreateRequest request,
+            CancellationToken cancellationToken)
+    {
+        if (
+            !Identity(
+                out var organizationId,
+                out var actorUserId))
+        {
+            return Unauthorized();
+        }
+
+        if (
+            !HasAnyPermission(
+                "helpdesk.request.create",
+                "tickets.create"))
+        {
+            return Forbid();
+        }
+
+        if (
+            _helpdesk
+            is not HelpdeskService service)
         {
             return Problem(
-                "El servicio de Helpdesk no admite solicitudes por grupo.");
+                title:
+                    "Servicio de Helpdesk no disponible.",
+                detail:
+                    "La implementación actual no admite solicitudes agrupadas.");
         }
+
+        var canUseConsole =
+            request.Console
+            &&
+            HasAnyPermission(
+                "helpdesk.agent.access",
+                "helpdesk.admin.access",
+                "helpdesk.ticket.details.view",
+                "helpdesk.view",
+                "tickets.view",
+                "tickets.comment",
+                "helpdesk.manage");
 
         try
         {
-            var id = await service.CreateGroupedRequestAsync(
-                org,
-                actor,
-                request.GroupId,
-                request.Subject,
-                request.Description,
-                request.Type,
-                request.Category,
-                request.Console &&
-                    (Has("helpdesk.view") ||
-                     Has("tickets.comment") ||
-                     Has("helpdesk.manage")),
-                ct);
+            var id =
+                await service
+                    .CreateGroupedRequestAsync(
+                        organizationId,
+                        actorUserId,
+                        request.GroupId,
+                        request.Subject,
+                        request.Description,
+                        request.Type,
+                        request.Category,
+                        canUseConsole,
+                        cancellationToken);
 
-            return Ok(new { id });
+            return Ok(
+                new
+                {
+                    id
+                });
         }
-        catch (ArgumentException ex)
+        catch (
+            ArgumentException ex)
         {
-            return BadRequest(new { message = ex.Message });
+            return BadRequest(
+                new
+                {
+                    message =
+                        ex.Message
+                });
         }
     }
+
+    // ============================================================
+    // DELETE GROUP
+    // ============================================================
 
     [HttpDelete("groups/{groupId:guid}")]
-    public async Task<IActionResult> Delete(
-        Guid groupId,
-        CancellationToken ct)
+    public async Task<IActionResult>
+        Delete(
+            Guid groupId,
+            CancellationToken cancellationToken)
     {
-        if (!Identity(out var org, out var actor))
+        if (
+            !Identity(
+                out var organizationId,
+                out var actorUserId))
+        {
             return Unauthorized();
+        }
 
-        if (!Has("helpdesk.manage") && !Has("settings.manage"))
-            return Forbid();
-
-        if (!await db.Users.AnyAsync(x =>
-            x.Id == actor &&
-            x.OrganizationId == org &&
-            x.IsActive, ct))
+        if (
+            !HasAnyPermission(
+                "helpdesk.groups.manage",
+                "helpdesk.admin.access",
+                "helpdesk.manage",
+                "settings.manage"))
         {
             return Forbid();
         }
 
-        var group = await db.HelpdeskTeams.FirstOrDefaultAsync(x =>
-            x.Id == groupId &&
-            x.OrganizationId == org, ct);
+        var actorExists =
+            await _db.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.Id ==
+                            actorUserId
+                        &&
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
 
-        if (group is null)
-            return NotFound();
-
-        // Eliminación lógica: conserva tickets y grupo histórico.
-        group.SetActive(false);
-
-        await db.SaveChangesAsync(ct);
-
-        return Ok(new
+        if (!actorExists)
         {
-            message =
-                "Grupo eliminado de los disponibles. " +
-                "Se conserva el historial de tickets."
-        });
+            return Forbid();
+        }
+
+        var group =
+            await _db.HelpdeskTeams
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.Id ==
+                            groupId
+                        &&
+                        x.OrganizationId ==
+                            organizationId,
+                    cancellationToken);
+
+        if (
+            group is null)
+        {
+            return NotFound();
+        }
+
+        group.SetActive(
+            false);
+
+        await _db.SaveChangesAsync(
+            cancellationToken);
+
+        return Ok(
+            new
+            {
+                message =
+                    "Grupo desactivado. " +
+                    "Los tickets históricos conservan su referencia."
+            });
     }
 
-    private bool Has(string code) => User.Claims.Any(x =>
-        x.Type == "permission" &&
-        string.Equals(
-            x.Value,
-            code,
-            StringComparison.OrdinalIgnoreCase));
+    // ============================================================
+    // PERMISSIONS
+    // ============================================================
 
-    private bool Identity(out Guid org, out Guid actor)
+    private bool CanUsePortal()
     {
-        var organization = Guid.TryParse(
-            User.FindFirstValue("organization_id") ??
-            User.FindFirstValue("organizationId"),
-            out org);
+        return HasAnyPermission(
+            "helpdesk.portal.access",
+            "helpdesk.request.create",
+            "helpdesk.request.own.view",
+            "helpdesk.agent.access",
+            "helpdesk.admin.access",
+            "tickets.create",
+            "helpdesk.view",
+            "tickets.view");
+    }
 
-        var person = Guid.TryParse(
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            User.FindFirstValue("sub") ??
-            User.FindFirstValue("user_id") ??
-            User.FindFirstValue("userId"),
-            out actor);
+    private bool HasAnyPermission(
+        params string[] permissions)
+    {
+        return permissions.Any(
+            Has);
+    }
 
-        return organization && person;
+    private bool Has(
+        string code)
+    {
+        return User.Claims.Any(
+            claim =>
+                claim.Type ==
+                    "permission"
+                &&
+                string.Equals(
+                    claim.Value,
+                    code,
+                    StringComparison.OrdinalIgnoreCase));
+    }
+
+    // ============================================================
+    // IDENTITY
+    // ============================================================
+
+    private bool Identity(
+        out Guid organizationId,
+        out Guid actorUserId)
+    {
+        var organization =
+            Guid.TryParse(
+                User.FindFirstValue(
+                    "organization_id")
+                ??
+                User.FindFirstValue(
+                    "organizationId"),
+                out organizationId);
+
+        var actor =
+            Guid.TryParse(
+                User.FindFirstValue(
+                    ClaimTypes.NameIdentifier)
+                ??
+                User.FindFirstValue(
+                    "sub")
+                ??
+                User.FindFirstValue(
+                    "user_id")
+                ??
+                User.FindFirstValue(
+                    "userId"),
+                out actorUserId);
+
+        return
+            organization &&
+            actor;
     }
 
     public sealed record CreateRequest(

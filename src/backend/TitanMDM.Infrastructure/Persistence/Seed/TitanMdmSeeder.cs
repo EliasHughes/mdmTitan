@@ -332,51 +332,391 @@ public sealed class TitanMdmSeeder
                 "Settings",
                 "Permite modificar la configuración global de TitanMDM."),
 
+              // =====================================================
+            // HELPDESK - WORKSPACE / ACCESS
             // =====================================================
-            // HELPDESK
+
+            new(
+                "helpdesk.portal.access",
+                "Acceder al portal de Mesa de Ayuda",
+                "Helpdesk",
+                "Permite acceder al portal de autoservicio para colaboradores."),
+
+            new(
+                "helpdesk.agent.access",
+                "Acceder a consola TIC",
+                "Helpdesk",
+                "Permite acceder a la consola operativa de técnicos de Mesa de Ayuda."),
+
+            new(
+                "helpdesk.admin.access",
+                "Acceder a administración Helpdesk",
+                "Helpdesk",
+                "Permite acceder a configuración avanzada de Mesa de Ayuda."),
+
+            // =====================================================
+            // HELPDESK - REQUESTER / COLLABORATOR
+            // =====================================================
+
+            new(
+                "helpdesk.request.create",
+                "Crear solicitudes propias",
+                "Helpdesk",
+                "Permite crear tickets desde el portal de autoservicio."),
+
+            new(
+                "helpdesk.request.own.view",
+                "Ver solicitudes propias",
+                "Helpdesk",
+                "Permite consultar únicamente los tickets creados por el usuario."),
+
+            new(
+                "helpdesk.request.own.comment",
+                "Responder solicitudes propias",
+                "Helpdesk",
+                "Permite responder tickets propios mientras permanezcan activos."),
+
+            new(
+                "helpdesk.request.own.reopen",
+                "Reabrir solicitudes propias",
+                "Helpdesk",
+                "Permite reabrir tickets propios dentro del período autorizado."),
+
+            new(
+                "helpdesk.request.own.confirm",
+                "Confirmar resolución propia",
+                "Helpdesk",
+                "Permite confirmar una resolución y cerrar un ticket propio."),
+
+            // =====================================================
+            // HELPDESK - AGENT CONSOLE
+            // =====================================================
+
+            new(
+                "helpdesk.inbox.my-work",
+                "Ver Mi trabajo",
+                "Helpdesk",
+                "Permite visualizar los tickets asignados al técnico actual."),
+
+            new(
+                "helpdesk.inbox.unassigned",
+                "Ver tickets sin asignar",
+                "Helpdesk",
+                "Permite visualizar tickets pendientes de asignación."),
+
+            new(
+                "helpdesk.inbox.all",
+                "Ver todos los tickets",
+                "Helpdesk",
+                "Permite consultar los tickets dentro del alcance autorizado."),
+
+            new(
+                "helpdesk.inbox.escalated",
+                "Ver tickets escalados",
+                "Helpdesk",
+                "Permite consultar tickets escalados por SLA o reglas operativas."),
+
+            new(
+                "helpdesk.kanban.view",
+                "Ver Kanban de Helpdesk",
+                "Helpdesk",
+                "Permite utilizar la vista Kanban de operación."),
+
+            new(
+                "helpdesk.ticket.details.view",
+                "Ver detalle de tickets",
+                "Helpdesk",
+                "Permite abrir el detalle operativo de un ticket."),
+
+            new(
+                "helpdesk.ticket.comment",
+                "Responder tickets",
+                "Helpdesk",
+                "Permite publicar respuestas visibles para el solicitante."),
+
+            new(
+                "helpdesk.ticket.internal-note",
+                "Crear notas internas",
+                "Helpdesk",
+                "Permite registrar notas visibles únicamente para personal TIC."),
+
+            new(
+                "helpdesk.ticket.take",
+                "Tomar tickets",
+                "Helpdesk",
+                "Permite asignarse personalmente un ticket."),
+
+            new(
+                "helpdesk.ticket.assign",
+                "Asignar tickets",
+                "Helpdesk",
+                "Permite asignar tickets a otros técnicos autorizados."),
+
+            new(
+                "helpdesk.ticket.transfer",
+                "Transferir tickets",
+                "Helpdesk",
+                "Permite transferir un ticket entre grupos o técnicos."),
+
+            new(
+                "helpdesk.ticket.transition",
+                "Cambiar estado del ticket",
+                "Helpdesk",
+                "Permite ejecutar transiciones permitidas en el ciclo de vida."),
+
+            new(
+                "helpdesk.ticket.resolve",
+                "Resolver tickets",
+                "Helpdesk",
+                "Permite marcar un ticket como resuelto."),
+
+            new(
+                "helpdesk.ticket.close",
+                "Cerrar tickets",
+                "Helpdesk",
+                "Permite cerrar definitivamente tickets."),
+
+            new(
+                "helpdesk.ticket.reopen",
+                "Reabrir tickets",
+                "Helpdesk",
+                "Permite reabrir tickets resueltos o cerrados."),
+
+            // =====================================================
+            // HELPDESK - SLA
+            // =====================================================
+
+            new(
+                "helpdesk.sla.view",
+                "Ver seguimiento SLA",
+                "Helpdesk",
+                "Permite consultar vencimientos, riesgos y seguimiento SLA."),
+
+            new(
+                "helpdesk.sla.manage",
+                "Administrar SLA",
+                "Helpdesk",
+                "Permite crear y modificar reglas y acuerdos de servicio."),
+
+            // =====================================================
+            // HELPDESK - KPI / ANALYTICS
+            // =====================================================
+
+            new(
+                "helpdesk.kpi.view",
+                "Ver KPI Helpdesk",
+                "Helpdesk",
+                "Permite visualizar indicadores operativos de Mesa de Ayuda."),
+
+            new(
+                "helpdesk.analytics.view",
+                "Ver gráficos Helpdesk",
+                "Helpdesk",
+                "Permite visualizar gráficos y tendencias operativas."),
+
+            new(
+                "helpdesk.reports.view",
+                "Ver reportes Helpdesk",
+                "Helpdesk",
+                "Permite consultar reportes de Mesa de Ayuda."),
+
+            new(
+                "helpdesk.reports.export",
+                "Exportar reportes Helpdesk",
+                "Helpdesk",
+                "Permite exportar datos y reportes de Mesa de Ayuda."),
+
+            // =====================================================
+            // HELPDESK - SITES / COVERAGE
+            // =====================================================
+
+            new(
+                "helpdesk.sites.view",
+                "Ver localidades en Helpdesk",
+                "Helpdesk",
+                "Permite utilizar Sites y localidades dentro de Mesa de Ayuda."),
+
+            new(
+                "helpdesk.sites.manage",
+                "Administrar localidades en Helpdesk",
+                "Helpdesk",
+                "Permite administrar la integración de Sites con Mesa de Ayuda."),
+
+            new(
+                "helpdesk.groups.view",
+                "Ver grupos de trabajo",
+                "Helpdesk",
+                "Permite consultar grupos y cobertura operativa."),
+
+            new(
+                "helpdesk.groups.manage",
+                "Administrar grupos de trabajo",
+                "Helpdesk",
+                "Permite crear y modificar grupos de trabajo."),
+
+            new(
+                "helpdesk.technicians.view",
+                "Ver técnicos",
+                "Helpdesk",
+                "Permite consultar técnicos, disponibilidad y capacidad."),
+
+            new(
+                "helpdesk.technicians.manage",
+                "Administrar técnicos",
+                "Helpdesk",
+                "Permite configurar técnicos, cobertura y disponibilidad."),
+
+            new(
+                "helpdesk.schedules.view",
+                "Ver turnos Helpdesk",
+                "Helpdesk",
+                "Permite consultar turnos y horarios operativos."),
+
+            new(
+                "helpdesk.schedules.manage",
+                "Administrar turnos Helpdesk",
+                "Helpdesk",
+                "Permite configurar turnos y horarios de técnicos."),
+
+            // =====================================================
+            // HELPDESK - SERVICE CATALOG
+            // =====================================================
+
+            new(
+                "helpdesk.categories.view",
+                "Ver categorías",
+                "Helpdesk",
+                "Permite consultar categorías y especialidades."),
+
+            new(
+                "helpdesk.categories.manage",
+                "Administrar categorías",
+                "Helpdesk",
+                "Permite crear y modificar categorías y especialidades."),
+
+            new(
+                "helpdesk.templates.view",
+                "Ver plantillas",
+                "Helpdesk",
+                "Permite utilizar plantillas disponibles."),
+
+            new(
+                "helpdesk.templates.manage",
+                "Administrar plantillas",
+                "Helpdesk",
+                "Permite crear, editar y desactivar plantillas."),
+
+            // =====================================================
+            // HELPDESK - WORKFLOW / AUTOMATION
+            // =====================================================
+
+            new(
+                "helpdesk.workflows.view",
+                "Ver workflows",
+                "Helpdesk",
+                "Permite consultar ciclos de vida y transiciones."),
+
+            new(
+                "helpdesk.workflows.manage",
+                "Administrar workflows",
+                "Helpdesk",
+                "Permite crear y modificar ciclos de vida."),
+
+            new(
+                "helpdesk.automation.view",
+                "Ver automatizaciones",
+                "Helpdesk",
+                "Permite consultar reglas y eventos de automatización."),
+
+            new(
+                "helpdesk.automation.manage",
+                "Administrar automatizaciones",
+                "Helpdesk",
+                "Permite crear y modificar reglas automáticas."),
+
+            // =====================================================
+            // HELPDESK - MAIL
+            // =====================================================
+
+            new(
+                "helpdesk.mail.view",
+                "Ver configuración de correo",
+                "Helpdesk",
+                "Permite consultar el estado de integración de correo."),
+
+            new(
+                "helpdesk.mail.manage",
+                "Administrar correo Helpdesk",
+                "Helpdesk",
+                "Permite configurar entrada y salida de correo."),
+
+            // =====================================================
+            // HELPDESK - AI / TITAN
+            // =====================================================
+
+            new(
+                "helpdesk.ai.use",
+                "Usar Titan en Helpdesk",
+                "Helpdesk",
+                "Permite utilizar funciones asistidas por IA."),
+
+            new(
+                "helpdesk.ai.view",
+                "Ver configuración de IA",
+                "Helpdesk",
+                "Permite consultar modelos y estado del proveedor de IA."),
+
+            new(
+                "helpdesk.ai.manage",
+                "Administrar IA Helpdesk",
+                "Helpdesk",
+                "Permite modificar configuración y automatizaciones asistidas por IA."),
+
+            // =====================================================
+            // HELPDESK - LEGACY COMPATIBILITY
             // =====================================================
 
             new(
                 "helpdesk.view",
                 "Ver mesa de ayuda",
                 "Helpdesk",
-                "Permite visualizar el workspace de Mesa de Ayuda."),
+                "Permiso heredado de compatibilidad temporal."),
 
             new(
                 "helpdesk.manage",
                 "Administrar mesa de ayuda",
                 "Helpdesk",
-                "Permite configurar Entra ID y la mesa de ayuda."),
+                "Permiso heredado de compatibilidad temporal."),
 
             new(
                 "tickets.view",
                 "Ver tickets",
                 "Helpdesk",
-                "Permite consultar tickets de la mesa de ayuda."),
+                "Permiso heredado de compatibilidad temporal."),
 
             new(
                 "tickets.create",
                 "Crear tickets",
                 "Helpdesk",
-                "Permite crear tickets."),
+                "Permiso heredado de compatibilidad temporal."),
 
             new(
                 "tickets.assign",
                 "Asignar tickets",
                 "Helpdesk",
-                "Permite asignar tickets a administradores Titan existentes."),
+                "Permiso heredado de compatibilidad temporal."),
 
             new(
                 "tickets.comment",
                 "Comentar tickets",
                 "Helpdesk",
-                "Permite agregar comentarios y notas internas."),
+                "Permiso heredado de compatibilidad temporal."),
 
             new(
                 "tickets.close",
                 "Cerrar tickets",
                 "Helpdesk",
-                "Permite resolver y cerrar tickets."),
+                "Permiso heredado de compatibilidad temporal."),
 
             // =====================================================
             // PONCHES

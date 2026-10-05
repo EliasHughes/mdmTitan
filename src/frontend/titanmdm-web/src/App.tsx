@@ -1,4 +1,6 @@
-import type { ReactNode } from 'react'
+import type {
+  ReactNode,
+} from 'react'
 
 import {
   Navigate,
@@ -6,466 +8,750 @@ import {
   Routes,
 } from 'react-router-dom'
 
-import { ProtectedRoute } from './auth/ProtectedRoute'
-import { PermissionRoute } from './auth/PermissionRoute'
+import {
+  ProtectedRoute,
+} from './auth/ProtectedRoute'
 
-import { AppLayout } from './components/layout/AppLayout'
+import {
+  PermissionRoute,
+} from './auth/PermissionRoute'
 
-import { AccessDeniedPage } from './pages/AccessDeniedPage'
-import { DashboardPage } from './pages/DashboardPage'
-import { EntraLoginCallbackPage } from './pages/EntraLoginCallbackPage'
-import { LoginPage } from './pages/LoginPage'
+import {
+  helpdeskPermissions,
+} from './auth/helpdeskAccess'
 
-import { LaunchpadPage } from './pages/launchpad/LaunchpadPage'
+import {
+  AppLayout,
+} from './components/layout/AppLayout'
 
-import { DevicesPage } from './pages/devices/DevicesPage'
-import { DeviceEntryPage } from './pages/devices/DeviceEntryPage'
-import { DeviceDetailPage } from './pages/devices/DeviceDetailPage'
-import { WindowsControlCenterPage } from './pages/devices/WindowsControlCenterPage'
+import {
+  AccessDeniedPage,
+} from './pages/AccessDeniedPage'
 
-import EnrollmentPage from './pages/enrollment/EnrollmentPage'
+import {
+  DashboardPage,
+} from './pages/DashboardPage'
 
-import { PoliciesPage } from './pages/policies/PoliciesPage'
-import { PolicyEditorPage } from './pages/policies/PolicyEditorPage'
+import {
+  EntraLoginCallbackPage,
+} from './pages/EntraLoginCallbackPage'
 
-import { DeviceGroupsPage } from './pages/groups/DeviceGroupsPage'
-import { AppsPage } from './pages/apps/AppsPage'
-import { SecurityPage } from './pages/security/SecurityPage'
-import { CompliancePage } from './pages/compliance/CompliancePage'
-import { KioskPage } from './pages/kiosk/KioskPage'
-import { GeofencingPage } from './pages/geofencing/GeofencingPage'
-import { AutomationPage } from './pages/automation/AutomationPage'
-import { RemotePage } from './pages/remote/RemotePage'
-import { ReportsPage } from './pages/reports/ReportsPage'
-import { AuditPage } from './pages/audit/AuditPage'
+import {
+  LoginPage,
+} from './pages/LoginPage'
 
-import { UsersPage } from './pages/users/UsersPage'
-import { RolesPage } from './pages/roles/RolesPage'
+import {
+  LaunchpadPage,
+} from './pages/launchpad/LaunchpadPage'
 
-import { SitesPage } from './pages/sites/SitesPage'
+import {
+  DevicesPage,
+} from './pages/devices/DevicesPage'
 
-import { SettingsPage } from './pages/settings/SettingsPage'
+import {
+  DeviceEntryPage,
+} from './pages/devices/DeviceEntryPage'
 
-import { MyHelpdeskPage } from './pages/helpdesk/MyHelpdeskPage'
-import { HelpdeskInboxPage } from './pages/helpdesk/HelpdeskInboxPage'
-import { HelpdeskTicketPage } from './pages/helpdesk/HelpdeskTicketPage'
-import { HelpdeskEntraSettingsPage } from './pages/helpdesk/HelpdeskEntraSettingsPage'
-import { HelpdeskOperationsPage } from './pages/helpdesk/HelpdeskOperationsPage'
-import { HelpdeskSpecialtiesPage } from './pages/helpdesk/HelpdeskSpecialtiesPage'
-import { HelpdeskReportsPage } from './pages/helpdesk/HelpdeskReportsPage'
-import { HelpdeskCoveragePage } from './pages/helpdesk/HelpdeskCoveragePage'
-import { HelpdeskFollowupPage } from './pages/helpdesk/HelpdeskFollowupPage'
-import { HelpdeskCenterPage } from './pages/helpdesk/HelpdeskCenterPage'
-import { MyHelpdeskActionsPanel } from './pages/helpdesk/MyHelpdeskActionsPanel'
+import {
+  DeviceDetailPage,
+} from './pages/devices/DeviceDetailPage'
 
-import { PonchesPage } from './pages/ponches/PonchesPage'
+import {
+  WindowsControlCenterPage,
+} from './pages/devices/WindowsControlCenterPage'
+
+import EnrollmentPage
+  from './pages/enrollment/EnrollmentPage'
+
+import {
+  PoliciesPage,
+} from './pages/policies/PoliciesPage'
+
+import {
+  PolicyEditorPage,
+} from './pages/policies/PolicyEditorPage'
+
+import {
+  DeviceGroupsPage,
+} from './pages/groups/DeviceGroupsPage'
+
+import {
+  AppsPage,
+} from './pages/apps/AppsPage'
+
+import {
+  SecurityPage,
+} from './pages/security/SecurityPage'
+
+import {
+  CompliancePage,
+} from './pages/compliance/CompliancePage'
+
+import {
+  KioskPage,
+} from './pages/kiosk/KioskPage'
+
+import {
+  GeofencingPage,
+} from './pages/geofencing/GeofencingPage'
+
+import {
+  AutomationPage,
+} from './pages/automation/AutomationPage'
+
+import {
+  RemotePage,
+} from './pages/remote/RemotePage'
+
+import {
+  ReportsPage,
+} from './pages/reports/ReportsPage'
+
+import {
+  AuditPage,
+} from './pages/audit/AuditPage'
+
+import {
+  UsersPage,
+} from './pages/users/UsersPage'
+
+import {
+  RolesPage,
+} from './pages/roles/RolesPage'
+
+import {
+  SitesPage,
+} from './pages/sites/SitesPage'
+
+import {
+  SettingsPage,
+} from './pages/settings/SettingsPage'
+
+import {
+  MyHelpdeskPage,
+} from './pages/helpdesk/MyHelpdeskPage'
+
+import {
+  HelpdeskRequesterCreatePage,
+} from './pages/helpdesk/HelpdeskRequesterCreatePage'
+
+import {
+  HelpdeskInboxPage,
+} from './pages/helpdesk/HelpdeskInboxPage'
+
+import {
+  HelpdeskTicketPage,
+} from './pages/helpdesk/HelpdeskTicketPage'
+
+import {
+  HelpdeskEntraSettingsPage,
+} from './pages/helpdesk/HelpdeskEntraSettingsPage'
+
+import {
+  HelpdeskOperationsPage,
+} from './pages/helpdesk/HelpdeskOperationsPage'
+
+import {
+  HelpdeskSpecialtiesPage,
+} from './pages/helpdesk/HelpdeskSpecialtiesPage'
+
+import {
+  HelpdeskReportsPage,
+} from './pages/helpdesk/HelpdeskReportsPage'
+
+import {
+  HelpdeskCoveragePage,
+} from './pages/helpdesk/HelpdeskCoveragePage'
+
+import {
+  HelpdeskFollowupPage,
+} from './pages/helpdesk/HelpdeskFollowupPage'
+
+import {
+  HelpdeskCenterPage,
+} from './pages/helpdesk/HelpdeskCenterPage'
+
+import {
+  MyHelpdeskActionsPanel,
+} from './pages/helpdesk/MyHelpdeskActionsPanel'
+
+import {
+  PonchesPage,
+} from './pages/ponches/PonchesPage'
 
 interface ApplicationRoute {
   path: string
   page: ReactNode
   permissions: string[]
+  helpdeskConsole?: boolean
 }
 
 const applicationRoutes:
   ApplicationRoute[] = [
     {
       path:
-        'helpdesk/centro/configuracion',
-      page:
-        <HelpdeskCenterPage />,
-      permissions:
-        [
-          'helpdesk.manage',
-          'settings.manage',
-        ],
-    },
-
-    {
-      path:
-        'helpdesk/centro/preparacion',
-      page:
-        <HelpdeskCenterPage />,
-      permissions:
-        [
-          'helpdesk.manage',
-          'settings.manage',
-        ],
-    },
-
-    {
-      path:
-        'helpdesk/centro/:section',
-      page:
-        <HelpdeskCenterPage />,
-      permissions:
-        [
-          'helpdesk.view',
-          'helpdesk.manage',
-          'settings.manage',
-        ],
-    },
-
-    {
-      path:
-        'dashboard',
-      page:
-        <DashboardPage />,
-      permissions:
-        [
-          'dashboard.view',
-        ],
-    },
-
-    {
-      path:
-        'helpdesk/operations',
-      page:
-        <HelpdeskOperationsPage />,
-      permissions:
-        [
-          'helpdesk.manage',
-          'settings.manage',
-        ],
-    },
-
-    {
-      path:
         'helpdesk',
+
       page:
         <HelpdeskInboxPage />,
-      permissions:
-        [
-          'helpdesk.view',
-          'tickets.view',
-        ],
-    },
 
-    {
-      path:
-        'helpdesk/especialidades',
-      page:
-        <HelpdeskSpecialtiesPage />,
-      permissions:
-        [
-          'helpdesk.manage',
-          'settings.manage',
-        ],
-    },
+      permissions: [
+        helpdeskPermissions
+          .agentAccess,
 
-    {
-      path:
-        'helpdesk/cobertura',
-      page:
-        <HelpdeskCoveragePage />,
-      permissions:
-        [
-          'helpdesk.manage',
-          'settings.manage',
-        ],
-    },
+        helpdeskPermissions
+          .inboxMyWork,
 
-    {
-      path:
-        'helpdesk/entra',
-      page:
-        <HelpdeskEntraSettingsPage />,
-      permissions:
-        [
-          'helpdesk.manage',
-          'settings.manage',
-        ],
+        helpdeskPermissions
+          .inboxUnassigned,
+
+        helpdeskPermissions
+          .inboxAll,
+
+        'helpdesk.view',
+
+        'tickets.view',
+      ],
+
+      helpdeskConsole:
+        true,
     },
 
     {
       path:
         'helpdesk/tickets/:ticketId',
+
       page:
         <HelpdeskTicketPage />,
-      permissions:
-        [
-          'helpdesk.view',
-          'tickets.view',
-        ],
+
+      permissions: [
+        helpdeskPermissions
+          .ticketDetails,
+
+        helpdeskPermissions
+          .agentAccess,
+
+        'tickets.view',
+      ],
+
+      helpdeskConsole:
+        true,
     },
 
     {
       path:
         'helpdesk/seguimiento',
+
       page:
         <HelpdeskFollowupPage />,
-      permissions:
-        [
-          'tickets.comment',
-          'tickets.assign',
-          'helpdesk.manage',
-          'settings.manage',
-        ],
+
+      permissions: [
+        helpdeskPermissions
+          .slaView,
+
+        'tickets.comment',
+
+        'tickets.assign',
+
+        'helpdesk.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/centro/kpis',
+
+      page:
+        <HelpdeskCenterPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .kpiView,
+
+        'helpdesk.view',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/centro/graficos',
+
+      page:
+        <HelpdeskCenterPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .analyticsView,
+
+        'helpdesk.view',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/centro/alertas',
+
+      page:
+        <HelpdeskCenterPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .automationView,
+
+        'helpdesk.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/centro/configuracion',
+
+      page:
+        <HelpdeskCenterPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .adminAccess,
+
+        'helpdesk.manage',
+
+        'settings.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/centro/preparacion',
+
+      page:
+        <HelpdeskCenterPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .adminAccess,
+
+        'helpdesk.manage',
+
+        'settings.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/operations',
+
+      page:
+        <HelpdeskOperationsPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .sitesView,
+
+        helpdeskPermissions
+          .techniciansView,
+
+        helpdeskPermissions
+          .adminAccess,
+
+        'helpdesk.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/especialidades',
+
+      page:
+        <HelpdeskSpecialtiesPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .groupsView,
+
+        helpdeskPermissions
+          .categoriesView,
+
+        helpdeskPermissions
+          .schedulesView,
+
+        helpdeskPermissions
+          .adminAccess,
+
+        'helpdesk.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/cobertura',
+
+      page:
+        <HelpdeskCoveragePage />,
+
+      permissions: [
+        helpdeskPermissions
+          .sitesView,
+
+        helpdeskPermissions
+          .groupsView,
+
+        'helpdesk.manage',
+      ],
+
+      helpdeskConsole:
+        true,
     },
 
     {
       path:
         'helpdesk/reportes',
+
       page:
         <HelpdeskReportsPage />,
-      permissions:
-        [
-          'helpdesk.view',
-          'tickets.view',
-        ],
+
+      permissions: [
+        helpdeskPermissions
+          .reportsView,
+
+        'tickets.view',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'helpdesk/entra',
+
+      page:
+        <HelpdeskEntraSettingsPage />,
+
+      permissions: [
+        helpdeskPermissions
+          .adminAccess,
+
+        'helpdesk.manage',
+
+        'settings.manage',
+      ],
+
+      helpdeskConsole:
+        true,
+    },
+
+    {
+      path:
+        'dashboard',
+
+      page:
+        <DashboardPage />,
+
+      permissions: [
+        'dashboard.view',
+      ],
     },
 
     {
       path:
         'ponches',
+
       page:
         <PonchesPage />,
-      permissions:
-        [
-          'settings.view',
-        ],
+
+      permissions: [
+        'workspace.ponches.view',
+        'ponches.manage',
+      ],
     },
 
     {
       path:
         'devices',
+
       page:
         <DevicesPage />,
-      permissions:
-        [
-          'devices.view',
-        ],
+
+      permissions: [
+        'devices.view',
+      ],
     },
 
     {
       path:
         'devices/:deviceId',
+
       page:
         <DeviceEntryPage />,
-      permissions:
-        [
-          'devices.view',
-        ],
+
+      permissions: [
+        'devices.view',
+      ],
     },
 
     {
       path:
         'devices/:deviceId/android',
+
       page:
         <DeviceDetailPage />,
-      permissions:
-        [
-          'devices.view',
-        ],
+
+      permissions: [
+        'devices.view',
+      ],
     },
 
     {
       path:
         'devices/:deviceId/control-center',
+
       page:
         <WindowsControlCenterPage />,
-      permissions:
-        [
-          'devices.commands',
-        ],
+
+      permissions: [
+        'devices.commands',
+      ],
     },
 
     {
       path:
         'enrollment',
+
       page:
         <EnrollmentPage />,
-      permissions:
-        [
-          'enrollment.view',
-        ],
+
+      permissions: [
+        'enrollment.view',
+      ],
     },
 
     {
       path:
         'policies',
+
       page:
         <PoliciesPage />,
-      permissions:
-        [
-          'policies.view',
-        ],
+
+      permissions: [
+        'policies.view',
+      ],
     },
 
     {
       path:
         'policies/new',
+
       page:
         <PolicyEditorPage />,
-      permissions:
-        [
-          'policies.manage',
-        ],
+
+      permissions: [
+        'policies.manage',
+      ],
     },
 
     {
       path:
         'policies/:policyId',
+
       page:
         <PolicyEditorPage />,
-      permissions:
-        [
-          'policies.view',
-          'policies.manage',
-        ],
+
+      permissions: [
+        'policies.view',
+        'policies.manage',
+      ],
     },
 
     {
       path:
         'groups',
+
       page:
         <DeviceGroupsPage />,
-      permissions:
-        [
-          'devices.view',
-        ],
+
+      permissions: [
+        'devices.view',
+      ],
     },
 
     {
       path:
         'apps',
+
       page:
         <AppsPage />,
-      permissions:
-        [
-          'apps.view',
-        ],
+
+      permissions: [
+        'apps.view',
+      ],
     },
 
     {
       path:
         'security',
+
       page:
         <SecurityPage />,
-      permissions:
-        [
-          'security.view',
-        ],
+
+      permissions: [
+        'security.view',
+      ],
     },
 
     {
       path:
         'compliance',
+
       page:
         <CompliancePage />,
-      permissions:
-        [
-          'compliance.view',
-        ],
+
+      permissions: [
+        'compliance.view',
+      ],
     },
 
     {
       path:
         'kiosk',
+
       page:
         <KioskPage />,
-      permissions:
-        [
-          'kiosk.view',
-        ],
+
+      permissions: [
+        'kiosk.view',
+      ],
     },
 
     {
       path:
         'geofencing',
+
       page:
         <GeofencingPage />,
-      permissions:
-        [
-          'geofencing.view',
-        ],
+
+      permissions: [
+        'geofencing.view',
+      ],
     },
 
     {
       path:
         'automation',
+
       page:
         <AutomationPage />,
-      permissions:
-        [
-          'devices.commands',
-        ],
+
+      permissions: [
+        'devices.commands',
+      ],
     },
 
     {
       path:
         'remote',
+
       page:
         <RemotePage />,
-      permissions:
-        [
-          'remote.view',
-        ],
+
+      permissions: [
+        'remote.view',
+      ],
     },
 
     {
       path:
         'reports',
+
       page:
         <ReportsPage />,
-      permissions:
-        [
-          'reports.view',
-        ],
+
+      permissions: [
+        'reports.view',
+      ],
     },
 
     {
       path:
         'audit',
+
       page:
         <AuditPage />,
-      permissions:
-        [
-          'audit.view',
-        ],
+
+      permissions: [
+        'audit.view',
+      ],
     },
 
     {
       path:
         'users',
+
       page:
         <UsersPage />,
-      permissions:
-        [
-          'users.view',
-        ],
+
+      permissions: [
+        'users.view',
+      ],
     },
 
     {
       path:
         'roles',
+
       page:
         <RolesPage />,
-      permissions:
-        [
-          'roles.view',
-        ],
+
+      permissions: [
+        'roles.view',
+      ],
     },
 
     {
       path:
         'sites',
+
       page:
         <SitesPage />,
-      permissions:
-        [
-          'sites.view',
-        ],
+
+      permissions: [
+        'sites.view',
+      ],
     },
 
     {
       path:
         'settings',
+
       page:
         <SettingsPage />,
-      permissions:
-        [
-          'settings.view',
-        ],
+
+      permissions: [
+        'settings.view',
+      ],
     },
   ]
 
@@ -510,17 +796,55 @@ function App() {
         <Route
           path="my-support"
           element={
-            <MyHelpdeskPage />
+            <PermissionRoute
+              anyOf={[
+                helpdeskPermissions
+                  .portalAccess,
+
+                helpdeskPermissions
+                  .requestOwnView,
+
+                'tickets.create',
+              ]}
+            >
+              <MyHelpdeskPage />
+            </PermissionRoute>
+          }
+        />
+
+        <Route
+          path="my-support/new"
+          element={
+            <PermissionRoute
+              anyOf={[
+                helpdeskPermissions
+                  .requestCreate,
+
+                'tickets.create',
+              ]}
+            >
+              <HelpdeskRequesterCreatePage />
+            </PermissionRoute>
           }
         />
 
         <Route
           path="my-support/:ticketId"
           element={
-            <>
-              <MyHelpdeskPage />
-              <MyHelpdeskActionsPanel />
-            </>
+            <PermissionRoute
+              anyOf={[
+                helpdeskPermissions
+                  .requestOwnView,
+
+                'tickets.create',
+              ]}
+            >
+              <>
+                <MyHelpdeskPage />
+
+                <MyHelpdeskActionsPanel />
+              </>
+            </PermissionRoute>
           }
         />
 
@@ -537,6 +861,9 @@ function App() {
                 <PermissionRoute
                   anyOf={
                     route.permissions
+                  }
+                  helpdeskConsole={
+                    route.helpdeskConsole
                   }
                 >
                   {route.page}

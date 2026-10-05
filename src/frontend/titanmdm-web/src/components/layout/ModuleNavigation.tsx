@@ -5,9 +5,11 @@ import {
   Cog,
   FileBarChart,
   Headphones,
+  Inbox,
   MapPin,
   Monitor,
   Package,
+  Plus,
   ScrollText,
   Settings,
   Shield,
@@ -15,6 +17,7 @@ import {
   Sparkles,
   UserRound,
   Users,
+  Workflow,
   type LucideIcon,
 } from 'lucide-react'
 
@@ -28,7 +31,10 @@ import {
 } from '../../auth/AuthContext'
 
 import {
+  canCreateHelpdeskRequest,
+  canManageHelpdesk,
   canUseHelpdeskConsole,
+  helpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
 import {
@@ -183,101 +189,182 @@ const androidLinks:
   ]
 
 // ============================================================
-// HELPDESK
+// COLLABORATOR PORTAL
+//
+// SOLO DOS OPCIONES.
+// ============================================================
+
+const requesterLinks:
+  ModuleLink[] = [
+    link(
+      'Crear ticket',
+      '/my-support/new?workspace=helpdesk',
+      Plus,
+      helpdeskPermissions
+        .requestCreate,
+    ),
+
+    link(
+      'Mis tickets',
+      '/my-support?workspace=helpdesk',
+      Inbox,
+      helpdeskPermissions
+        .requestOwnView,
+    ),
+  ]
+
+// ============================================================
+// HELP DESK TIC
 // ============================================================
 
 const helpdeskLinks:
   ModuleLink[] = [
     link(
-      'Bandeja TIC',
+      'Mi trabajo',
       '/helpdesk?workspace=helpdesk',
       ClipboardList,
-      'helpdesk.view',
-      'tickets.view',
+      helpdeskPermissions
+        .inboxMyWork,
+    ),
+
+    link(
+      'Sin asignar',
+      '/helpdesk?view=unassigned&workspace=helpdesk',
+      Inbox,
+      helpdeskPermissions
+        .inboxUnassigned,
+    ),
+
+    link(
+      'Todos',
+      '/helpdesk?view=all&workspace=helpdesk',
+      ClipboardList,
+      helpdeskPermissions
+        .inboxAll,
+    ),
+
+    link(
+      'Kanban',
+      '/helpdesk?view=kanban&workspace=helpdesk',
+      Workflow,
+      helpdeskPermissions
+        .kanbanView,
     ),
 
     link(
       'Mis solicitudes',
       '/my-support?workspace=helpdesk',
       UserRound,
+      helpdeskPermissions
+        .requestOwnView,
     ),
 
     link(
-      'Seguimiento SLA',
+      'SLA',
       '/helpdesk/seguimiento?workspace=helpdesk',
       Headphones,
-      'tickets.comment',
-      'tickets.assign',
-      'helpdesk.manage',
-      'settings.manage',
+      helpdeskPermissions
+        .slaView,
     ),
 
     link(
       'KPI',
       '/helpdesk/centro/kpis?workspace=helpdesk',
       BarChart3,
-      'helpdesk.view',
-      'helpdesk.manage',
-      'settings.manage',
+      helpdeskPermissions
+        .kpiView,
     ),
 
     link(
       'Gráficos',
       '/helpdesk/centro/graficos?workspace=helpdesk',
       BarChart3,
-      'helpdesk.view',
-      'tickets.view',
+      helpdeskPermissions
+        .analyticsView,
     ),
 
     link(
       'Automatización',
       '/helpdesk/centro/alertas?workspace=helpdesk',
       Sparkles,
-      'helpdesk.view',
-      'helpdesk.manage',
-      'settings.manage',
+      helpdeskPermissions
+        .automationView,
     ),
 
     link(
-      'Configuración Helpdesk',
-      '/helpdesk/centro/configuracion?workspace=helpdesk',
-      Settings,
-      'helpdesk.manage',
-      'settings.manage',
-    ),
-
-    link(
-      'Zonas y agentes',
-      '/helpdesk/operations?workspace=helpdesk',
-      Users,
-      'helpdesk.manage',
-      'settings.manage',
-    ),
-
-    link(
-      'Grupos, tareas y turnos',
-      '/helpdesk/especialidades?workspace=helpdesk',
-      Sparkles,
-      'helpdesk.manage',
-      'settings.manage',
+      'Reportes',
+      '/helpdesk/reportes?workspace=helpdesk',
+      FileBarChart,
+      helpdeskPermissions
+        .reportsView,
     ),
   ]
 
 // ============================================================
-// REQUESTER
+// HELPDESK ADMINISTRATION
 // ============================================================
 
-const requesterLinks:
+const helpdeskAdminLinks:
   ModuleLink[] = [
     link(
-      'Mis solicitudes',
-      '/my-support?workspace=helpdesk',
-      UserRound,
+      'Sites',
+      '/helpdesk/operations?tab=sites&workspace=helpdesk',
+      Building2,
+      helpdeskPermissions
+        .sitesView,
+    ),
+
+    link(
+      'Grupos',
+      '/helpdesk/especialidades?workspace=helpdesk',
+      Users,
+      helpdeskPermissions
+        .groupsView,
+    ),
+
+    link(
+      'Técnicos',
+      '/helpdesk/operations?tab=technicians&workspace=helpdesk',
+      Headphones,
+      helpdeskPermissions
+        .techniciansView,
+    ),
+
+    link(
+      'Turnos',
+      '/helpdesk/especialidades?tab=schedules&workspace=helpdesk',
+      Workflow,
+      helpdeskPermissions
+        .schedulesView,
+    ),
+
+    link(
+      'Categorías',
+      '/helpdesk/especialidades?tab=categories&workspace=helpdesk',
+      ClipboardList,
+      helpdeskPermissions
+        .categoriesView,
+    ),
+
+    link(
+      'Plantillas',
+      '/helpdesk/centro/configuracion?tab=templates&workspace=helpdesk',
+      FileBarChart,
+      helpdeskPermissions
+        .templatesView,
+    ),
+
+    link(
+      'Configuración',
+      '/helpdesk/centro/configuracion?workspace=helpdesk',
+      Settings,
+      helpdeskPermissions
+        .adminAccess,
     ),
   ]
 
 // ============================================================
-// ADMINISTRATION
+// TITAN ADMINISTRATION
 // ============================================================
 
 const adminLinks:
@@ -321,14 +408,10 @@ const adminLinks:
       'Entra ID',
       '/helpdesk/entra?workspace=administration',
       UserRound,
-      'helpdesk.manage',
-      'settings.manage',
+      helpdeskPermissions
+        .adminAccess,
     ),
   ]
-
-// ============================================================
-// COMPONENT
-// ============================================================
 
 export function ModuleNavigation() {
   const {
@@ -344,7 +427,6 @@ export function ModuleNavigation() {
   const location =
     useLocation()
 
-  // Ponches tiene navegación propia.
   if (
     location.pathname ===
       '/ponches'
@@ -362,9 +444,10 @@ export function ModuleNavigation() {
       hasPermission,
     )
 
-  // ==========================================================
-  // DETERMINE WORKSPACE
-  // ==========================================================
+  const helpdeskAdmin =
+    canManageHelpdesk(
+      hasPermission,
+    )
 
   const workspace =
     location.pathname
@@ -376,12 +459,7 @@ export function ModuleNavigation() {
       .startsWith(
         '/helpdesk',
       )
-      ? location.pathname
-          .startsWith(
-            '/helpdesk/entra',
-          )
-        ? 'administration'
-        : 'helpdesk'
+      ? 'helpdesk'
       : location.pathname
           .startsWith(
             '/sites',
@@ -389,60 +467,90 @@ export function ModuleNavigation() {
         ? 'administration'
         : activeWorkspaceId
 
-  // ==========================================================
-  // NAVIGATION CONFIG
-  // ==========================================================
+  let config:
+    {
+      title: string
+      links: ModuleLink[]
+    }
+    | null =
+      null
 
-  const config =
+  if (
     workspace ===
     'windows'
-      ? {
-          title:
-            'Windows',
+  ) {
+    config = {
+      title:
+        'Windows',
 
-          links:
-            windowsLinks,
-        }
-      : workspace ===
-          'android'
-        ? {
-            title:
-              'Android',
+      links:
+        windowsLinks,
+    }
+  }
+  else if (
+    workspace ===
+    'android'
+  ) {
+    config = {
+      title:
+        'Android',
 
-            links:
-              androidLinks,
-          }
-        : workspace ===
-            'helpdesk'
-          ? {
-              title:
-                staff
-                  ? 'Mesa de ayuda · TIC'
-                  : 'Mis solicitudes',
+      links:
+        androidLinks,
+    }
+  }
+  else if (
+    workspace ===
+    'helpdesk'
+  ) {
+    if (
+      staff
+    ) {
+      config = {
+        title:
+          helpdeskAdmin
+            ? 'Mesa de ayuda · Administración'
+            : 'Mesa de ayuda · TIC',
 
-              links:
-                staff
-                  ? helpdeskLinks
-                  : requesterLinks,
-            }
-          : workspace ===
-              'administration'
-            ? {
-                title:
-                  'Configuración',
+        links: [
+          ...helpdeskLinks,
 
-                links:
-                  adminLinks,
-              }
-            : null
+          ...(
+            helpdeskAdmin
+              ? helpdeskAdminLinks
+              : []
+          ),
+        ],
+      }
+    }
+    else {
+      config = {
+        title:
+          'Mesa de ayuda',
 
-  if (!config) {
-    return null
+        links:
+          requesterLinks,
+      }
+    }
+  }
+  else if (
+    workspace ===
+    'administration'
+  ) {
+    config = {
+      title:
+        'Configuración',
+
+      links:
+        adminLinks,
+    }
   }
 
-  // ==========================================================
-  // RBAC FILTER
-  // ==========================================================
+  if (
+    !config
+  ) {
+    return null
+  }
 
   const visible =
     config.links
@@ -457,13 +565,41 @@ export function ModuleNavigation() {
             ),
       )
 
-  if (!visible.length) {
-    return null
+  /*
+   * Compatibilidad inicial:
+   *
+   * mientras asignamos los permisos nuevos
+   * en RolesPage, permitimos que el portal
+   * muestre Crear ticket cuando tenga
+   * tickets.create antiguo.
+   */
+  if (
+    workspace ===
+      'helpdesk'
+    &&
+    !staff
+    &&
+    canCreateHelpdeskRequest(
+      hasPermission,
+    )
+    &&
+    !visible.some(
+      item =>
+        item.path.startsWith(
+          '/my-support/new',
+        ),
+    )
+  ) {
+    visible.unshift(
+      requesterLinks[0],
+    )
   }
 
-  // ==========================================================
-  // UI
-  // ==========================================================
+  if (
+    !visible.length
+  ) {
+    return null
+  }
 
   return (
     <nav
@@ -472,11 +608,15 @@ export function ModuleNavigation() {
         `Opciones de ${config.title}`
       }
     >
-      <span className="module-navigation__title">
+      <span
+        className="module-navigation__title"
+      >
         {config.title}
       </span>
 
-      <div className="module-navigation__links">
+      <div
+        className="module-navigation__links"
+      >
         {visible.map(
           item => {
             const Icon =
@@ -498,17 +638,7 @@ export function ModuleNavigation() {
                 to={
                   item.path
                 }
-                end={
-                  [
-                    '/helpdesk',
-                    '/dashboard',
-                    '/settings',
-                    '/sites',
-                  ]
-                    .includes(
-                      pathname,
-                    )
-                }
+                end
                 className={
                   active
                     ? 'module-navigation__link module-navigation__link--active'
