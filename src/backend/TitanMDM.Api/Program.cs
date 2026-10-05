@@ -5,6 +5,7 @@ using Microsoft.EntityFrameworkCore;
 
 using TitanMDM.Api.AI;
 using TitanMDM.Api.Hubs;
+using TitanMDM.Api.Ponches;
 using TitanMDM.Api.RemoteSupport;
 using TitanMDM.Api.Security;
 using TitanMDM.Api.Services;
@@ -13,16 +14,12 @@ using TitanMDM.Infrastructure.DependencyInjection;
 using TitanMDM.Infrastructure.Persistence;
 using TitanMDM.Infrastructure.Persistence.Bootstrap;
 
+var builder =
+    WebApplication.CreateBuilder(args);
 
-
-using TitanMDM.Api.Ponches;
-
-
-var builder = WebApplication.CreateBuilder(args);
-
-// ================================================================
+// ============================================================================
 // ENVIRONMENT / CONFIGURATION
-// ================================================================
+// ============================================================================
 
 var environment =
     builder.Environment;
@@ -44,19 +41,22 @@ var applicationVersion =
 var frontendUrl =
     configuration["Application:FrontendUrl"];
 
-// ================================================================
+// ============================================================================
 // DATA PROTECTION
-// ================================================================
+// ============================================================================
 
 var keyRingPath =
-    configuration["DataProtection:KeyRingPath"];
+    configuration[
+        "DataProtection:KeyRingPath"];
 
-if (string.IsNullOrWhiteSpace(keyRingPath))
+if (string.IsNullOrWhiteSpace(
+        keyRingPath))
 {
     keyRingPath =
         Path.Combine(
             Environment.GetFolderPath(
-                Environment.SpecialFolder.CommonApplicationData),
+                Environment.SpecialFolder
+                    .CommonApplicationData),
             "TitanMDM",
             "DataProtectionKeys");
 }
@@ -72,9 +72,9 @@ builder.Services
         new DirectoryInfo(
             keyRingPath));
 
-// ================================================================
+// ============================================================================
 // MVC / API
-// ================================================================
+// ============================================================================
 
 builder.Services.AddControllers(
     options =>
@@ -88,9 +88,18 @@ if (isDevelopment)
     builder.Services.AddOpenApi();
 }
 
-// ================================================================
+// ============================================================================
+// CACHE
+//
+// IMPORTANTE:
+// TODA la configuración DI debe existir ANTES de builder.Build().
+// ============================================================================
+
+builder.Services.AddMemoryCache();
+
+// ============================================================================
 // SIGNALR
-// ================================================================
+// ============================================================================
 
 builder.Services.AddSignalR(
     options =>
@@ -98,7 +107,8 @@ builder.Services.AddSignalR(
         options.MaximumReceiveMessageSize =
             configuration.GetValue<long?>(
                 "SignalR:MaximumReceiveMessageSizeBytes")
-            ?? 8L * 1024L * 1024L;
+            ??
+            8L * 1024L * 1024L;
 
         options.EnableDetailedErrors =
             isDevelopment &&
@@ -109,36 +119,36 @@ builder.Services.AddSignalR(
             TimeSpan.FromSeconds(
                 configuration.GetValue<int?>(
                     "SignalR:KeepAliveSeconds")
-                ?? 10);
+                ??
+                10);
 
         options.ClientTimeoutInterval =
             TimeSpan.FromSeconds(
                 configuration.GetValue<int?>(
                     "SignalR:ClientTimeoutSeconds")
-                ?? 30);
+                ??
+                30);
     });
 
-
-
-// ================================================================
+// ============================================================================
 // OPENROUTER / AI
-// ================================================================
+// ============================================================================
 
 builder.Services.AddTitanOpenRouter(
     configuration);
 
-// ================================================================
-// TITAN INFRASTRUCTURE
-// ================================================================
+// ============================================================================
+// TITANMDM INFRASTRUCTURE
+// ============================================================================
 
 builder.Services.AddTitanMdmInfrastructure(
     configuration);
 
 builder.Services.AddTitanAuthorization();
 
-// ================================================================
-// TITAN SERVICES
-// ================================================================
+// ============================================================================
+// REMOTE SUPPORT / WINDOWS SERVICES
+// ============================================================================
 
 builder.Services.AddSingleton<
     RemoteSupportNotifier>();
@@ -171,9 +181,9 @@ builder.Services.AddScoped<
 builder.Services.AddScoped<
     RemoteControlLeaseService>();
 
-// ================================================================
-// BACKGROUND SERVICES
-// ================================================================
+// ============================================================================
+// HELPDESK BACKGROUND SERVICES
+// ============================================================================
 
 builder.Services.AddHostedService<
     HelpdeskMonitoringService>();
@@ -187,9 +197,9 @@ builder.Services.AddHostedService<
 builder.Services.AddHostedService<
     HelpdeskOutboundEmailWorker>();
 
-// ================================================================
+// ============================================================================
 // ENTRA ID
-// ================================================================
+// ============================================================================
 
 if (configuration.GetValue<bool>(
         "EntraLogin:Enabled"))
@@ -313,16 +323,17 @@ if (configuration.GetValue<bool>(
             });
 }
 
-// ================================================================
+// ============================================================================
 // CORS
-// ================================================================
+// ============================================================================
 
 var allowedOrigins =
     configuration
         .GetSection(
             "Cors:AllowedOrigins")
         .Get<string[]>()
-    ?? Array.Empty<string>();
+    ??
+    Array.Empty<string>();
 
 builder.Services.AddCors(
     options =>
@@ -355,9 +366,10 @@ builder.Services.AddCors(
             });
     });
 
-// ================================================================
-// FORWARDED HEADERS - IIS / REVERSE PROXY
-// ================================================================
+// ============================================================================
+// FORWARDED HEADERS
+// IIS / REVERSE PROXY
+// ============================================================================
 
 builder.Services.Configure<
     ForwardedHeadersOptions>(
@@ -365,14 +377,15 @@ builder.Services.Configure<
         {
             options.ForwardedHeaders =
                 ForwardedHeaders
-                    .XForwardedFor |
+                    .XForwardedFor
+                |
                 ForwardedHeaders
                     .XForwardedProto;
         });
 
-// ============================================================
+// ============================================================================
 // PONCHES / BIOMETRIC EDGE SERVICE
-// ============================================================
+// ============================================================================
 
 builder.Services
     .AddOptions<PonchesOptions>()
@@ -380,40 +393,88 @@ builder.Services
         configuration.GetSection(
             PonchesOptions.SectionName));
 
+// ----------------------------------------------------------------------------
+// PONCHES CACHE
+//
+// El navegador nunca consulta directamente BioTime o Python.
+//
+// React
+//   ↓
+// TitanMDM API
+//   ↓
+// Memory Cache
+//   ↓
+// Ponches Gateway
+//   ↓
+// Python Edge
+//   ↓
+// BioTime / ZKTeco
+//
+// Operaciones de escritura NO deben reutilizar respuestas cacheadas.
+// ----------------------------------------------------------------------------
+
 builder.Services
-    .AddHttpClient<IPonchesGateway, PonchesGateway>(
+    .AddOptions<PonchesCacheOptions>()
+    .Bind(
+        configuration.GetSection(
+            PonchesCacheOptions.SectionName));
+
+builder.Services.AddSingleton<
+    IPonchesQueryCache,
+    PonchesQueryCache>();
+
+// ----------------------------------------------------------------------------
+// PONCHES HTTP GATEWAY
+// ----------------------------------------------------------------------------
+
+builder.Services
+    .AddHttpClient<
+        IPonchesGateway,
+        PonchesGateway>(
         client =>
         {
             /*
-             * El timeout lo controla PonchesGateway mediante
-             * CancellationTokenSource para poder distinguir
-             * consultas normales de operaciones ZKTeco.
+             * El timeout real es controlado
+             * por PonchesGateway mediante
+             * CancellationTokenSource.
+             *
+             * Esto permite tiempos diferentes
+             * para:
+             *
+             * - consultas
+             * - SQL
+             * - sincronización
+             * - operaciones ZKTeco
              */
             client.Timeout =
                 Timeout.InfiniteTimeSpan;
 
-            client.DefaultRequestHeaders
+            client
+                .DefaultRequestHeaders
                 .UserAgent
                 .ParseAdd(
                     "TitanMDM-PonchesGateway/1.0");
         });
 
-// ================================================================
-// BUILD
-// ================================================================
+// ============================================================================
+// IMPORTANTE
+//
+// NO AGREGAR builder.Services DESPUÉS DE ESTE PUNTO.
+// ============================================================================
 
 var app =
     builder.Build();
 
-// ================================================================
+// ============================================================================
 // DATABASE BOOTSTRAP
-// ================================================================
+// ============================================================================
 
 using (var scope =
        app.Services.CreateScope())
 {
     var bootstrapper =
-        scope.ServiceProvider
+        scope
+            .ServiceProvider
             .GetRequiredService<
                 DatabaseBootstrapper>();
 
@@ -421,9 +482,9 @@ using (var scope =
         .BootstrapAsync();
 }
 
-// ================================================================
+// ============================================================================
 // HTTP PIPELINE
-// ================================================================
+// ============================================================================
 
 app.UseForwardedHeaders();
 
@@ -453,23 +514,23 @@ app.UseAuthentication();
 
 app.UseAuthorization();
 
-// ================================================================
-// API
-// ================================================================
+// ============================================================================
+// API CONTROLLERS
+// ============================================================================
 
 app.MapControllers();
 
-// ================================================================
+// ============================================================================
 // SIGNALR
-// ================================================================
+// ============================================================================
 
 app.MapHub<
     RemoteSupportHub>(
         RemoteSupportHub.Route);
 
-// ================================================================
-// ROOT INFORMATION ENDPOINT
-// ================================================================
+// ============================================================================
+// ROOT INFORMATION
+// ============================================================================
 
 app.MapGet(
     "/",
@@ -488,7 +549,8 @@ app.MapGet(
                     applicationVersion,
 
                 environment =
-                    environment.EnvironmentName,
+                    environment
+                        .EnvironmentName,
 
                 status =
                     "Running",
@@ -505,6 +567,9 @@ app.MapGet(
                 liveness =
                     "/api/health/live",
 
+                ponchesHealth =
+                    "/api/ponches/health",
+
                 windowsAgentPackage =
                     "/api/enrollment/windows/package",
 
@@ -519,9 +584,9 @@ app.MapGet(
             });
     });
 
-// ================================================================
+// ============================================================================
 // LIVENESS
-// ================================================================
+// ============================================================================
 
 app.MapGet(
     "/api/health/live",
@@ -541,9 +606,9 @@ app.MapGet(
             });
     });
 
-// ================================================================
+// ============================================================================
 // READINESS
-// ================================================================
+// ============================================================================
 
 app.MapGet(
     "/api/health/ready",
@@ -620,9 +685,9 @@ app.MapGet(
         }
     });
 
-// ================================================================
-// COMPATIBILITY HEALTH ENDPOINT
-// ================================================================
+// ============================================================================
+// GENERAL HEALTH
+// ============================================================================
 
 app.MapGet(
     "/api/health",
@@ -673,6 +738,12 @@ app.MapGet(
                 windowsAgentDistribution =
                     "Enabled",
 
+                ponchesGateway =
+                    "Enabled",
+
+                memoryCache =
+                    "Enabled",
+
                 utc =
                     DateTime.UtcNow
             };
@@ -687,7 +758,15 @@ app.MapGet(
                         .Status503ServiceUnavailable);
     });
 
+// ============================================================================
+// RUN
+// ============================================================================
+
 app.Run();
+
+// ============================================================================
+// TEST HOST SUPPORT
+// ============================================================================
 
 public partial class Program
 {

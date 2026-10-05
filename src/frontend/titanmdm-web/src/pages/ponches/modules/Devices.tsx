@@ -30,7 +30,7 @@ export default function Devices() {
     setLoading(true);
     setErr("");
     try {
-      const res = await authFetch("/api/records/device-health");
+      const res = await authFetch("/api/ponches/device-health");
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || `Error ${res.status}`);
       setItems(data.items || []);

@@ -1,6 +1,4 @@
 import {
-  useCallback,
-  useEffect,
   useMemo,
   useState,
 } from 'react'
@@ -34,26 +32,37 @@ import {
 } from 'react-router-dom'
 
 import {
-  loadDashboardSnapshot,
-  type DashboardSnapshot,
-} from '../lib/dashboardApi'
+  useQuery,
+} from '@tanstack/react-query'
+
+import {
+  ponchesDashboardQueryOptions,
+} from '../lib/dashboardQueries'
 
 import {
   Btn,
   PageHeader,
 } from '../ui/kit'
 
-type CardProps = {
+type MetricTone =
+  | 'default'
+  | 'green'
+  | 'amber'
+  | 'red'
+  | 'blue'
+
+type MetricCardProps = {
   label: string
-  value: string | number
+  value:
+    | string
+    | number
   subtitle: string
-  icon: React.ReactNode
+  icon:
+    React.ReactNode
   tone?:
-    | 'default'
-    | 'green'
-    | 'amber'
-    | 'red'
-    | 'blue'
+    MetricTone
+  onClick?:
+    () => void
 }
 
 function MetricCard({
@@ -62,50 +71,122 @@ function MetricCard({
   subtitle,
   icon,
   tone = 'default',
-}: CardProps) {
-  const tones = {
-    default:
-      'bg-white border-zinc-200',
+  onClick,
+}: MetricCardProps) {
+  const tones:
+    Record<
+      MetricTone,
+      string
+    > = {
+      default:
+        'bg-white border-zinc-200',
 
-    green:
-      'bg-emerald-50/50 border-emerald-100',
+      green:
+        'bg-emerald-50/70 border-emerald-100',
 
-    amber:
-      'bg-amber-50/60 border-amber-100',
+      amber:
+        'bg-amber-50/70 border-amber-100',
 
-    red:
-      'bg-rose-50/60 border-rose-100',
+      red:
+        'bg-rose-50/70 border-rose-100',
 
-    blue:
-      'bg-sky-50/60 border-sky-100',
+      blue:
+        'bg-sky-50/70 border-sky-100',
+    }
+
+  const content = (
+    <>
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-zinc-500">
+            {label}
+          </p>
+
+          <p className="mt-1.5 text-2xl font-black tracking-tight text-zinc-900">
+            {value}
+          </p>
+
+          <p className="mt-1 truncate text-[11px] text-zinc-500">
+            {subtitle}
+          </p>
+        </div>
+
+        <div className="shrink-0 rounded-xl bg-white p-2 text-[#c8102e] shadow-sm ring-1 ring-black/5">
+          {icon}
+        </div>
+      </div>
+
+      {onClick && (
+        <div className="mt-3 flex items-center justify-end text-[10px] font-semibold text-[#c8102e] opacity-0 transition-opacity group-hover:opacity-100">
+          Ver detalle
+          <ArrowRight
+            size={12}
+            className="ml-1"
+          />
+        </div>
+      )}
+    </>
+  )
+
+  const className =
+    `group rounded-2xl border p-4 text-left shadow-sm transition ${
+      tones[
+        tone
+      ]
+    } ${
+      onClick
+        ? 'cursor-pointer hover:-translate-y-0.5 hover:shadow-md'
+        : ''
+    }`
+
+  if (
+    onClick
+  ) {
+    return (
+      <button
+        type="button"
+        className={
+          className
+        }
+        onClick={
+          onClick
+        }
+      >
+        {content}
+      </button>
+    )
   }
 
   return (
     <article
       className={
-        `rounded-2xl border p-4 shadow-sm ${tones[tone]}`
+        className
       }
     >
-      <div className="flex items-start justify-between gap-3">
-        <div>
-          <p className="text-[11px] font-semibold uppercase tracking-[0.08em] text-zinc-500">
-            {label}
-          </p>
-
-          <p className="mt-2 text-3xl font-bold tracking-tight text-zinc-900">
-            {value}
-          </p>
-
-          <p className="mt-1 text-xs text-zinc-500">
-            {subtitle}
-          </p>
-        </div>
-
-        <div className="rounded-xl bg-white p-2.5 text-[#c8102e] shadow-sm ring-1 ring-black/5">
-          {icon}
-        </div>
-      </div>
+      {content}
     </article>
+  )
+}
+
+function EmptyCompact({
+  title,
+  description,
+}: {
+  title: string
+  description: string
+}) {
+  return (
+    <div className="flex min-h-[82px] items-center justify-center rounded-xl border border-dashed border-zinc-200 bg-zinc-50/60 px-4 py-5 text-center">
+      <div>
+        <p className="text-sm font-semibold text-zinc-700">
+          {title}
+        </p>
+
+        <p className="mt-1 text-xs text-zinc-400">
+          {description}
+        </p>
+      </div>
+    </div>
   )
 }
 
@@ -121,14 +202,20 @@ function percentChange(
 
   return Math.round(
     (
-      (current - previous) /
+      (
+        current -
+        previous
+      ) /
       previous
-    ) * 100,
+    ) *
+      100,
   )
 }
 
-function formatTime(
-  value?: string | null,
+function formatDateTime(
+  value?:
+    | string
+    | null,
 ) {
   if (
     !value
@@ -137,7 +224,9 @@ function formatTime(
   }
 
   const date =
-    new Date(value)
+    new Date(
+      value,
+    )
 
   if (
     Number.isNaN(
@@ -151,6 +240,43 @@ function formatTime(
     .toLocaleString()
 }
 
+function formatClock(
+  value?:
+    | string
+    | null,
+) {
+  if (
+    !value
+  ) {
+    return '—'
+  }
+
+  const date =
+    new Date(
+      value,
+    )
+
+  if (
+    Number.isNaN(
+      date.getTime(),
+    )
+  ) {
+    return value
+  }
+
+  return date
+    .toLocaleTimeString(
+      [],
+      {
+        hour:
+          '2-digit',
+
+        minute:
+          '2-digit',
+      },
+    )
+}
+
 export default function Dashboard() {
   const [
     ,
@@ -159,141 +285,55 @@ export default function Dashboard() {
     useSearchParams()
 
   const [
-    snapshot,
-    setSnapshot,
-  ] =
-    useState<DashboardSnapshot | null>(
-      null,
-    )
-
-  const [
-    loading,
-    setLoading,
-  ] =
-    useState(true)
-
-  const [
-    refreshing,
-    setRefreshing,
-  ] =
-    useState(false)
-
-  const [
     autoRefresh,
     setAutoRefresh,
   ] =
-    useState(true)
-
-  const [
-    error,
-    setError,
-  ] =
-    useState('')
+    useState(
+      true,
+    )
 
   const [
     search,
     setSearch,
   ] =
-    useState('')
-
-  const open =
-    useCallback(
-      (
-        section: string,
-      ) => {
-        setSearchParams({
-          section,
-        })
-      },
-      [
-        setSearchParams,
-      ],
+    useState(
+      '',
     )
 
-  const load =
-    useCallback(
-      async (
-        initial = false,
-      ) => {
-        if (
-          initial
-        ) {
-          setLoading(
-            true,
-          )
-        } else {
-          setRefreshing(
-            true,
-          )
-        }
+  const {
+    data:
+      snapshot,
 
-        setError('')
+    error,
 
-        try {
-          const result =
-            await loadDashboardSnapshot()
+    isLoading,
 
-          setSnapshot(
-            result,
-          )
-        } catch (
-          exception
-        ) {
-          console.error(
-            exception,
-          )
+    isFetching,
 
-          setError(
-            'No fue posible actualizar el Centro Operativo de Ponches.',
-          )
-        } finally {
-          setLoading(
-            false,
-          )
+    refetch,
+  } =
+    useQuery({
+      ...ponchesDashboardQueryOptions(),
 
-          setRefreshing(
-            false,
-          )
-        }
-      },
-      [],
-    )
+      /*
+       * Actualización silenciosa.
+       *
+       * Los datos actuales NO desaparecen mientras
+       * llega el siguiente snapshot.
+       */
+      refetchInterval:
+        autoRefresh
+          ? 30_000
+          : false,
+    })
 
-  useEffect(
-    () => {
-      void load(true)
-    },
-    [
-      load,
-    ],
-  )
-
-  useEffect(
-    () => {
-      if (
-        !autoRefresh
-      ) {
-        return
-      }
-
-      const interval =
-        window.setInterval(
-          () => {
-            void load()
-          },
-          30_000,
-        )
-
-      return () =>
-        window.clearInterval(
-          interval,
-        )
-    },
-    [
-      autoRefresh,
-      load,
-    ],
-  )
+  function open(
+    section: string,
+  ) {
+    setSearchParams({
+      section,
+    })
+  }
 
   const onlinePercent =
     snapshot &&
@@ -332,7 +372,8 @@ export default function Dashboard() {
           []
 
         if (
-          rows.length === 0
+          rows.length ===
+          0
         ) {
           return null
         }
@@ -389,13 +430,15 @@ export default function Dashboard() {
           !term
         ) {
           return (
-            snapshot?.recentPunches ??
+            snapshot
+              ?.recentPunches ??
             []
           )
         }
 
         return (
-          snapshot?.recentPunches ??
+          snapshot
+            ?.recentPunches ??
           []
         ).filter(
           item =>
@@ -426,13 +469,54 @@ export default function Dashboard() {
       ],
     )
 
+  const problematicDevices =
+    useMemo(
+      () =>
+        (
+          snapshot
+            ?.healthItems ??
+          []
+        )
+          .filter(
+            item =>
+              !item.online ||
+              (
+                item.latencyMs !=
+                  null &&
+                item.latencyMs >
+                  300
+              ),
+          )
+          .sort(
+            (
+              a,
+              b,
+            ) =>
+              Number(
+                a.online,
+              ) -
+              Number(
+                b.online,
+              ),
+          ),
+      [
+        snapshot,
+      ],
+    )
+
+  const warningsCount =
+    snapshot
+      ?.warnings.length ??
+    0
+
   if (
-    loading
+    isLoading &&
+    !snapshot
   ) {
     return (
-      <div className="flex min-h-[60vh] flex-col items-center justify-center gap-4">
+      <div className="flex min-h-[45vh] flex-col items-center justify-center gap-4">
         <RefreshCw
-          size={34}
+          size={32}
           className="animate-spin text-[#c8102e]"
         />
 
@@ -442,7 +526,7 @@ export default function Dashboard() {
           </p>
 
           <p className="mt-1 text-sm text-zinc-500">
-            Consultando BioTime, relojes y actividad reciente.
+            Recuperando el primer snapshot operacional.
           </p>
         </div>
       </div>
@@ -450,16 +534,16 @@ export default function Dashboard() {
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader
         kicker="Ponches · Centro Operativo"
-        title="Resumen General"
+        title="Dashboard General"
         subtitle={
           snapshot
-            ? `Última actualización: ${formatTime(
+            ? `Actualizado ${formatDateTime(
                 snapshot.generatedAt,
               )}`
-            : 'Información operacional del módulo biométrico.'
+            : 'Resumen operacional del módulo biométrico.'
         }
         actions={
           <div className="flex flex-wrap gap-2">
@@ -492,16 +576,16 @@ export default function Dashboard() {
             <Btn
               tone="primary"
               disabled={
-                refreshing
+                isFetching
               }
               onClick={() =>
-                void load()
+                void refetch()
               }
             >
               <RefreshCw
                 size={16}
                 className={
-                  refreshing
+                  isFetching
                     ? 'animate-spin'
                     : ''
                 }
@@ -514,210 +598,296 @@ export default function Dashboard() {
       />
 
       {error && (
-        <div className="flex items-center gap-3 rounded-2xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
+        <div className="flex items-center gap-2 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-800">
           <AlertTriangle
-            size={18}
+            size={16}
           />
 
-          {error}
+          No se pudo obtener la última actualización.
+          Se conservaron los datos disponibles en caché.
         </div>
       )}
 
-      {snapshot &&
-        snapshot.warnings.length >
+      {snapshot
+        ?.warnings &&
+        snapshot
+          .warnings
+          .length >
           0 && (
-          <section className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4">
-            <div className="mb-3 flex items-center gap-2 font-semibold text-amber-900">
-              <AlertTriangle
-                size={18}
-              />
-
-              Atención operativa
-            </div>
-
-            <div className="grid gap-2 md:grid-cols-2">
-              {snapshot.warnings.map(
+          <div className="flex flex-wrap gap-2">
+            {snapshot
+              .warnings
+              .slice(
+                0,
+                4,
+              )
+              .map(
                 warning => (
-                  <div
+                  <button
+                    type="button"
                     key={
                       warning
                     }
-                    className="rounded-xl bg-white px-3 py-2 text-sm text-zinc-700 ring-1 ring-amber-100"
+                    onClick={() =>
+                      open(
+                        'devices',
+                      )
+                    }
+                    className="rounded-full border border-amber-200 bg-amber-50 px-3 py-1.5 text-xs font-medium text-amber-800"
                   >
                     {warning}
-                  </div>
+                  </button>
                 ),
               )}
-            </div>
-          </section>
+          </div>
         )}
 
-      <section className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+      {/*
+       * ======================================================
+       * KPIs
+       * ======================================================
+       */}
+
+      <section className="grid grid-cols-2 gap-3 lg:grid-cols-4 xl:grid-cols-8">
         <MetricCard
           label="Ponches hoy"
           value={
-            snapshot?.punchesToday ??
+            snapshot
+              ?.punchesToday ??
             0
           }
           subtitle={
-            attendanceDelta == null
-              ? 'Sin referencia anterior'
-              : `${attendanceDelta >= 0 ? '+' : ''}${attendanceDelta}% vs ayer`
+            attendanceDelta ==
+              null
+              ? 'Actividad registrada'
+              : `${
+                  attendanceDelta >=
+                  0
+                    ? '+'
+                    : ''
+                }${attendanceDelta}% vs ayer`
           }
           icon={
-            attendanceDelta != null &&
+            attendanceDelta !=
+              null &&
             attendanceDelta <
               0
               ? (
                 <ArrowDownRight
-                  size={20}
+                  size={19}
                 />
               )
               : (
                 <ArrowUpRight
-                  size={20}
+                  size={19}
                 />
               )
           }
           tone="blue"
+          onClick={() =>
+            open(
+              'records',
+            )
+          }
         />
 
         <MetricCard
           label="Colaboradores"
           value={
-            snapshot?.employeesToday ??
+            snapshot
+              ?.employeesToday ??
             0
           }
           subtitle={
-            employeeDelta == null
-              ? 'Personas registradas hoy'
-              : `${employeeDelta >= 0 ? '+' : ''}${employeeDelta}% vs ayer`
+            employeeDelta ==
+              null
+              ? 'Registrados hoy'
+              : `${
+                  employeeDelta >=
+                  0
+                    ? '+'
+                    : ''
+                }${employeeDelta}% vs ayer`
           }
           icon={
             <Users
-              size={20}
+              size={19}
             />
+          }
+          onClick={() =>
+            open(
+              'collaborators',
+            )
           }
         />
 
         <MetricCard
           label="Entradas"
           value={
-            snapshot?.entriesToday ??
+            snapshot
+              ?.entriesToday ??
             0
           }
-          subtitle="Entradas registradas"
+          subtitle="Entradas de hoy"
           icon={
             <LogIn
-              size={20}
+              size={19}
             />
           }
           tone="green"
+          onClick={() =>
+            open(
+              'records',
+            )
+          }
         />
 
         <MetricCard
           label="Salidas"
           value={
-            snapshot?.exitsToday ??
+            snapshot
+              ?.exitsToday ??
             0
           }
-          subtitle="Salidas registradas"
+          subtitle="Salidas de hoy"
           icon={
             <LogOut
-              size={20}
+              size={19}
             />
+          }
+          onClick={() =>
+            open(
+              'records',
+            )
           }
         />
 
         <MetricCard
           label="Turnos abiertos"
           value={
-            snapshot?.openShifts ??
+            snapshot
+              ?.openShifts ??
             0
           }
-          subtitle="Sin salida o pendientes"
+          subtitle="Entrada sin salida"
           icon={
             <Clock3
-              size={20}
+              size={19}
             />
           }
           tone={
             (
-              snapshot?.openShifts ??
+              snapshot
+                ?.openShifts ??
               0
             ) >
             0
               ? 'amber'
               : 'green'
           }
+          onClick={() =>
+            open(
+              'records',
+            )
+          }
         />
 
         <MetricCard
           label="Relojes online"
           value={
-            snapshot?.devicesOnline ??
-            0
+            `${
+              snapshot
+                ?.devicesOnline ??
+              0
+            }/${
+              snapshot
+                ?.devicesTotal ??
+              0
+            }`
           }
           subtitle={`${onlinePercent}% disponible`}
           icon={
             <Wifi
-              size={20}
+              size={19}
             />
           }
           tone="green"
+          onClick={() =>
+            open(
+              'devices',
+            )
+          }
         />
 
         <MetricCard
           label="Relojes offline"
           value={
-            snapshot?.devicesOffline ??
+            snapshot
+              ?.devicesOffline ??
             0
           }
-          subtitle={`de ${snapshot?.devicesTotal ?? 0} configurados`}
+          subtitle="Requieren atención"
           icon={
             <WifiOff
-              size={20}
+              size={19}
             />
           }
           tone={
             (
-              snapshot?.devicesOffline ??
+              snapshot
+                ?.devicesOffline ??
               0
             ) >
             0
               ? 'red'
-              : 'default'
+              : 'green'
+          }
+          onClick={() =>
+            open(
+              'devices',
+            )
           }
         />
 
         <MetricCard
-          label="Hora pico"
+          label="Alertas"
           value={
-            peakHour
-              ? `${String(
-                  peakHour.hour,
-                ).padStart(
-                  2,
-                  '0',
-                )}:00`
-              : '—'
+            warningsCount
           }
           subtitle={
-            peakHour
-              ? `${peakHour.total} registros`
-              : 'Sin datos suficientes'
+            snapshot
+              ?.databaseOnline
+              ? 'Estado operacional'
+              : 'Revisar BioTime'
           }
           icon={
-            <Gauge
-              size={20}
+            <AlertTriangle
+              size={19}
             />
+          }
+          tone={
+            warningsCount >
+              0
+              ? 'amber'
+              : 'green'
+          }
+          onClick={() =>
+            open(
+              'devices',
+            )
           }
         />
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-[1.4fr_.8fr]">
+      {/*
+       * ======================================================
+       * INFRAESTRUCTURA + ACTIVIDAD
+       * ======================================================
+       */}
+
+      <section className="grid items-start gap-4 xl:grid-cols-[1.55fr_.75fr]">
         <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between gap-4">
+          <div className="flex items-center justify-between gap-4">
             <div>
               <h2 className="font-semibold text-zinc-900">
                 Actividad por hora
@@ -731,200 +901,281 @@ export default function Dashboard() {
             <Activity className="text-[#c8102e]" />
           </div>
 
-          <div className="flex h-52 items-end gap-2">
-            {(
-              snapshot?.byHour ??
-              []
-            ).length ===
-            0 ? (
-              <div className="flex h-full w-full items-center justify-center text-sm text-zinc-400">
-                Todavía no hay actividad suficiente.
-              </div>
-            ) : (
-              snapshot?.byHour.map(
-                item => (
-                  <div
-                    key={
-                      item.hour
-                    }
-                    className="group flex min-w-0 flex-1 flex-col items-center justify-end gap-2"
-                  >
-                    <span className="text-[10px] font-semibold text-zinc-500 opacity-0 transition-opacity group-hover:opacity-100">
-                      {item.total}
-                    </span>
-
-                    <div
-                      className="w-full rounded-t-lg bg-gradient-to-t from-[#991b2f] to-[#e11d48] transition-all hover:brightness-110"
-                      style={{
-                        height:
-                          `${Math.max(
-                            5,
-                            (
-                              item.total /
-                              maxHour
-                            ) *
-                              145,
-                          )}px`,
-                      }}
-                    />
-
-                    <span className="text-[10px] text-zinc-500">
-                      {String(
+          {(
+            snapshot
+              ?.byHour ??
+            []
+          ).length ===
+          0 ? (
+            <div className="mt-4">
+              <EmptyCompact
+                title="Sin actividad suficiente"
+                description="El gráfico aparecerá cuando existan registros horarios."
+              />
+            </div>
+          ) : (
+            <>
+              <div className="mt-5 flex h-40 items-end gap-2">
+                {snapshot?.byHour.map(
+                  item => (
+                    <button
+                      type="button"
+                      key={
+                        item.hour
+                      }
+                      onClick={() =>
+                        open(
+                          'records',
+                        )
+                      }
+                      className="group flex h-full min-w-0 flex-1 flex-col items-center justify-end gap-1"
+                      title={`${String(
                         item.hour,
                       ).padStart(
                         2,
                         '0',
-                      )}
-                    </span>
-                  </div>
-                ),
-              )
-            )}
-          </div>
+                      )}:00 · ${
+                        item.total
+                      } ponches`}
+                    >
+                      <span className="text-[10px] font-semibold text-zinc-500 opacity-0 group-hover:opacity-100">
+                        {
+                          item.total
+                        }
+                      </span>
+
+                      <div
+                        className="w-full rounded-t-md bg-gradient-to-t from-[#991b2f] to-[#e11d48]"
+                        style={{
+                          height:
+                            `${Math.max(
+                              6,
+                              (
+                                item.total /
+                                maxHour
+                              ) *
+                                115,
+                            )}px`,
+                        }}
+                      />
+
+                      <span className="text-[9px] text-zinc-400">
+                        {String(
+                          item.hour,
+                        ).padStart(
+                          2,
+                          '0',
+                        )}
+                      </span>
+                    </button>
+                  ),
+                )}
+              </div>
+
+              <div className="mt-3 flex items-center justify-between border-t border-zinc-100 pt-3 text-xs text-zinc-500">
+                <span>
+                  Hora pico
+                </span>
+
+                <strong className="text-zinc-900">
+                  {peakHour
+                    ? `${String(
+                        peakHour.hour,
+                      ).padStart(
+                        2,
+                        '0',
+                      )}:00 · ${
+                        peakHour.total
+                      } registros`
+                    : '—'}
+                </strong>
+              </div>
+            </>
+          )}
         </article>
 
         <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center gap-3">
+          <div className="mb-4 flex items-center gap-3">
             <Server className="text-[#c8102e]" />
 
             <div>
               <h2 className="font-semibold">
-                Salud del servicio
+                Infraestructura
               </h2>
 
-              <p className="text-sm text-zinc-500">
-                TitanMDM ↔ Python ↔ BioTime
+              <p className="text-xs text-zinc-500">
+                TitanMDM → Python → BioTime
               </p>
             </div>
           </div>
 
-          <div className="space-y-3">
+          <div className="space-y-2">
             <StatusRow
               label="Gateway Python"
               online={
-                snapshot?.serviceOnline ??
+                snapshot
+                  ?.serviceOnline ??
                 false
               }
               icon={
                 <Server
-                  size={17}
+                  size={16}
                 />
               }
             />
 
             <StatusRow
-              label="Base de datos BioTime"
+              label="Base BioTime"
               online={
-                snapshot?.databaseOnline ??
+                snapshot
+                  ?.databaseOnline ??
                 false
               }
               icon={
                 <Database
-                  size={17}
-                />
-              }
-            />
-
-            <StatusRow
-              label="Red biométrica"
-              online={
-                (
-                  snapshot?.devicesOffline ??
-                  0
-                ) ===
-                0
-              }
-              icon={
-                <MonitorSmartphone
-                  size={17}
+                  size={16}
                 />
               }
             />
           </div>
+
+          <div className="mt-4 grid grid-cols-2 gap-2 border-t border-zinc-100 pt-4">
+            <div className="rounded-xl bg-zinc-50 p-3">
+              <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                Último snapshot
+              </p>
+
+              <p className="mt-1 text-sm font-bold">
+                {formatClock(
+                  snapshot
+                    ?.generatedAt,
+                )}
+              </p>
+            </div>
+
+            <button
+              type="button"
+              onClick={() =>
+                open(
+                  'sync-history',
+                )
+              }
+              className="rounded-xl bg-zinc-50 p-3 text-left transition hover:bg-rose-50"
+            >
+              <p className="text-[10px] uppercase tracking-wide text-zinc-400">
+                Sincronización
+              </p>
+
+              <p className="mt-1 text-sm font-bold text-[#c8102e]">
+                Ver historial
+              </p>
+            </button>
+          </div>
         </article>
       </section>
 
-      <section className="grid gap-4 lg:grid-cols-2">
+      {/*
+       * ======================================================
+       * DEPARTAMENTOS + DISPOSITIVOS PROBLEMÁTICOS
+       * ======================================================
+       */}
+
+      <section className="grid items-start gap-4 xl:grid-cols-2">
         <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold">
                 Ponches por departamento
               </h2>
 
               <p className="text-sm text-zinc-500">
-                Distribución de actividad registrada.
+                Distribución organizacional.
               </p>
             </div>
 
             <Building2 className="text-[#c8102e]" />
           </div>
 
-          <div className="space-y-4">
-            {(
-              snapshot?.byDepartment ??
-              []
-            ).slice(
-              0,
-              8,
-            ).map(
-              item => (
-                <div
-                  key={
-                    item.name
-                  }
-                >
-                  <div className="mb-1.5 flex items-center justify-between text-sm">
-                    <span className="truncate font-medium">
-                      {item.name}
-                    </span>
+          {(
+            snapshot
+              ?.byDepartment ??
+            []
+          ).length ===
+          0 ? (
+            <div className="mt-4">
+              <EmptyCompact
+                title="Sin distribución departamental"
+                description="No existen datos departamentales para mostrar."
+              />
+            </div>
+          ) : (
+            <div className="mt-5 space-y-3">
+              {snapshot
+                ?.byDepartment
+                .slice(
+                  0,
+                  6,
+                )
+                .map(
+                  item => (
+                    <button
+                      type="button"
+                      key={
+                        item.name
+                      }
+                      onClick={() =>
+                        open(
+                          'records',
+                        )
+                      }
+                      className="block w-full text-left"
+                    >
+                      <div className="mb-1 flex items-center justify-between text-xs">
+                        <span className="truncate font-semibold">
+                          {
+                            item.name
+                          }
+                        </span>
 
-                    <span className="text-zinc-500">
-                      {item.total}
-                    </span>
-                  </div>
+                        <span className="text-zinc-500">
+                          {
+                            item.total
+                          }
+                        </span>
+                      </div>
 
-                  <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
-                    <div
-                      className="h-full rounded-full bg-[#c8102e]"
-                      style={{
-                        width:
-                          `${Math.max(
-                            3,
-                            (
-                              item.total /
-                              maxDepartment
-                            ) *
-                              100,
-                          )}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              ),
-            )}
-
-            {(
-              snapshot?.byDepartment ??
-              []
-            ).length ===
-              0 && (
-              <p className="py-10 text-center text-sm text-zinc-400">
-                No existen datos departamentales para mostrar.
-              </p>
-            )}
-          </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-zinc-100">
+                        <div
+                          className="h-full rounded-full bg-[#c8102e]"
+                          style={{
+                            width:
+                              `${Math.max(
+                                3,
+                                (
+                                  item.total /
+                                  maxDepartment
+                                ) *
+                                  100,
+                              )}%`,
+                          }}
+                        />
+                      </div>
+                    </button>
+                  ),
+                )}
+            </div>
+          )}
         </article>
 
         <article className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
-          <div className="mb-5 flex items-center justify-between">
+          <div className="flex items-center justify-between">
             <div>
               <h2 className="font-semibold">
-                Estado de relojes
+                Relojes que requieren atención
               </h2>
 
               <p className="text-sm text-zinc-500">
-                Disponibilidad y latencia de los dispositivos.
+                Offline o con latencia elevada.
               </p>
             </div>
 
@@ -938,115 +1189,142 @@ export default function Dashboard() {
               className="flex items-center gap-1 text-sm font-semibold text-[#c8102e]"
             >
               Ver todos
+
               <ArrowRight
-                size={15}
+                size={14}
               />
             </button>
           </div>
 
-          <div className="divide-y divide-zinc-100">
-            {(
-              snapshot?.healthItems ??
-              []
-            ).slice(
-              0,
-              8,
-            ).map(
-              item => (
-                <div
-                  key={
-                    item.name
-                  }
-                  className="flex items-center justify-between gap-4 py-3"
-                >
-                  <div className="flex min-w-0 items-center gap-3">
-                    <div
-                      className={
-                        `rounded-xl p-2 ${
-                          item.online
-                            ? 'bg-emerald-50 text-emerald-600'
-                            : 'bg-rose-50 text-rose-600'
-                        }`
-                      }
-                    >
-                      {item.online
-                        ? (
-                          <Wifi
-                            size={17}
-                          />
-                        )
-                        : (
-                          <WifiOff
-                            size={17}
-                          />
-                        )}
-                    </div>
+          {problematicDevices.length ===
+          0 ? (
+            <div className="mt-4">
+              <div className="flex min-h-[82px] items-center gap-3 rounded-xl border border-emerald-100 bg-emerald-50/70 p-4">
+                <CheckCircle2
+                  size={22}
+                  className="text-emerald-600"
+                />
 
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold">
-                        {item.name}
-                      </p>
+                <div>
+                  <p className="text-sm font-semibold text-emerald-900">
+                    Red biométrica estable
+                  </p>
 
-                      <p className="text-xs text-zinc-500">
-                        {item.punchesToday} ponches hoy
-                      </p>
-                    </div>
-                  </div>
-
-                  <div className="text-right">
-                    <p
-                      className={
-                        `text-xs font-semibold ${
-                          item.online
-                            ? 'text-emerald-600'
-                            : 'text-rose-600'
-                        }`
-                      }
-                    >
-                      {item.online
-                        ? 'Online'
-                        : 'Offline'}
-                    </p>
-
-                    <p className="text-xs text-zinc-400">
-                      {item.latencyMs == null
-                        ? '—'
-                        : `${item.latencyMs} ms`}
-                    </p>
-                  </div>
+                  <p className="text-xs text-emerald-700">
+                    No hay relojes offline ni con latencia crítica.
+                  </p>
                 </div>
-              ),
-            )}
+              </div>
+            </div>
+          ) : (
+            <div className="mt-4 divide-y divide-zinc-100">
+              {problematicDevices
+                .slice(
+                  0,
+                  5,
+                )
+                .map(
+                  item => (
+                    <button
+                      type="button"
+                      key={
+                        item.name
+                      }
+                      onClick={() =>
+                        open(
+                          'devices',
+                        )
+                      }
+                      className="flex w-full items-center justify-between gap-3 py-3 text-left hover:bg-zinc-50"
+                    >
+                      <div className="flex min-w-0 items-center gap-3">
+                        <div
+                          className={
+                            `rounded-xl p-2 ${
+                              item.online
+                                ? 'bg-amber-50 text-amber-600'
+                                : 'bg-rose-50 text-rose-600'
+                            }`
+                          }
+                        >
+                          {item.online
+                            ? (
+                              <Wifi
+                                size={16}
+                              />
+                            )
+                            : (
+                              <WifiOff
+                                size={16}
+                              />
+                            )}
+                        </div>
 
-            {(
-              snapshot?.healthItems ??
-              []
-            ).length ===
-              0 && (
-              <p className="py-10 text-center text-sm text-zinc-400">
-                No existen relojes reportados.
-              </p>
-            )}
-          </div>
+                        <div className="min-w-0">
+                          <p className="truncate text-sm font-semibold">
+                            {
+                              item.name
+                            }
+                          </p>
+
+                          <p className="text-xs text-zinc-500">
+                            {
+                              item.punchesToday
+                            } ponches hoy
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="text-right text-xs">
+                        <p
+                          className={
+                            item.online
+                              ? 'font-semibold text-amber-600'
+                              : 'font-semibold text-rose-600'
+                          }
+                        >
+                          {item.online
+                            ? 'Latencia'
+                            : 'Offline'}
+                        </p>
+
+                        <p className="text-zinc-400">
+                          {item.latencyMs ==
+                          null
+                            ? '—'
+                            : `${item.latencyMs} ms`}
+                        </p>
+                      </div>
+                    </button>
+                  ),
+                )}
+            </div>
+          )}
         </article>
       </section>
 
+      {/*
+       * ======================================================
+       * PONCHES RECIENTES
+       * ======================================================
+       */}
+
       <article className="rounded-2xl border border-zinc-200 bg-white shadow-sm">
-        <div className="flex flex-col gap-4 border-b border-zinc-100 p-5 lg:flex-row lg:items-center lg:justify-between">
+        <div className="flex flex-col gap-3 border-b border-zinc-100 p-4 lg:flex-row lg:items-center lg:justify-between">
           <div>
             <h2 className="font-semibold">
               Ponches recientes
             </h2>
 
-            <p className="text-sm text-zinc-500">
-              Últimos registros recibidos desde BioTime.
+            <p className="text-xs text-zinc-500">
+              Últimos registros recibidos.
             </p>
           </div>
 
           <div className="flex items-center gap-2">
             <div className="relative">
               <Search
-                size={16}
+                size={15}
                 className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
               />
 
@@ -1060,8 +1338,8 @@ export default function Dashboard() {
                       event.target.value,
                     )
                 }
-                placeholder="Buscar empleado..."
-                className="w-64 rounded-xl border border-zinc-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#c8102e]"
+                placeholder="Buscar..."
+                className="w-56 rounded-xl border border-zinc-200 py-2 pl-9 pr-3 text-sm outline-none focus:border-[#c8102e]"
               />
             </div>
 
@@ -1074,111 +1352,128 @@ export default function Dashboard() {
               }
               className="rounded-xl border border-zinc-200 px-3 py-2 text-sm font-semibold hover:bg-zinc-50"
             >
-              Ver historial
+              Historial
             </button>
           </div>
         </div>
 
-        <div className="overflow-x-auto">
-          <table className="w-full min-w-[850px] text-left text-sm">
-            <thead className="bg-zinc-50 text-[11px] uppercase tracking-wide text-zinc-500">
-              <tr>
-                <th className="px-5 py-3">
-                  Código
-                </th>
-
-                <th className="px-5 py-3">
-                  Colaborador
-                </th>
-
-                <th className="px-5 py-3">
-                  Departamento
-                </th>
-
-                <th className="px-5 py-3">
-                  Entrada
-                </th>
-
-                <th className="px-5 py-3">
-                  Salida
-                </th>
-
-                <th className="px-5 py-3">
-                  Dispositivo
-                </th>
-              </tr>
-            </thead>
-
-            <tbody className="divide-y divide-zinc-100">
-              {filteredPunches.map(
-                (
-                  punch,
-                  index,
-                ) => (
-                  <tr
-                    key={
-                      punch.id ??
-                      `${punch.codigo}-${index}`
-                    }
-                    className="hover:bg-zinc-50/70"
-                  >
-                    <td className="px-5 py-3 font-mono text-xs">
-                      {punch.codigo ||
-                        '—'}
-                    </td>
-
-                    <td className="px-5 py-3 font-semibold">
-                      {punch.nombre ||
-                        'Sin identificar'}
-                    </td>
-
-                    <td className="px-5 py-3 text-zinc-600">
-                      {punch.departamento ||
-                        'Sin departamento'}
-                    </td>
-
-                    <td className="px-5 py-3">
-                      {formatTime(
-                        punch.entrada,
-                      )}
-                    </td>
-
-                    <td className="px-5 py-3">
-                      {formatTime(
-                        punch.salida,
-                      )}
-                    </td>
-
-                    <td className="px-5 py-3 text-zinc-500">
-                      {punch.dispositivo_origen ||
-                        '—'}
-                    </td>
-                  </tr>
-                ),
-              )}
-
-              {filteredPunches.length ===
-                0 && (
+        {filteredPunches.length ===
+        0 ? (
+          <div className="p-4">
+            <EmptyCompact
+              title="Sin registros recientes"
+              description="Los últimos ponches aparecerán en esta sección."
+            />
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[850px] text-left text-sm">
+              <thead className="bg-zinc-50 text-[10px] uppercase tracking-wide text-zinc-500">
                 <tr>
-                  <td
-                    colSpan={
-                      6
-                    }
-                    className="px-5 py-12 text-center text-zinc-400"
-                  >
-                    No hay registros recientes para mostrar.
-                  </td>
+                  <th className="px-4 py-3">
+                    Código
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Colaborador
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Departamento
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Entrada
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Salida
+                  </th>
+
+                  <th className="px-4 py-3">
+                    Dispositivo
+                  </th>
                 </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
+              </thead>
+
+              <tbody className="divide-y divide-zinc-100">
+                {filteredPunches
+                  .slice(
+                    0,
+                    8,
+                  )
+                  .map(
+                    (
+                      punch,
+                      index,
+                    ) => (
+                      <tr
+                        key={
+                          punch.id ??
+                          `${punch.codigo}-${index}`
+                        }
+                        className="cursor-pointer hover:bg-zinc-50"
+                        onClick={() =>
+                          open(
+                            'records',
+                          )
+                        }
+                      >
+                        <td className="px-4 py-3 font-mono text-xs">
+                          {punch.codigo ||
+                            '—'}
+                        </td>
+
+                        <td className="px-4 py-3 font-semibold">
+                          {punch.nombre ||
+                            'Sin identificar'}
+                        </td>
+
+                        <td className="px-4 py-3 text-zinc-600">
+                          {punch.departamento ||
+                            'Sin departamento'}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatDateTime(
+                            punch.entrada,
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3">
+                          {formatDateTime(
+                            punch.salida,
+                          )}
+                        </td>
+
+                        <td className="px-4 py-3 text-zinc-500">
+                          {punch.dispositivo_origen ||
+                            '—'}
+                        </td>
+                      </tr>
+                    ),
+                  )}
+              </tbody>
+            </table>
+          </div>
+        )}
       </article>
 
-      <section className="grid gap-3 md:grid-cols-3 xl:grid-cols-5">
+      {/*
+       * ======================================================
+       * ACCIONES
+       * ======================================================
+       */}
+
+      <section className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <QuickAction
-          title="Ver ponches"
-          description="Historial y búsqueda"
+          title="Ponches"
+          description="Consultar historial"
+          icon={
+            <Activity
+              size={18}
+            />
+          }
           onClick={() =>
             open(
               'records',
@@ -1188,7 +1483,12 @@ export default function Dashboard() {
 
         <QuickAction
           title="Relojes"
-          description="Estado de dispositivos"
+          description="Estado biométrico"
+          icon={
+            <MonitorSmartphone
+              size={18}
+            />
+          }
           onClick={() =>
             open(
               'devices',
@@ -1198,7 +1498,12 @@ export default function Dashboard() {
 
         <QuickAction
           title="Colaboradores"
-          description="Personal biométrico"
+          description="Personal registrado"
+          icon={
+            <Users
+              size={18}
+            />
+          }
           onClick={() =>
             open(
               'collaborators',
@@ -1207,8 +1512,13 @@ export default function Dashboard() {
         />
 
         <QuickAction
-          title="Modo espejo"
-          description="Sincronización de relojes"
+          title="Sincronización"
+          description="Modo espejo"
+          icon={
+            <RefreshCw
+              size={18}
+            />
+          }
           onClick={() =>
             open(
               'mirror',
@@ -1218,7 +1528,12 @@ export default function Dashboard() {
 
         <QuickAction
           title="Reportes"
-          description="Horas y resultados"
+          description="Análisis operativo"
+          icon={
+            <Gauge
+              size={18}
+            />
+          }
           onClick={() =>
             open(
               'reports',
@@ -1237,10 +1552,11 @@ function StatusRow({
 }: {
   label: string
   online: boolean
-  icon: React.ReactNode
+  icon:
+    React.ReactNode
 }) {
   return (
-    <div className="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50/70 px-3 py-3">
+    <div className="flex items-center justify-between rounded-xl border border-zinc-100 bg-zinc-50/70 px-3 py-2.5">
       <div className="flex items-center gap-3">
         <span className="text-zinc-500">
           {icon}
@@ -1253,7 +1569,7 @@ function StatusRow({
 
       <span
         className={
-          `flex items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-semibold ${
+          `flex items-center gap-1 rounded-full px-2 py-1 text-[10px] font-bold ${
             online
               ? 'bg-emerald-100 text-emerald-700'
               : 'bg-rose-100 text-rose-700'
@@ -1263,12 +1579,12 @@ function StatusRow({
         {online
           ? (
             <CheckCircle2
-              size={13}
+              size={11}
             />
           )
           : (
             <AlertTriangle
-              size={13}
+              size={11}
             />
           )}
 
@@ -1283,11 +1599,15 @@ function StatusRow({
 function QuickAction({
   title,
   description,
+  icon,
   onClick,
 }: {
   title: string
   description: string
-  onClick: () => void
+  icon:
+    React.ReactNode
+  onClick:
+    () => void
 }) {
   return (
     <button
@@ -1298,18 +1618,17 @@ function QuickAction({
       className="group rounded-2xl border border-zinc-200 bg-white p-4 text-left shadow-sm transition hover:-translate-y-0.5 hover:border-rose-200 hover:shadow-md"
     >
       <div className="flex items-center justify-between">
-        <Activity
-          size={18}
-          className="text-[#c8102e]"
-        />
+        <span className="text-[#c8102e]">
+          {icon}
+        </span>
 
         <ArrowUpRight
-          size={16}
+          size={15}
           className="text-zinc-300 transition group-hover:text-[#c8102e]"
         />
       </div>
 
-      <p className="mt-4 text-sm font-semibold text-zinc-900">
+      <p className="mt-3 text-sm font-semibold text-zinc-900">
         {title}
       </p>
 

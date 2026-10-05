@@ -2,6 +2,7 @@ using System.Security.Claims;
 
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Options;
 
 using TitanMDM.Api.Ponches;
 
@@ -15,7 +16,7 @@ public sealed class PonchesController : ControllerBase
     private const long MaxBodyBytes =
         8L * 1024L * 1024L;
 
-    private static readonly HashSet<string> LegacyRoots =
+    private static readonly HashSet<string> ModuleRoots =
         new(
             StringComparer.OrdinalIgnoreCase)
         {
@@ -33,11 +34,19 @@ public sealed class PonchesController : ControllerBase
     private readonly IPonchesGateway
         _gateway;
 
+    private readonly IPonchesQueryCache
+        _cache;
+
+    private readonly PonchesCacheOptions
+        _cacheOptions;
+
     private readonly ILogger<PonchesController>
         _logger;
 
     public PonchesController(
         IPonchesGateway gateway,
+        IPonchesQueryCache cache,
+        IOptions<PonchesCacheOptions> cacheOptions,
         ILogger<PonchesController> logger)
     {
         _gateway =
@@ -45,6 +54,17 @@ public sealed class PonchesController : ControllerBase
             ??
             throw new ArgumentNullException(
                 nameof(gateway));
+
+        _cache =
+            cache
+            ??
+            throw new ArgumentNullException(
+                nameof(cache));
+
+        _cacheOptions =
+            cacheOptions?.Value
+            ??
+            new PonchesCacheOptions();
 
         _logger =
             logger
@@ -61,16 +81,25 @@ public sealed class PonchesController : ControllerBase
     public Task<IActionResult> Health(
         CancellationToken cancellationToken)
     {
+        /*
+         * Health no se cachea.
+         * Debe representar el estado real del Edge Service.
+         */
         return ForwardAsync(
             route:
                 "/api/internal/titan/health",
+
             method:
                 HttpMethod.Get,
+
             hasBody:
                 false,
+
             deviceOperation:
                 false,
+
             cancellationToken,
+
             "workspace.ponches.view");
     }
 
@@ -82,33 +111,58 @@ public sealed class PonchesController : ControllerBase
     public Task<IActionResult> Dashboard(
         CancellationToken cancellationToken)
     {
-        return ForwardAsync(
+        return ForwardCachedAsync(
             route:
                 "/api/internal/titan/dashboard",
-            method:
-                HttpMethod.Get,
-            hasBody:
-                false,
+
+            cacheKey:
+                "dashboard:main",
+
+            lifetime:
+                TimeSpan.FromSeconds(
+                    Math.Clamp(
+                        _cacheOptions
+                            .DashboardSeconds,
+                        5,
+                        300)),
+
             deviceOperation:
                 false,
+
             cancellationToken,
+
             "ponches.dashboard.view");
     }
 
+    /*
+     * Contrato temporal de compatibilidad.
+     * Lo retiraremos en F9 cuando el Dashboard nuevo ya cubra
+     * completamente al antiguo.
+     */
     [HttpGet("dashboard-original")]
     public Task<IActionResult> OriginalDashboard(
         CancellationToken cancellationToken)
     {
-        return ForwardAsync(
+        return ForwardCachedAsync(
             route:
                 "/api/internal/titan/dashboard-original",
-            method:
-                HttpMethod.Get,
-            hasBody:
-                false,
+
+            cacheKey:
+                "dashboard:original",
+
+            lifetime:
+                TimeSpan.FromSeconds(
+                    Math.Clamp(
+                        _cacheOptions
+                            .DashboardSeconds,
+                        5,
+                        300)),
+
             deviceOperation:
                 false,
+
             cancellationToken,
+
             "ponches.dashboard.view");
     }
 
@@ -120,37 +174,74 @@ public sealed class PonchesController : ControllerBase
     public Task<IActionResult> DeviceHealth(
         CancellationToken cancellationToken)
     {
-        return ForwardAsync(
+        return ForwardCachedAsync(
             route:
                 "/api/internal/titan/device-health",
-            method:
-                HttpMethod.Get,
-            hasBody:
-                false,
+
+            cacheKey:
+                "devices:health",
+
+            lifetime:
+                TimeSpan.FromSeconds(
+                    Math.Clamp(
+                        _cacheOptions
+                            .DeviceHealthSeconds,
+                        5,
+                        120)),
+
             deviceOperation:
                 true,
+
             cancellationToken,
+
             "ponches.devices.view");
     }
 
     // ============================================================
     // RECORDS
+    //
+    // Contrato pÃºblico TitanMDM.
+    //
+    // Internamente todavÃ­a utiliza records/search del Edge
+    // porque F3-F9 estÃ¡n eliminando gradualmente el API legado.
+    // El frontend ya no debe conocer esa ruta.
     // ============================================================
 
     [HttpGet("records")]
     public Task<IActionResult> Records(
         [FromQuery]
         int limit = 100,
+
         [FromQuery]
         string search = "",
+
+        [FromQuery]
+        string fecha = "",
+
+        [FromQuery]
+        string dispositivo = "",
+
         CancellationToken cancellationToken = default)
     {
-        search ??= string.Empty;
+        search ??=
+            string.Empty;
+
+        fecha ??=
+            string.Empty;
+
+        dispositivo ??=
+            string.Empty;
 
         search =
             search.Trim();
 
-        if (limit is < 1 or > 200)
+        fecha =
+            fecha.Trim();
+
+        dispositivo =
+            dispositivo.Trim();
+
+        if (limit is < 1 or > 500)
         {
             return Task.FromResult<IActionResult>(
                 BadRequest(
@@ -160,7 +251,7 @@ public sealed class PonchesController : ControllerBase
                             "PONCHES_INVALID_LIMIT",
 
                         message =
-                            "El límite debe estar entre 1 y 200."
+                            "El lÃ­mite debe estar entre 1 y 500."
                     }));
         }
 
@@ -174,20 +265,97 @@ public sealed class PonchesController : ControllerBase
                             "PONCHES_INVALID_SEARCH",
 
                         message =
-                            "El criterio de búsqueda supera el tamaño permitido."
+                            "El criterio de bÃºsqueda supera el tamaÃ±o permitido."
                     }));
         }
 
-        var route =
-            "/api/internal/titan/records" +
-            $"?limit={limit}" +
-            $"&search={Uri.EscapeDataString(search)}";
+        if (fecha.Length > 20)
+        {
+            return Task.FromResult<IActionResult>(
+                BadRequest(
+                    new
+                    {
+                        code =
+                            "PONCHES_INVALID_DATE",
 
-        return ForwardAsync(
+                        message =
+                            "La fecha suministrada no es vÃ¡lida."
+                    }));
+        }
+
+        if (dispositivo.Length > 160)
+        {
+            return Task.FromResult<IActionResult>(
+                BadRequest(
+                    new
+                    {
+                        code =
+                            "PONCHES_INVALID_DEVICE",
+
+                        message =
+                            "El dispositivo suministrado no es vÃ¡lido."
+                    }));
+        }
+
+        var query =
+            new List<string>
+            {
+                $"limit={limit}"
+            };
+
+        if (!string.IsNullOrWhiteSpace(
+                search))
+        {
+            query.Add(
+                $"q={Uri.EscapeDataString(search)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                fecha))
+        {
+            query.Add(
+                $"fecha={Uri.EscapeDataString(fecha)}");
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                dispositivo) &&
+            !string.Equals(
+                dispositivo,
+                "todos",
+                StringComparison.OrdinalIgnoreCase))
+        {
+            query.Add(
+                $"dispositivo={Uri.EscapeDataString(dispositivo)}");
+        }
+
+        var queryString =
+            string.Join(
+                "&",
+                query);
+
+        /*
+         * Ruta interna temporal.
+         *
+         * La UI sÃ³lo conoce:
+         * /api/ponches/records
+         */
+        var route =
+            "/api/records/search?" +
+            queryString;
+
+        var cacheKey =
+            "records:" +
+            queryString;
+
+        return ForwardCachedAsync(
             route,
-            HttpMethod.Get,
-            hasBody:
-                false,
+            cacheKey,
+            TimeSpan.FromSeconds(
+                Math.Clamp(
+                    _cacheOptions
+                        .RecordsSeconds,
+                    5,
+                    120)),
             deviceOperation:
                 false,
             cancellationToken,
@@ -195,10 +363,109 @@ public sealed class PonchesController : ControllerBase
     }
 
     // ============================================================
-    // LEGACY BRIDGE
+    // EMPLOYEES
+    // ============================================================
+
+    [HttpGet("employees")]
+    public Task<IActionResult> Employees(
+        [FromQuery]
+        string search = "",
+
+        [FromQuery]
+        int limit = 150,
+
+        CancellationToken cancellationToken = default)
+    {
+        search ??=
+            string.Empty;
+
+        search =
+            search.Trim();
+
+        if (search.Length > 80)
+        {
+            return Task.FromResult<IActionResult>(
+                BadRequest(
+                    new
+                    {
+                        code =
+                            "PONCHES_INVALID_SEARCH",
+
+                        message =
+                            "El criterio de bÃºsqueda supera el tamaÃ±o permitido."
+                    }));
+        }
+
+        limit =
+            Math.Clamp(
+                limit,
+                1,
+                500);
+
+        var route =
+            "/api/records/employees" +
+            $"?q={Uri.EscapeDataString(search)}" +
+            $"&limit={limit}";
+
+        var cacheKey =
+            $"employees:{search}:{limit}";
+
+        return ForwardCachedAsync(
+            route,
+            cacheKey,
+            TimeSpan.FromSeconds(
+                Math.Clamp(
+                    _cacheOptions
+                        .EmployeesSeconds,
+                    10,
+                    600)),
+            deviceOperation:
+                false,
+            cancellationToken,
+            "ponches.employees.view");
+    }
+
+    // ============================================================
+    // DEVICES
+    // ============================================================
+
+    [HttpGet("devices")]
+    public Task<IActionResult> Devices(
+        CancellationToken cancellationToken)
+    {
+        return ForwardCachedAsync(
+            route:
+                "/api/records/managed-devices",
+
+            cacheKey:
+                "devices:catalog",
+
+            lifetime:
+                TimeSpan.FromSeconds(
+                    Math.Clamp(
+                        _cacheOptions
+                            .DevicesSeconds,
+                        10,
+                        300)),
+
+            deviceOperation:
+                true,
+
+            cancellationToken,
+
+            "ponches.devices.view");
+    }
+
+    // ============================================================
+    // MODULE COMPATIBILITY ADAPTER
     //
-    // Este endpoint permanece mientras migramos las pantallas
-    // originales de Ponches hacia TitanMDM.
+    // IMPORTANTE:
+    //
+    // Este bridge permanece mientras F4-F9 migran completamente
+    // las pantallas histÃ³ricas de Ponches hacia contratos estables
+    // TitanMDM.
+    //
+    // En F9 serÃ¡ reducido o eliminado.
     // ============================================================
 
     [AcceptVerbs(
@@ -207,9 +474,9 @@ public sealed class PonchesController : ControllerBase
         "PUT",
         "PATCH",
         "DELETE")]
-    [Route("legacy/{**path}")]
+    [Route("module/{**path}")]
     [RequestSizeLimit(MaxBodyBytes)]
-    public Task<IActionResult> Legacy(
+    public Task<IActionResult> ModuleBridge(
         string path,
         CancellationToken cancellationToken)
     {
@@ -220,7 +487,7 @@ public sealed class PonchesController : ControllerBase
                     StringSplitOptions
                         .RemoveEmptyEntries);
 
-        if (!IsSafeLegacyPath(
+        if (!IsSafeModulePath(
                 segments))
         {
             return Task.FromResult<IActionResult>(
@@ -251,6 +518,13 @@ public sealed class PonchesController : ControllerBase
                     Uri.EscapeDataString)) +
             Request.QueryString.Value;
 
+        /*
+         * Para GET legacy utilizamos ForwardAsync por ahora.
+         *
+         * El cache central se concentra en los contratos Titan
+         * estables para evitar almacenar combinaciones antiguas
+         * que serÃ¡n eliminadas en F9.
+         */
         return ForwardAsync(
             route,
             new HttpMethod(
@@ -267,7 +541,167 @@ public sealed class PonchesController : ControllerBase
     }
 
     // ============================================================
-    // FORWARD
+    // CACHED FORWARD
+    // ============================================================
+
+    private async Task<IActionResult> ForwardCachedAsync(
+        string route,
+        string cacheKey,
+        TimeSpan lifetime,
+        bool deviceOperation,
+        CancellationToken cancellationToken,
+        params string[] requiredPermissions)
+    {
+        var authorizationResult =
+            ValidateAuthorization(
+                requiredPermissions);
+
+        if (authorizationResult is not null)
+        {
+            return authorizationResult;
+        }
+
+        var identity =
+            ResolveIdentity();
+
+        if (!identity.IsValid)
+        {
+            return Unauthorized(
+                new
+                {
+                    code =
+                        "PONCHES_INVALID_IDENTITY",
+
+                    message =
+                        "La identidad de TitanMDM no contiene un usuario u organizaciÃ³n vÃ¡lidos."
+                });
+        }
+
+        var manage =
+            HasPermission(
+                "ponches.manage");
+
+        var operations =
+            PonchesAccess.Operations(
+                GetGrantedPermissions());
+
+        try
+        {
+            var result =
+                await _cache
+                    .GetOrCreateAsync(
+                        identity.OrganizationId!,
+                        cacheKey,
+                        lifetime,
+                        async () =>
+                            await _gateway
+                                .SendAsync(
+                                    new PonchesGatewayRequest(
+                                        Route:
+                                            route,
+
+                                        Method:
+                                            HttpMethod.Get,
+
+                                        ActorUserId:
+                                            identity.ActorUserId!,
+
+                                        OrganizationId:
+                                            identity.OrganizationId!,
+
+                                        IsAdministrator:
+                                            manage,
+
+                                        Operations:
+                                            operations,
+
+                                        Body:
+                                            null,
+
+                                        ContentType:
+                                            null,
+
+                                        DeviceOperation:
+                                            deviceOperation),
+                                    cancellationToken),
+                        cancellationToken);
+
+            Response.Headers.CacheControl =
+                "no-store";
+
+            return BuildGatewayResponse(
+                result,
+                route);
+        }
+        catch (OperationCanceledException)
+            when (cancellationToken
+                .IsCancellationRequested)
+        {
+            return StatusCode(
+                499);
+        }
+        catch (PonchesNotConfiguredException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Ponches no estÃ¡ configurado.");
+
+            return StatusCode(
+                StatusCodes
+                    .Status503ServiceUnavailable,
+                new
+                {
+                    code =
+                        "PONCHES_NOT_CONFIGURED",
+
+                    message =
+                        "La integraciÃ³n de Ponches no estÃ¡ configurada en este servidor."
+                });
+        }
+        catch (PonchesTimeoutException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Timeout consultando Ponches. Route={Route}",
+                GetSafeRouteForLog(
+                    route));
+
+            return StatusCode(
+                StatusCodes
+                    .Status504GatewayTimeout,
+                new
+                {
+                    code =
+                        "PONCHES_TIMEOUT",
+
+                    message =
+                        "La operaciÃ³n de Ponches superÃ³ el tiempo permitido."
+                });
+        }
+        catch (PonchesUnavailableException exception)
+        {
+            _logger.LogWarning(
+                exception,
+                "Ponches Edge no estÃ¡ disponible. Route={Route}",
+                GetSafeRouteForLog(
+                    route));
+
+            return StatusCode(
+                StatusCodes
+                    .Status503ServiceUnavailable,
+                new
+                {
+                    code =
+                        "PONCHES_UNAVAILABLE",
+
+                    message =
+                        "El servicio interno de Ponches no estÃ¡ disponible."
+                });
+        }
+    }
+
+    // ============================================================
+    // STANDARD FORWARD
     // ============================================================
 
     private async Task<IActionResult> ForwardAsync(
@@ -278,30 +712,21 @@ public sealed class PonchesController : ControllerBase
         CancellationToken cancellationToken,
         params string[] requiredPermissions)
     {
-        var manage =
-            HasPermission(
-                "ponches.manage");
+        var authorizationResult =
+            ValidateAuthorization(
+                requiredPermissions);
 
-        if (!manage &&
-            !HasPermission(
-                "workspace.ponches.view"))
+        if (authorizationResult is not null)
         {
-            return Forbid();
-        }
-
-        if (!manage &&
-            requiredPermissions.Length > 0 &&
-            !requiredPermissions.Any(
-                HasPermission))
-        {
-            return Forbid();
+            return authorizationResult;
         }
 
         /*
-         * Eliminar colaboradores puede afectar
-         * directamente relojes físicos.
+         * Eliminar o sincronizar colaboradores puede afectar
+         * directamente relojes fÃ­sicos.
          */
-        if (!manage &&
+        if (!HasPermission(
+                "ponches.manage") &&
             RequiresCollaboratorSyncPermission(
                 route) &&
             !HasPermission(
@@ -323,30 +748,14 @@ public sealed class PonchesController : ControllerBase
                         "PONCHES_PAYLOAD_TOO_LARGE",
 
                     message =
-                        "El contenido supera el límite de 8 MB."
+                        "El contenido supera el lÃ­mite de 8 MB."
                 });
         }
 
-        var actor =
-            User.FindFirstValue(
-                ClaimTypes.NameIdentifier)
-            ??
-            User.FindFirstValue(
-                "sub");
+        var identity =
+            ResolveIdentity();
 
-        var organization =
-            User.FindFirstValue(
-                "organization_id")
-            ??
-            User.FindFirstValue(
-                "organizationId");
-
-        if (!Guid.TryParse(
-                actor,
-                out _) ||
-            !Guid.TryParse(
-                organization,
-                out _))
+        if (!identity.IsValid)
         {
             return Unauthorized(
                 new
@@ -355,25 +764,17 @@ public sealed class PonchesController : ControllerBase
                         "PONCHES_INVALID_IDENTITY",
 
                     message =
-                        "La identidad de TitanMDM no contiene un usuario u organización válidos."
+                        "La identidad de TitanMDM no contiene un usuario u organizaciÃ³n vÃ¡lidos."
                 });
         }
 
-        var grantedPermissions =
-            User.Claims
-                .Where(
-                    claim =>
-                        string.Equals(
-                            claim.Type,
-                            "permission",
-                            StringComparison.OrdinalIgnoreCase))
-                .Select(
-                    claim =>
-                        claim.Value);
+        var manage =
+            HasPermission(
+                "ponches.manage");
 
         var operations =
             PonchesAccess.Operations(
-                grantedPermissions);
+                GetGrantedPermissions());
 
         try
         {
@@ -387,10 +788,10 @@ public sealed class PonchesController : ControllerBase
                             method,
 
                         ActorUserId:
-                            actor!,
+                            identity.ActorUserId!,
 
                         OrganizationId:
-                            organization!,
+                            identity.OrganizationId!,
 
                         IsAdministrator:
                             manage,
@@ -413,67 +814,37 @@ public sealed class PonchesController : ControllerBase
                     cancellationToken);
 
             /*
-             * Python nunca debe poder forzar caché
-             * sobre respuestas operativas.
+             * Toda escritura exitosa invalida los datos
+             * operacionales relacionados.
+             *
+             * Evitamos mostrar Dashboard, Employees,
+             * Devices o Records obsoletos tras una acciÃ³n.
+             */
+            if (method != HttpMethod.Get &&
+                result.StatusCode
+                    is >= 200
+                    and < 300)
+            {
+                _cache
+                    .InvalidateOperationalData(
+                        identity.OrganizationId!);
+            }
+
+            /*
+             * Python nunca debe decidir la polÃ­tica de cachÃ©
+             * pÃºblica del API TitanMDM.
              */
             Response.Headers.CacheControl =
                 "no-store";
 
-            if (!string.IsNullOrWhiteSpace(
-                    result.ContentDisposition))
-            {
-                Response.Headers
-                    .ContentDisposition =
-                        result.ContentDisposition;
-            }
-
-            /*
-             * Una 401 del Edge Service no debe convertirse
-             * en una falsa 401 del usuario.
-             *
-             * Esa situación significa que la credencial
-             * machine-to-machine está desincronizada.
-             */
-            if (result.StatusCode ==
-                StatusCodes.Status401Unauthorized)
-            {
-                _logger.LogWarning(
-                    "Ponches Edge rechazó la credencial interna. Route={Route}",
-                    GetSafeRouteForLog(
-                        route));
-
-                return StatusCode(
-                    StatusCodes
-                        .Status502BadGateway,
-                    new
-                    {
-                        code =
-                            "PONCHES_INTEGRATION_AUTH",
-
-                        message =
-                            "La autenticación interna entre TitanMDM y Ponches Edge fue rechazada."
-                    });
-            }
-
-            Response.StatusCode =
-                result.StatusCode;
-
-            return File(
-                result.Body,
-                string.IsNullOrWhiteSpace(
-                    result.ContentType)
-                    ? "application/json"
-                    : result.ContentType);
+            return BuildGatewayResponse(
+                result,
+                route);
         }
         catch (OperationCanceledException)
             when (cancellationToken
                 .IsCancellationRequested)
         {
-            /*
-             * 499 no es estándar HTTP oficial,
-             * pero se usa ampliamente para
-             * Client Closed Request.
-             */
             return StatusCode(
                 499);
         }
@@ -481,7 +852,7 @@ public sealed class PonchesController : ControllerBase
         {
             _logger.LogWarning(
                 exception,
-                "Ponches no está configurado.");
+                "Ponches no estÃ¡ configurado.");
 
             return StatusCode(
                 StatusCodes
@@ -492,7 +863,7 @@ public sealed class PonchesController : ControllerBase
                         "PONCHES_NOT_CONFIGURED",
 
                     message =
-                        "La integración de Ponches no está configurada en este servidor."
+                        "La integraciÃ³n de Ponches no estÃ¡ configurada en este servidor."
                 });
         }
         catch (PonchesTimeoutException exception)
@@ -512,7 +883,7 @@ public sealed class PonchesController : ControllerBase
                         "PONCHES_TIMEOUT",
 
                     message =
-                        "La operación de Ponches superó el tiempo permitido. " +
+                        "La operaciÃ³n de Ponches superÃ³ el tiempo permitido. " +
                         "Si fue una escritura en reloj, consulta el historial antes de repetirla."
                 });
         }
@@ -520,7 +891,7 @@ public sealed class PonchesController : ControllerBase
         {
             _logger.LogWarning(
                 exception,
-                "Ponches Edge no está disponible. Route={Route}",
+                "Ponches Edge no estÃ¡ disponible. Route={Route}",
                 GetSafeRouteForLog(
                     route));
 
@@ -533,14 +904,101 @@ public sealed class PonchesController : ControllerBase
                         "PONCHES_UNAVAILABLE",
 
                     message =
-                        "El servicio interno de Ponches no está disponible."
+                        "El servicio interno de Ponches no estÃ¡ disponible."
                 });
         }
     }
 
     // ============================================================
-    // HELPERS
+    // RESPONSE
     // ============================================================
+
+    private IActionResult BuildGatewayResponse(
+        PonchesGatewayResponse result,
+        string route)
+    {
+        if (!string.IsNullOrWhiteSpace(
+                result.ContentDisposition))
+        {
+            Response.Headers
+                .ContentDisposition =
+                    result.ContentDisposition;
+        }
+
+        /*
+         * Una 401 del Edge no representa que el usuario Titan
+         * haya perdido sesiÃ³n.
+         *
+         * Significa que la autenticaciÃ³n machine-to-machine
+         * TitanMDM -> Ponches Edge fue rechazada.
+         */
+        if (result.StatusCode ==
+            StatusCodes.Status401Unauthorized)
+        {
+            _logger.LogWarning(
+                "Ponches Edge rechazÃ³ la credencial interna. Route={Route}",
+                GetSafeRouteForLog(
+                    route));
+
+            return StatusCode(
+                StatusCodes
+                    .Status502BadGateway,
+                new
+                {
+                    code =
+                        "PONCHES_INTEGRATION_AUTH",
+
+                    message =
+                        "La autenticaciÃ³n interna entre TitanMDM y Ponches Edge fue rechazada."
+                });
+        }
+
+        Response.StatusCode =
+            result.StatusCode;
+
+        return File(
+            result.Body,
+            string.IsNullOrWhiteSpace(
+                result.ContentType)
+                ? "application/json"
+                : result.ContentType);
+    }
+
+    // ============================================================
+    // AUTHORIZATION
+    // ============================================================
+
+    private IActionResult? ValidateAuthorization(
+        IReadOnlyCollection<string>
+            requiredPermissions)
+    {
+        var manage =
+            HasPermission(
+                "ponches.manage");
+
+        if (!manage &&
+            !HasPermission(
+                "workspace.ponches.view"))
+        {
+            return Forbid();
+        }
+
+        /*
+         * Required() devuelve en muchos casos varias
+         * alternativas vÃ¡lidas.
+         *
+         * Basta poseer una de ellas.
+         */
+        if (!manage &&
+            requiredPermissions.Count > 0 &&
+            !requiredPermissions.Any(
+                HasPermission))
+        {
+            return Forbid();
+        }
+
+        return null;
+    }
 
     private bool HasPermission(
         string permission)
@@ -558,7 +1016,66 @@ public sealed class PonchesController : ControllerBase
                     StringComparison.OrdinalIgnoreCase));
     }
 
-    private static bool IsSafeLegacyPath(
+    private IEnumerable<string>
+        GetGrantedPermissions()
+    {
+        return User.Claims
+            .Where(
+                claim =>
+                    string.Equals(
+                        claim.Type,
+                        "permission",
+                        StringComparison.OrdinalIgnoreCase))
+            .Select(
+                claim =>
+                    claim.Value)
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase);
+    }
+
+    private PonchesIdentity ResolveIdentity()
+    {
+        var actor =
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ??
+            User.FindFirstValue(
+                "sub");
+
+        var organization =
+            User.FindFirstValue(
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
+
+        var validActor =
+            Guid.TryParse(
+                actor,
+                out _);
+
+        var validOrganization =
+            Guid.TryParse(
+                organization,
+                out _);
+
+        return new PonchesIdentity(
+            ActorUserId:
+                actor,
+
+            OrganizationId:
+                organization,
+
+            IsValid:
+                validActor &&
+                validOrganization);
+    }
+
+    // ============================================================
+    // LEGACY SECURITY
+    // ============================================================
+
+    private static bool IsSafeModulePath(
         IReadOnlyList<string> segments)
     {
         if (segments.Count == 0)
@@ -566,7 +1083,7 @@ public sealed class PonchesController : ControllerBase
             return false;
         }
 
-        if (!LegacyRoots.Contains(
+        if (!ModuleRoots.Contains(
                 segments[0]))
         {
             return false;
@@ -579,7 +1096,14 @@ public sealed class PonchesController : ControllerBase
                 return false;
             }
 
-            if (segment.Contains('\\'))
+            if (segment.Contains(
+                    '\\'))
+            {
+                return false;
+            }
+
+            if (segment.Contains(
+                    ':'))
             {
                 return false;
             }
@@ -608,6 +1132,22 @@ public sealed class PonchesController : ControllerBase
                ||
                route.StartsWith(
                    "/api/collaborators/delete",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               route.StartsWith(
+                   "/api/records/collab-push",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               route.StartsWith(
+                   "/api/records/collab-clone",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               route.StartsWith(
+                   "/api/records/collab-delete-clocks",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               route.StartsWith(
+                   "/api/records/collab-reconcile",
                    StringComparison.OrdinalIgnoreCase);
     }
 
@@ -657,6 +1197,10 @@ public sealed class PonchesController : ControllerBase
                ||
                path.Contains(
                    "sync-now",
+                   StringComparison.OrdinalIgnoreCase)
+               ||
+               path.Contains(
+                   "remote-punch",
                    StringComparison.OrdinalIgnoreCase);
     }
 
@@ -672,6 +1216,11 @@ public sealed class PonchesController : ControllerBase
             ? route[..questionMarkIndex]
             : route;
     }
+
+    private sealed record PonchesIdentity(
+        string? ActorUserId,
+        string? OrganizationId,
+        bool IsValid);
 }
 
 // ================================================================
@@ -680,160 +1229,163 @@ public sealed class PonchesController : ControllerBase
 
 public static class PonchesAccess
 {
-    private static readonly Dictionary<string, string[]> Map =
-        new(
-            StringComparer.OrdinalIgnoreCase)
-        {
-            ["ponches.dashboard.view"] =
-            [
-                "attendance.read",
-                "devices.read"
-            ],
+    private static readonly Dictionary<
+        string,
+        string[]>
+        Map =
+            new(
+                StringComparer.OrdinalIgnoreCase)
+            {
+                ["ponches.dashboard.view"] =
+                [
+                    "attendance.read",
+                    "devices.read"
+                ],
 
-            ["ponches.records.view"] =
-            [
-                "attendance.read"
-            ],
+                ["ponches.records.view"] =
+                [
+                    "attendance.read"
+                ],
 
-            ["ponches.history.view"] =
-            [
-                "settings.read",
-                "attendance.read"
-            ],
+                ["ponches.history.view"] =
+                [
+                    "settings.read",
+                    "attendance.read"
+                ],
 
-            ["ponches.remote.create"] =
-            [
-                "remote_punch",
-                "devices.read",
-                "attendance.read"
-            ],
+                ["ponches.remote.create"] =
+                [
+                    "remote_punch",
+                    "devices.read",
+                    "attendance.read"
+                ],
 
-            ["ponches.devices.view"] =
-            [
-                "devices.read",
-                "zk.read"
-            ],
+                ["ponches.devices.view"] =
+                [
+                    "devices.read",
+                    "zk.read"
+                ],
 
-            ["ponches.devices.manage"] =
-            [
-                "devices.read",
-                "devices.write",
-                "devices.delete",
-                "zk.read"
-            ],
+                ["ponches.devices.manage"] =
+                [
+                    "devices.read",
+                    "devices.write",
+                    "devices.delete",
+                    "zk.read"
+                ],
 
-            ["ponches.employees.view"] =
-            [
-                "attendance.read"
-            ],
+                ["ponches.employees.view"] =
+                [
+                    "attendance.read"
+                ],
 
-            ["ponches.collaborators.view"] =
-            [
-                "collaborators.read",
-                "devices.read",
-                "schedules.read"
-            ],
+                ["ponches.collaborators.view"] =
+                [
+                    "collaborators.read",
+                    "devices.read",
+                    "schedules.read"
+                ],
 
-            ["ponches.collaborators.manage"] =
-            [
-                "collaborators.read",
-                "collaborators.write",
-                "devices.read",
-                "schedules.read"
-            ],
+                ["ponches.collaborators.manage"] =
+                [
+                    "collaborators.read",
+                    "collaborators.write",
+                    "devices.read",
+                    "schedules.read"
+                ],
 
-            ["ponches.collaborators.sync"] =
-            [
-                "collaborators.read",
-                "collaborators.sync",
-                "devices.read",
-                "zk.read",
-                "zk.push",
-                "zk.clone",
-                "zk.move",
-                "zk.delete"
-            ],
+                ["ponches.collaborators.sync"] =
+                [
+                    "collaborators.read",
+                    "collaborators.sync",
+                    "devices.read",
+                    "zk.read",
+                    "zk.push",
+                    "zk.clone",
+                    "zk.move",
+                    "zk.delete"
+                ],
 
-            ["ponches.schedules.view"] =
-            [
-                "schedules.read"
-            ],
+                ["ponches.schedules.view"] =
+                [
+                    "schedules.read"
+                ],
 
-            ["ponches.schedules.manage"] =
-            [
-                "schedules.read",
-                "schedules.write"
-            ],
+                ["ponches.schedules.manage"] =
+                [
+                    "schedules.read",
+                    "schedules.write"
+                ],
 
-            ["ponches.inventory.view"] =
-            [
-                "inventory.read",
-                "devices.read",
-                "zk.read"
-            ],
+                ["ponches.inventory.view"] =
+                [
+                    "inventory.read",
+                    "devices.read",
+                    "zk.read"
+                ],
 
-            ["ponches.inventory.manage"] =
-            [
-                "inventory.read",
-                "inventory.write",
-                "devices.read",
-                "devices.write",
-                "zk.read"
-            ],
+                ["ponches.inventory.manage"] =
+                [
+                    "inventory.read",
+                    "inventory.write",
+                    "devices.read",
+                    "devices.write",
+                    "zk.read"
+                ],
 
-            ["ponches.bulk.execute"] =
-            [
-                "bulk.execute",
-                "devices.read",
-                "zk.read",
-                "zk.enroll"
-            ],
+                ["ponches.bulk.execute"] =
+                [
+                    "bulk.execute",
+                    "devices.read",
+                    "zk.read",
+                    "zk.enroll"
+                ],
 
-            ["ponches.reports.view"] =
-            [
-                "reports.read",
-                "attendance.read",
-                "exports.read",
-                "schedules.read"
-            ],
+                ["ponches.reports.view"] =
+                [
+                    "reports.read",
+                    "attendance.read",
+                    "exports.read",
+                    "schedules.read"
+                ],
 
-            ["ponches.advanced-reports.view"] =
-            [
-                "reports.read",
-                "attendance.read",
-                "exports.read",
-                "schedules.read"
-            ],
+                ["ponches.advanced-reports.view"] =
+                [
+                    "reports.read",
+                    "attendance.read",
+                    "exports.read",
+                    "schedules.read"
+                ],
 
-            ["ponches.export"] =
-            [
-                "exports.read",
-                "reports.export",
-                "attendance.read"
-            ],
+                ["ponches.export"] =
+                [
+                    "exports.read",
+                    "reports.export",
+                    "attendance.read"
+                ],
 
-            ["ponches.sync.view"] =
-            [
-                "sync.read"
-            ],
+                ["ponches.sync.view"] =
+                [
+                    "sync.read"
+                ],
 
-            ["ponches.sync.run"] =
-            [
-                "sync.read",
-                "sync.run"
-            ],
+                ["ponches.sync.run"] =
+                [
+                    "sync.read",
+                    "sync.run"
+                ],
 
-            ["ponches.settings.view"] =
-            [
-                "settings.read"
-            ],
+                ["ponches.settings.view"] =
+                [
+                    "settings.read"
+                ],
 
-            ["ponches.settings.manage"] =
-            [
-                "settings.read",
-                "settings.write"
-            ]
-        };
+                ["ponches.settings.manage"] =
+                [
+                    "settings.read",
+                    "settings.write"
+                ]
+            };
 
     public static string[] Operations(
         IEnumerable<string> permissions)
@@ -866,10 +1418,14 @@ public static class PonchesAccess
                             "users.read",
                             "users.write",
                             "users.delete",
+
                             "roles.read",
                             "roles.write",
+
                             "payroll.run",
+
                             "schema.admin",
+
                             "zk.sync"
                         });
         }
@@ -914,6 +1470,10 @@ public static class PonchesAccess
                 "GET",
                 StringComparison.OrdinalIgnoreCase);
 
+        // ========================================================
+        // SETTINGS
+        // ========================================================
+
         if (root == "settings")
         {
             return
@@ -924,12 +1484,24 @@ public static class PonchesAccess
             ];
         }
 
+        // ========================================================
+        // SCHEMA
+        // ========================================================
+
         if (root == "schema")
         {
             return read
-                ? ["ponches.history.view"]
-                : [];
+                ?
+                [
+                    "ponches.history.view"
+                ]
+                :
+                [];
         }
+
+        // ========================================================
+        // PAYROLL / REPORTS
+        // ========================================================
 
         if (root == "payroll" &&
             action == "overtime" &&
@@ -955,6 +1527,10 @@ public static class PonchesAccess
             ];
         }
 
+        // ========================================================
+        // RECORDS
+        // ========================================================
+
         if (root == "records")
         {
             if (action == "export" &&
@@ -978,6 +1554,10 @@ public static class PonchesAccess
                 ];
             }
 
+            /*
+             * GestiÃ³n de usuarios TitanMDM pertenece
+             * al mÃ³dulo central, no a Ponches legacy.
+             */
             if (action is
                 "app-users"
                 or
@@ -1094,6 +1674,11 @@ public static class PonchesAccess
                 ];
             }
 
+            /*
+             * CatÃ¡logo de relojes reutilizado por varias
+             * pantallas. La autorizaciÃ³n puede provenir
+             * de cualquiera de esos mÃ³dulos.
+             */
             if (action ==
                     "managed-devices" &&
                 read)
@@ -1102,11 +1687,14 @@ public static class PonchesAccess
                 [
                     "ponches.devices.view",
                     "ponches.devices.manage",
+
                     "ponches.inventory.view",
                     "ponches.inventory.manage",
+
                     "ponches.collaborators.view",
                     "ponches.collaborators.manage",
                     "ponches.collaborators.sync",
+
                     "ponches.bulk.execute"
                 ];
             }
@@ -1165,8 +1753,12 @@ public static class PonchesAccess
                 "ops-overview")
             {
                 return read
-                    ? ["ponches.dashboard.view"]
-                    : [];
+                    ?
+                    [
+                        "ponches.dashboard.view"
+                    ]
+                    :
+                    [];
             }
 
             if (action is
@@ -1186,6 +1778,10 @@ public static class PonchesAccess
                     [];
             }
         }
+
+        // ========================================================
+        // DEVICES
+        // ========================================================
 
         if (root == "devices")
         {
@@ -1226,6 +1822,10 @@ public static class PonchesAccess
                     "ponches.collaborators.sync"
                 ];
         }
+
+        // ========================================================
+        // COLLABORATORS
+        // ========================================================
 
         if (root ==
             "collaborators")

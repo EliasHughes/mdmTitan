@@ -40,7 +40,7 @@ function isTimeField(name: string) {
 }
 
 function isTruthy(v: string) {
-  return ["1", "true", "si", "sí", "yes", "on"].includes(String(v).toLowerCase());
+  return ["1", "true", "si", "sÃ­", "yes", "on"].includes(String(v).toLowerCase());
 }
 
 function parseTimeToMinutes(v: string): number | null {
@@ -89,7 +89,7 @@ export default function Schedules() {
         setRotations(rd.items || []);
       }
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Error de conexión");
+      setError(err instanceof Error ? err.message : "Error de conexiÃ³n");
     } finally {
       setLoading(false);
     }
@@ -155,7 +155,7 @@ export default function Schedules() {
         editingId === "new"
           ? "/api/records/schedules"
           : `/api/records/schedules/${editingId}`;
-      const res = await fetch(url, {
+      const res = await authFetch(url, {
         method: editingId === "new" ? "POST" : "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ fields: form }),
@@ -187,12 +187,12 @@ export default function Schedules() {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch("/api/payroll/rotations", {
+      const res = await authFetch("/api/payroll/rotations", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           name: rotName,
-          description: "Rotación semanal automática",
+          description: "RotaciÃ³n semanal automÃ¡tica",
           schedule_ids: rotIds,
           employee_codes: rotCodes.split(",").map((c) => c.trim()).filter(Boolean),
           active: true,
@@ -200,7 +200,7 @@ export default function Schedules() {
       });
       if (!res.ok) {
         const d = await res.json().catch(() => ({}));
-        throw new Error(d.detail || "No se pudo guardar rotación");
+        throw new Error(d.detail || "No se pudo guardar rotaciÃ³n");
       }
       setOk("Horario rotativo guardado");
       setRotName("");
@@ -214,7 +214,7 @@ export default function Schedules() {
     }
   };
 
-  const fmt = (v: unknown) => (v == null || v === "" ? "—" : String(v));
+  const fmt = (v: unknown) => (v == null || v === "" ? "â€”" : String(v));
   const visibleCols = columns.slice(0, 7);
 
   return (
@@ -223,7 +223,7 @@ export default function Schedules() {
         <div>
           <h2 className="text-lg font-bold text-zinc-900">Horarios</h2>
           <p className="text-sm text-zinc-500">
-            Switch activo · overnight automático ≥ 18:00 · rotativos por checkbox
+            Switch activo Â· overnight automÃ¡tico â‰¥ 18:00 Â· rotativos por checkbox
           </p>
         </div>
         <button
@@ -261,7 +261,7 @@ export default function Schedules() {
                 <div key={c} className={tol ? "max-w-[140px]" : ""}>
                   <label className="block text-[11px] font-semibold text-zinc-500 uppercase mb-1">
                     {c.split("_").join(" ")}
-                    {night && <span className="ml-1 text-red-600 normal-case font-normal">(auto ≥ 18:00)</span>}
+                    {night && <span className="ml-1 text-red-600 normal-case font-normal">(auto â‰¥ 18:00)</span>}
                   </label>
                   {active ? (
                     <button
@@ -353,7 +353,7 @@ export default function Schedules() {
         <div>
           <h3 className="text-sm font-bold text-zinc-900">Horarios rotativos (semanal)</h3>
           <p className="text-xs text-zinc-500">
-            Marca con checkbox 2 o más horarios. Cada semana ISO se usa el siguiente.
+            Marca con checkbox 2 o mÃ¡s horarios. Cada semana ISO se usa el siguiente.
           </p>
         </div>
         <form onSubmit={saveRotation} className="space-y-3">
@@ -386,7 +386,7 @@ export default function Schedules() {
           <input
             value={rotCodes}
             onChange={(e) => setRotCodes(e.target.value)}
-            placeholder="Códigos de empleados (opcional, separados por coma)"
+            placeholder="CÃ³digos de empleados (opcional, separados por coma)"
             className="w-full text-sm border border-zinc-200 rounded-lg px-3 py-2"
           />
           <button
@@ -404,9 +404,9 @@ export default function Schedules() {
               <div key={r.id} className="text-sm flex flex-wrap gap-2 items-center">
                 <span className="font-semibold">{r.name}</span>
                 <span className="text-xs text-zinc-500">
-                  semana {r.iso_week} → horario #{r.current_schedule_id}
+                  semana {r.iso_week} â†’ horario #{r.current_schedule_id}
                 </span>
-                <span className="text-xs text-zinc-400">({(r.schedule_ids || []).join(" → ")})</span>
+                <span className="text-xs text-zinc-400">({(r.schedule_ids || []).join(" â†’ ")})</span>
               </div>
             ))}
           </div>

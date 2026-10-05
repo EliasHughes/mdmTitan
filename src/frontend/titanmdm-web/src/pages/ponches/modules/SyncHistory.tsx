@@ -1,463 +1,941 @@
-import { useEffect, useState } from "react";
-import { Download, RefreshCw, ShieldCheck } from "lucide-react";
-import { authFetch } from "../lib/api";
-import { Btn, PageHeader, Panel } from "../ui/kit";
+import {
+  useMemo,
+  useState,
+} from 'react'
 
-type Row = {
-  id?: number;
-  fecha?: string;
-  evento?: string;
-  detalle?: string;
-  registros?: number;
-  estado?: string;
-};
+import {
+  CheckCircle2,
+  Database,
+  Download,
+  RefreshCw,
+  ShieldCheck,
+} from 'lucide-react'
 
-type Payload = {
-  device: string;
-  start: string;
-  end: string;
-};
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+} from '@tanstack/react-query'
 
-type Result = {
-  candidates?: number;
-  inserts?: number;
-  updates?: number;
-  inserted?: number;
-  updated?: number;
-  unchanged?: number;
-  ignored?: number;
-  sql_confirmed?: boolean;
-  message?: string;
-  warning?: string;
-};
+import {
+  authFetch,
+} from '../lib/api'
 
-function today() {
-  const d = new Date();
-  return [
-    d.getFullYear(),
-    String(d.getMonth() + 1).padStart(2, "0"),
-    String(d.getDate()).padStart(2, "0"),
-  ].join("-");
+import {
+  Btn,
+  PageHeader,
+  Panel,
+} from '../ui/kit'
+
+type SyncRow = {
+  id?: number
+
+  fecha?: string
+
+  evento?: string
+
+  detalle?: string
+
+  registros?: number
+
+  estado?: string
 }
 
-async function read(response: Response) {
-  const data = await response.json();
+type Device = {
+  name: string
+}
 
-  if (!response.ok) {
+type SyncHistoryResponse = {
+  items?: SyncRow[]
+
+  devices?: Device[]
+}
+
+type SyncPayload = {
+  device: string
+  start: string
+  end: string
+}
+
+type SyncResult = {
+  candidates?: number
+  inserts?: number
+  updates?: number
+  inserted?: number
+  updated?: number
+  unchanged?: number
+  ignored?: number
+  sql_confirmed?: boolean
+  message?: string
+  warning?: string
+}
+
+function today(): string {
+  const date =
+    new Date()
+
+  return [
+    date.getFullYear(),
+
+    String(
+      date.getMonth() +
+        1,
+    ).padStart(
+      2,
+      '0',
+    ),
+
+    String(
+      date.getDate(),
+    ).padStart(
+      2,
+      '0',
+    ),
+  ].join(
+    '-',
+  )
+}
+
+async function readJson<T>(
+  response: Response,
+): Promise<T> {
+  const data =
+    await response
+      .json()
+      .catch(
+        () =>
+          ({}),
+      ) as
+      T & {
+        detail?: string
+        message?: string
+      }
+
+  if (
+    !response.ok
+  ) {
     throw new Error(
-      typeof data.detail === "string"
-        ? data.detail
-        : `Error ${response.status}`,
-    );
+      data.detail ??
+      data.message ??
+      `Error HTTP ${response.status}`,
+    )
   }
 
-  return data;
+  return data
+}
+
+async function loadSyncHistory(
+  signal?: AbortSignal,
+): Promise<SyncHistoryResponse> {
+  /*
+   * Este endpoint todavía pertenece al bridge F6.
+   *
+   * Será convertido a /api/ponches/sync-history
+   * durante F9 después de terminar todos los
+   * contratos Python.
+   */
+  return readJson<SyncHistoryResponse>(
+    await authFetch(
+      '/api/records/sync-history?limit=150',
+      {
+        signal,
+      },
+    ),
+  )
+}
+
+async function previewSync(
+  payload: SyncPayload,
+): Promise<SyncResult> {
+  return readJson<SyncResult>(
+    await authFetch(
+      '/api/records/sync-now',
+      {
+        method:
+          'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            ...payload,
+
+            dry_run:
+              true,
+
+            confirm:
+              false,
+          }),
+      },
+    ),
+  )
+}
+
+async function executeSync(
+  payload: SyncPayload,
+): Promise<SyncResult> {
+  return readJson<SyncResult>(
+    await authFetch(
+      '/api/records/sync-now',
+      {
+        method:
+          'POST',
+
+        headers: {
+          'Content-Type':
+            'application/json',
+        },
+
+        body:
+          JSON.stringify({
+            ...payload,
+
+            dry_run:
+              false,
+
+            confirm:
+              true,
+          }),
+      },
+    ),
+  )
 }
 
 export default function SyncHistory() {
-  const [items, setItems] = useState<Row[]>([]);
-  const [devices, setDevices] = useState<string[]>([]);
-  const [device, setDevice] = useState("");
-  const [start, setStart] = useState(today);
-  const [end, setEnd] = useState(today);
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
-  const [message, setMessage] = useState("");
-  const [preview, setPreview] = useState<{
-    payload: Payload;
-    result: Result;
-  } | null>(null);
+  const client =
+    useQueryClient()
 
-  async function load() {
-    setLoading(true);
+  const [
+    device,
+    setDevice,
+  ] =
+    useState(
+      '',
+    )
 
-    try {
-      const data = await read(
-        await authFetch("/api/records/sync-history?limit=150"),
-      );
+  const [
+    start,
+    setStart,
+  ] =
+    useState(
+      today(),
+    )
 
-      setItems(data.items ?? []);
-      setDevices(
-        (data.devices ?? []).map(
-          (item: { name: string }) => item.name,
-        ),
-      );
-    } finally {
-      setLoading(false);
-    }
-  }
+  const [
+    end,
+    setEnd,
+  ] =
+    useState(
+      today(),
+    )
 
-  async function refresh() {
-    setError("");
+  const [
+    preview,
+    setPreview,
+  ] =
+    useState<{
+      payload: SyncPayload
+      result: SyncResult
+    } | null>(
+      null,
+    )
 
-    try {
-      await load();
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudo cargar el historial",
-      );
-    }
-  }
+  const [
+    message,
+    setMessage,
+  ] =
+    useState(
+      '',
+    )
 
-  useEffect(() => {
-    void refresh();
-  }, []);
+  const historyQuery =
+    useQuery({
+      queryKey: [
+        'ponches',
+        'sync-history',
+      ],
 
-  function invalidate() {
-    setPreview(null);
-    setMessage("");
-  }
+      queryFn:
+        ({
+          signal,
+        }) =>
+          loadSyncHistory(
+            signal,
+          ),
 
-  async function inspect() {
-    setBusy(true);
-    setError("");
-    setMessage("");
-    setPreview(null);
+      staleTime:
+        20_000,
 
-    const payload = { device, start, end };
+      gcTime:
+        5 * 60_000,
 
-    try {
-      if (!device || !devices.includes(device)) {
-        throw new Error("Selecciona un reloj registrado");
-      }
+      refetchOnWindowFocus:
+        false,
+    })
 
-      const result = await read(
-        await authFetch("/api/records/sync-now", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...payload,
-            dry_run: true,
-            confirm: false,
-          }),
-        }),
-      );
+  const inspectMutation =
+    useMutation({
+      mutationFn:
+        previewSync,
 
-      setPreview({ payload, result });
-    } catch (e) {
-      setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudo leer el reloj",
-      );
-    } finally {
-      setBusy(false);
-    }
-  }
+      onSuccess:
+        (
+          result,
+          payload,
+        ) => {
+          setMessage(
+            '',
+          )
 
-  async function confirm() {
-    if (!preview) return;
+          setPreview({
+            payload,
+            result,
+          })
+        },
+    })
 
-    setBusy(true);
-    setError("");
-    setMessage("");
+  const syncMutation =
+    useMutation({
+      mutationFn:
+        executeSync,
 
-    try {
-      const result: Result = await read(
-        await authFetch("/api/records/sync-now", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            ...preview.payload,
-            dry_run: false,
-            confirm: true,
-          }),
-        }),
-      );
+      onSuccess:
+        async result => {
+          if (
+            !result
+              .sql_confirmed
+          ) {
+            throw new Error(
+              'El servidor no confirmó la escritura en SQL.',
+            )
+          }
 
-      if (!result.sql_confirmed) {
-        throw new Error(
-          "El servidor no confirmó la escritura en SQL",
-        );
+          setPreview(
+            null,
+          )
+
+          setMessage(
+            [
+              result.message ??
+                'Sincronización confirmada.',
+
+              result.warning ??
+                '',
+            ]
+              .filter(
+                Boolean,
+              )
+              .join(
+                ' ',
+              ),
+          )
+
+          /*
+           * Invalidamos las vistas relacionadas.
+           */
+          await Promise.all([
+            client.invalidateQueries({
+              queryKey: [
+                'ponches',
+                'sync-history',
+              ],
+            }),
+
+            client.invalidateQueries({
+              queryKey: [
+                'ponches',
+                'dashboard',
+              ],
+            }),
+
+            client.invalidateQueries({
+              queryKey: [
+                'ponches',
+                'records',
+              ],
+            }),
+
+            client.invalidateQueries({
+              queryKey: [
+                'ponches',
+                'employees',
+              ],
+            }),
+
+            client.invalidateQueries({
+              queryKey: [
+                'ponches',
+                'device-health',
+              ],
+            }),
+          ])
+        },
+    })
+
+  const data =
+    historyQuery.data
+
+  const items =
+    data?.items ??
+    []
+
+  const devices =
+    data?.devices ??
+    []
+
+  const completed =
+    useMemo(
+      () =>
+        items.filter(
+          item =>
+            item.estado
+              ?.toLowerCase() ===
+            'ok',
+        ).length,
+      [
+        items,
+      ],
+    )
+
+  const errors =
+    items.length -
+    completed
+
+  const busy =
+    inspectMutation
+      .isPending ||
+    syncMutation
+      .isPending
+
+  const error =
+    historyQuery.error ??
+    inspectMutation.error ??
+    syncMutation.error
+
+  const selectedValid =
+    devices.some(
+      item =>
+        item.name ===
+        device,
+    )
+
+  const inspect =
+    () => {
+      if (
+        !selectedValid
+      ) {
+        return
       }
 
       setMessage(
-        `${result.message || "Importación confirmada"}${
-          result.warning ? ` · ${result.warning}` : ""
-        }`,
-      );
+        '',
+      )
 
-      setPreview(null);
+      setPreview(
+        null,
+      )
 
-      try {
-        await load();
-      } catch {
-        setError(
-          "SQL confirmado; no se pudo actualizar la bitácora " +
-          "en pantalla. Presiona Actualizar historial.",
-        );
-      }
-    } catch (e) {
-      setPreview(null);
-      setError(
-        e instanceof Error
-          ? e.message
-          : "No se pudo confirmar la importación",
-      );
-    } finally {
-      setBusy(false);
+      inspectMutation.mutate({
+        device,
+        start,
+        end,
+      })
     }
-  }
-
-  const completed = items.filter(
-    (row) => row.estado === "ok",
-  ).length;
-
-  const input =
-    "w-full rounded-xl border border-zinc-200 bg-white px-3 py-2 text-sm";
 
   return (
     <div className="space-y-5 page-enter">
       <PageHeader
-        kicker="Operación"
-        title="Sincronización de asistencia"
-        subtitle="Importación reloj → SQL con vista previa y conservación de datos existentes."
+        kicker="Sincronización"
+        title="Reloj → TitanMDM"
+        subtitle="Importación controlada de asistencia desde dispositivos biométricos."
         actions={
           <Btn
             tone="ghost"
-            disabled={busy || loading}
-            onClick={() => void refresh()}
+            disabled={
+              historyQuery
+                .isFetching
+            }
+            onClick={() =>
+              void historyQuery
+                .refetch()
+            }
           >
-            <RefreshCw size={16} />
-            Actualizar historial
+            <RefreshCw
+              size={16}
+              className={
+                historyQuery
+                  .isFetching
+                  ? 'animate-spin'
+                  : ''
+              }
+            />
+
+            Actualizar
           </Btn>
         }
       />
 
       <div className="grid gap-3 sm:grid-cols-3">
-        {[
-          ["Eventos del historial", items.length, "kpi-violet"],
-          ["Completados", completed, "kpi-emerald"],
-          [
-            "Otros estados",
-            items.length - completed,
-            "kpi-amber",
-          ],
-        ].map(([label, value, color]) => (
-          <div
-            key={String(label)}
-            className={`kpi-tile ${color}`}
-          >
-            <span className="shine" />
-            <p className="text-xs text-white/80">{label}</p>
-            <p className="text-3xl font-black">{value}</p>
-          </div>
-        ))}
+        <Metric
+          title="Operaciones"
+          value={
+            items.length
+          }
+        />
+
+        <Metric
+          title="Completadas"
+          value={
+            completed
+          }
+        />
+
+        <Metric
+          title="Otros estados"
+          value={
+            errors
+          }
+        />
       </div>
 
       {error && (
-        <p
+        <div
           role="alert"
-          className="rounded-xl bg-rose-50 p-3 text-sm text-rose-700"
+          className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-700"
         >
-          {error}
-        </p>
+          {error instanceof Error
+            ? error.message
+            : 'No se pudo completar la operación.'}
+        </div>
       )}
 
       {message && (
-        <p
+        <div
           role="status"
-          className="rounded-xl bg-emerald-50 p-3 text-sm text-emerald-700"
+          className="flex items-center gap-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-700"
         >
+          <CheckCircle2
+            size={17}
+          />
+
           {message}
-        </p>
+        </div>
       )}
 
       <Panel>
-        <h3 className="font-semibold">Importar desde un reloj</h3>
-        <p className="my-3 text-xs text-zinc-500">
-          Selecciona un reloj registrado y entre uno y siete días.
-          La lectura no borra los datos del reloj.
-        </p>
+        <div className="mb-4 flex items-center gap-2">
+          <Download
+            size={18}
+            className="text-red-600"
+          />
 
-        <form
-          onSubmit={(event) => {
-            event.preventDefault();
-            void inspect();
-          }}
-          className="space-y-3"
-        >
-          <div className="grid gap-3 md:grid-cols-3">
-            <label className="grid gap-1 text-xs">
-              Reloj
-              <select
-                required
-                value={device}
-                disabled={busy || loading}
-                className={input}
-                onChange={(event) => {
-                  setDevice(event.target.value);
-                  invalidate();
-                }}
-              >
-                <option value="">
-                  {loading
-                    ? "Cargando relojes…"
-                    : "Selecciona un reloj"}
-                </option>
-                {devices.map((name) => (
-                  <option key={name} value={name}>
-                    {name}
-                  </option>
-                ))}
-              </select>
-            </label>
+          <div>
+            <h3 className="font-bold">
+              Importar desde reloj
+            </h3>
 
-            <label className="grid gap-1 text-xs">
-              Desde
-              <input
-                type="date"
-                required
-                value={start}
-                max={end}
-                disabled={busy}
-                className={input}
-                onChange={(event) => {
-                  setStart(event.target.value);
-                  invalidate();
-                }}
-              />
-            </label>
-
-            <label className="grid gap-1 text-xs">
-              Hasta
-              <input
-                type="date"
-                required
-                value={end}
-                min={start}
-                max={today()}
-                disabled={busy}
-                className={input}
-                onChange={(event) => {
-                  setEnd(event.target.value);
-                  invalidate();
-                }}
-              />
-            </label>
-          </div>
-
-          {!loading && !devices.length && (
-            <p className="text-sm text-amber-700">
-              No hay relojes disponibles en el catálogo recibido.
-              Regístralos en Dispositivos y actualiza el historial.
+            <p className="text-xs text-zinc-500">
+              Primero se realiza una vista previa. Nada se escribe hasta confirmar.
             </p>
-          )}
+          </div>
+        </div>
 
-          <button
-            type="submit"
-            disabled={busy || loading || !device}
-            className="inline-flex items-center gap-2 rounded-xl bg-rose-700 px-4 py-2 text-sm font-semibold text-white disabled:opacity-50"
-          >
-            <Download size={16} />
-            {busy ? "Procesando…" : "Leer y previsualizar"}
-          </button>
-        </form>
+        <div className="grid gap-3 lg:grid-cols-4">
+          <label className="grid gap-1 text-xs font-semibold text-zinc-600">
+            Dispositivo
+
+            <select
+              value={
+                device
+              }
+              disabled={
+                busy
+              }
+              onChange={
+                event => {
+                  setDevice(
+                    event.target.value,
+                  )
+
+                  setPreview(
+                    null,
+                  )
+                }
+              }
+              className="rounded-xl border border-zinc-200 bg-white px-3 py-2.5 text-sm"
+            >
+              <option value="">
+                Selecciona un reloj
+              </option>
+
+              {devices.map(
+                item => (
+                  <option
+                    key={
+                      item.name
+                    }
+                    value={
+                      item.name
+                    }
+                  >
+                    {
+                      item.name
+                    }
+                  </option>
+                ),
+              )}
+            </select>
+          </label>
+
+          <label className="grid gap-1 text-xs font-semibold text-zinc-600">
+            Desde
+
+            <input
+              type="date"
+              value={
+                start
+              }
+              max={
+                end
+              }
+              disabled={
+                busy
+              }
+              onChange={
+                event => {
+                  setStart(
+                    event.target.value,
+                  )
+
+                  setPreview(
+                    null,
+                  )
+                }
+              }
+              className="rounded-xl border border-zinc-200 px-3 py-2.5 text-sm"
+            />
+          </label>
+
+          <label className="grid gap-1 text-xs font-semibold text-zinc-600">
+            Hasta
+
+            <input
+              type="date"
+              value={
+                end
+              }
+              min={
+                start
+              }
+              max={
+                today()
+              }
+              disabled={
+                busy
+              }
+              onChange={
+                event => {
+                  setEnd(
+                    event.target.value,
+                  )
+
+                  setPreview(
+                    null,
+                  )
+                }
+              }
+              className="rounded-xl border border-zinc-200 px-3 py-2.5 text-sm"
+            />
+          </label>
+
+          <div className="flex items-end">
+            <Btn
+              tone="primary"
+              disabled={
+                busy ||
+                !selectedValid
+              }
+              onClick={
+                inspect
+              }
+            >
+              <Database
+                size={16}
+              />
+
+              {inspectMutation
+                .isPending
+                ? 'Leyendo…'
+                : 'Previsualizar'}
+            </Btn>
+          </div>
+        </div>
       </Panel>
 
       {preview && (
         <Panel>
-          <h3 className="font-semibold">
-            Vista previa · {preview.payload.device}
-          </h3>
-          <p className="my-2 text-sm text-zinc-500">
-            {preview.payload.start} al {preview.payload.end}.
-            Todavía no se ha escrito en SQL.
-          </p>
+          <div className="mb-4">
+            <h3 className="font-bold">
+              Vista previa
+            </h3>
 
-          <div className="my-4 grid grid-cols-2 gap-3 lg:grid-cols-5">
-            {[
-              ["Filas candidatas", preview.result.candidates],
-              ["Nuevas", preview.result.inserts],
-              ["A completar", preview.result.updates],
-              ["Sin cambios", preview.result.unchanged],
-              ["Marcas ignoradas", preview.result.ignored],
-            ].map(([label, value]) => (
-              <div
-                key={String(label)}
-                className="rounded-xl bg-zinc-50 p-3"
-              >
-                <p className="text-xs text-zinc-500">{label}</p>
-                <p className="text-xl font-bold">{value ?? 0}</p>
-              </div>
-            ))}
+            <p className="text-xs text-zinc-500">
+              {preview.payload.device}
+              {' · '}
+              {preview.payload.start}
+              {' → '}
+              {preview.payload.end}
+            </p>
           </div>
 
-          <p className="mb-3 text-xs text-zinc-500">
-            Al confirmar se vuelve a leer el reloj.
-            Se completan únicamente campos vacíos;
-            los totales pueden cambiar si llegan nuevas marcas.
-          </p>
+          <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-5">
+            <PreviewMetric
+              title="Candidatos"
+              value={
+                preview
+                  .result
+                  .candidates
+              }
+            />
 
-          <Btn
-            tone="primary"
-            disabled={busy}
-            onClick={() => void confirm()}
-          >
-            <ShieldCheck size={16} />
-            Confirmar importación a SQL
-          </Btn>
+            <PreviewMetric
+              title="Nuevos"
+              value={
+                preview
+                  .result
+                  .inserts
+              }
+            />
+
+            <PreviewMetric
+              title="Actualizar"
+              value={
+                preview
+                  .result
+                  .updates
+              }
+            />
+
+            <PreviewMetric
+              title="Sin cambios"
+              value={
+                preview
+                  .result
+                  .unchanged
+              }
+            />
+
+            <PreviewMetric
+              title="Ignorados"
+              value={
+                preview
+                  .result
+                  .ignored
+              }
+            />
+          </div>
+
+          <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 p-4">
+            <div>
+              <strong className="text-sm text-amber-900">
+                Confirmación requerida
+              </strong>
+
+              <p className="mt-1 text-xs text-amber-700">
+                El preview no modifica SQL ni elimina datos del dispositivo.
+              </p>
+            </div>
+
+            <Btn
+              tone="primary"
+              disabled={
+                syncMutation
+                  .isPending
+              }
+              onClick={() =>
+                syncMutation.mutate(
+                  preview.payload,
+                )
+              }
+            >
+              <ShieldCheck
+                size={16}
+              />
+
+              {syncMutation
+                .isPending
+                ? 'Sincronizando…'
+                : 'Confirmar importación'}
+            </Btn>
+          </div>
         </Panel>
       )}
 
       <Panel>
-        <h3 className="mb-3 font-semibold">
-          Historial de operaciones
+        <h3 className="mb-4 font-bold">
+          Historial de sincronización
         </h3>
+
         <div className="max-h-[560px] overflow-auto">
-          <table className="w-full text-left text-sm">
-            <thead>
-              <tr className="text-xs uppercase text-zinc-500">
-                <th className="py-2">Fecha</th>
-                <th>Evento</th>
-                <th>Detalle</th>
-                <th>Registros</th>
-                <th>Estado</th>
+          <table className="w-full text-sm">
+            <thead className="sticky top-0 bg-white">
+              <tr className="border-b text-left text-[11px] uppercase tracking-wide text-zinc-500">
+                <th className="py-3">
+                  Fecha
+                </th>
+
+                <th>
+                  Evento
+                </th>
+
+                <th>
+                  Detalle
+                </th>
+
+                <th>
+                  Registros
+                </th>
+
+                <th>
+                  Estado
+                </th>
               </tr>
             </thead>
-            <tbody>
-              {items.map((row, index) => (
-                <tr
-                  key={row.id ?? index}
-                  className="border-t border-zinc-100"
-                >
-                  <td className="py-3 text-xs">{row.fecha}</td>
-                  <td>{row.evento}</td>
-                  <td className="max-w-lg whitespace-normal text-xs text-zinc-500">
-                    {row.detalle}
-                  </td>
-                  <td>{row.registros ?? 0}</td>
-                  <td
-                    className={
-                      row.estado === "ok"
-                        ? "font-semibold text-emerald-600"
-                        : "text-amber-700"
-                    }
-                  >
-                    {row.estado}
-                  </td>
-                </tr>
-              ))}
 
-              {!items.length && (
+            <tbody>
+              {historyQuery
+                .isLoading && (
                 <tr>
                   <td
                     colSpan={5}
-                    className="py-6 text-center text-zinc-500"
+                    className="py-10 text-center text-zinc-400"
                   >
-                    {loading
-                      ? "Cargando…"
-                      : "Sin operaciones registradas"}
+                    Cargando historial…
                   </td>
                 </tr>
+              )}
+
+              {!historyQuery
+                  .isLoading &&
+                items.length ===
+                  0 && (
+                  <tr>
+                    <td
+                      colSpan={5}
+                      className="py-12 text-center text-zinc-400"
+                    >
+                      Aún no existen operaciones registradas.
+                    </td>
+                  </tr>
+                )}
+
+              {items.map(
+                (
+                  row,
+                  index,
+                ) => {
+                  const ok =
+                    row.estado
+                      ?.toLowerCase() ===
+                    'ok'
+
+                  return (
+                    <tr
+                      key={
+                        row.id ??
+                        index
+                      }
+                      className="border-b border-zinc-100"
+                    >
+                      <td className="py-3 text-xs text-zinc-500">
+                        {
+                          row.fecha
+                        }
+                      </td>
+
+                      <td className="font-semibold">
+                        {
+                          row.evento
+                        }
+                      </td>
+
+                      <td className="max-w-xl text-xs text-zinc-500">
+                        {
+                          row.detalle
+                        }
+                      </td>
+
+                      <td>
+                        {row.registros ??
+                          0}
+                      </td>
+
+                      <td>
+                        <span
+                          className={
+                            `rounded-full px-2.5 py-1 text-xs font-semibold ${
+                              ok
+                                ? 'bg-emerald-50 text-emerald-700'
+                                : 'bg-amber-50 text-amber-700'
+                            }`
+                          }
+                        >
+                          {row.estado ||
+                            'N/D'}
+                        </span>
+                      </td>
+                    </tr>
+                  )
+                },
               )}
             </tbody>
           </table>
         </div>
       </Panel>
     </div>
-  );
+  )
+}
+
+function Metric({
+  title,
+  value,
+}: {
+  title: string
+  value: number
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm">
+      <p className="text-xs font-semibold uppercase tracking-wide text-zinc-500">
+        {title}
+      </p>
+
+      <p className="mt-2 text-3xl font-black text-zinc-900">
+        {value}
+      </p>
+    </div>
+  )
+}
+
+function PreviewMetric({
+  title,
+  value,
+}: {
+  title: string
+  value?: number
+}) {
+  return (
+    <div className="rounded-xl bg-zinc-50 p-4">
+      <p className="text-xs text-zinc-500">
+        {title}
+      </p>
+
+      <p className="mt-1 text-2xl font-bold">
+        {value ??
+          0}
+      </p>
+    </div>
+  )
 }

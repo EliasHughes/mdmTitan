@@ -1,170 +1,599 @@
-import { useEffect, useState } from "react";
-import { RefreshCw, Search } from "lucide-react";
-import { authFetch } from "../lib/api";
-import { Btn, PageHeader, Panel } from "../ui/kit";
+import {
+  useMemo,
+  useState,
+} from 'react'
+
+import {
+  RefreshCw,
+  Search,
+} from 'lucide-react'
+
+import {
+  keepPreviousData,
+  useQuery,
+} from '@tanstack/react-query'
+
+import {
+  titanFetch,
+} from '../lib/api'
+
+import {
+  Btn,
+  PageHeader,
+  Panel,
+} from '../ui/kit'
 
 type PunchRow = {
-  id: number;
-  codigo: string;
-  nombre?: string | null;
-  departamento?: string | null;
-  fecha?: string | null;
-  entrada?: string | null;
-  salida?: string | null;
-  dispositivo_origen?: string | null;
-};
-type DeviceRow = { dispositivo: string };
+  id:
+    | number
+    | string
 
-function formatTime(v?: string | null) {
-  if (!v) return "—";
-  return String(v).slice(0, 8);
+  codigo: string
+
+  nombre?:
+    | string
+    | null
+
+  departamento?:
+    | string
+    | null
+
+  fecha?:
+    | string
+    | null
+
+  entrada?:
+    | string
+    | null
+
+  salida?:
+    | string
+    | null
+
+  dispositivo_origen?:
+    | string
+    | null
 }
-function formatDate(v?: string | null) {
-  if (!v) return "—";
-  return String(v).slice(0, 10);
+
+type RecordsResponse = {
+  items?: PunchRow[]
+}
+
+function formatTime(
+  value?:
+    | string
+    | null,
+) {
+  if (!value) {
+    return '—'
+  }
+
+  return String(
+    value,
+  ).slice(
+    0,
+    8,
+  )
+}
+
+function formatDate(
+  value?:
+    | string
+    | null,
+) {
+  if (!value) {
+    return '—'
+  }
+
+  return String(
+    value,
+  ).slice(
+    0,
+    10,
+  )
+}
+
+async function getRecords(
+  search: string,
+  fecha: string,
+  dispositivo: string,
+  limit: number,
+  signal?: AbortSignal,
+): Promise<PunchRow[]> {
+  const params =
+    new URLSearchParams({
+      limit:
+        String(
+          limit,
+        ),
+    })
+
+  if (
+    search.trim()
+  ) {
+    params.set(
+      'search',
+      search.trim(),
+    )
+  }
+
+  if (
+    fecha
+  ) {
+    params.set(
+      'fecha',
+      fecha,
+    )
+  }
+
+  if (
+    dispositivo &&
+    dispositivo !==
+      'todos'
+  ) {
+    params.set(
+      'dispositivo',
+      dispositivo,
+    )
+  }
+
+  const response =
+    await titanFetch(
+      `/api/ponches/records?${params.toString()}`,
+      {
+        signal,
+      },
+    )
+
+  const data =
+    await response
+      .json()
+      .catch(
+        () =>
+          ({}),
+      ) as
+      RecordsResponse & {
+        message?: string
+        detail?: string
+      }
+
+  if (
+    !response.ok
+  ) {
+    throw new Error(
+      data.detail ??
+      data.message ??
+      `Error ${response.status}`,
+    )
+  }
+
+  return data.items ??
+    []
 }
 
 export default function Records() {
-  const [rows, setRows] = useState<PunchRow[]>([]);
-  const [devices, setDevices] = useState<DeviceRow[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const [q, setQ] = useState("");
-  const [fecha, setFecha] = useState("");
-  const [dispositivo, setDispositivo] = useState("todos");
-  const [limit, setLimit] = useState(100);
+  const [
+    searchInput,
+    setSearchInput,
+  ] =
+    useState(
+      '',
+    )
 
-  const loadDevices = async () => {
-    try {
-      const res = await authFetch("/api/records/devices");
-      const data = await res.json();
-      setDevices(data.items || data.devices || []);
-    } catch {
-      setDevices([]);
-    }
-  };
+  const [
+    search,
+    setSearch,
+  ] =
+    useState(
+      '',
+    )
 
-  const load = async () => {
-    setLoading(true);
-    setError("");
-    try {
-      const params = new URLSearchParams({ limit: String(limit) });
-      if (q.trim()) params.set("q", q.trim());
-      if (fecha) params.set("fecha", fecha);
-      if (dispositivo && dispositivo !== "todos") params.set("dispositivo", dispositivo);
-      const res = await authFetch(`/api/records/search?${params.toString()}`);
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || `Error ${res.status}`);
-      setRows(data.items || []);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "No se pudieron cargar los ponches");
-    } finally {
-      setLoading(false);
-    }
-  };
+  const [
+    fecha,
+    setFecha,
+  ] =
+    useState(
+      '',
+    )
 
-  useEffect(() => {
-    loadDevices();
-    load();
-  }, []);
+  const [
+    dispositivo,
+    setDispositivo,
+  ] =
+    useState(
+      'todos',
+    )
 
-  const onSubmit = (ev: React.FormEvent) => {
-    ev.preventDefault();
-    load();
-  };
+  const [
+    limit,
+    setLimit,
+  ] =
+    useState(
+      100,
+    )
 
-  const conSalida = rows.filter((r) => r.salida).length;
-  const abiertos = rows.length - conSalida;
+  const query =
+    useQuery({
+      queryKey: [
+        'ponches',
+        'records',
+        search,
+        fecha,
+        dispositivo,
+        limit,
+      ],
+
+      queryFn:
+        ({
+          signal,
+        }) =>
+          getRecords(
+            search,
+            fecha,
+            dispositivo,
+            limit,
+            signal,
+          ),
+
+      staleTime:
+        15_000,
+
+      gcTime:
+        5 * 60_000,
+
+      placeholderData:
+        keepPreviousData,
+
+      refetchOnWindowFocus:
+        false,
+    })
+
+  const rows =
+    query.data ??
+    []
+
+  const conSalida =
+    useMemo(
+      () =>
+        rows.filter(
+          row =>
+            Boolean(
+              row.salida,
+            ),
+        ).length,
+      [
+        rows,
+      ],
+    )
+
+  const abiertos =
+    rows.length -
+    conSalida
 
   return (
     <div className="space-y-5 page-enter">
       <PageHeader
         kicker="Asistencia"
         title="Ponches"
-        subtitle="BioTimeDB · solo lectura · filtros en vivo"
+        subtitle="Consulta operacional de asistencia"
         actions={
-          <Btn tone="primary" onClick={load} disabled={loading}>
-            <RefreshCw size={16} className={loading ? "animate-spin" : ""} /> Actualizar
+          <Btn
+            tone="primary"
+            onClick={() =>
+              void query.refetch()
+            }
+            disabled={
+              query.isFetching
+            }
+          >
+            <RefreshCw
+              size={16}
+              className={
+                query.isFetching
+                  ? 'animate-spin'
+                  : ''
+              }
+            />
+
+            Actualizar
           </Btn>
         }
       />
 
-      <div className="grid sm:grid-cols-3 gap-3">
-        <div className="kpi-tile kpi-violet"><span className="shine" /><p className="text-xs text-white/80">Registros</p><p className="text-3xl font-black">{rows.length}</p></div>
-        <div className="kpi-tile kpi-emerald"><span className="shine" /><p className="text-xs text-white/80">Con salida</p><p className="text-3xl font-black">{conSalida}</p></div>
-        <div className="kpi-tile kpi-amber"><span className="shine" /><p className="text-xs text-white/80">Sin salida</p><p className="text-3xl font-black">{abiertos}</p></div>
+      <div className="grid gap-3 sm:grid-cols-3">
+        <Metric
+          label="Registros"
+          value={
+            rows.length
+          }
+        />
+
+        <Metric
+          label="Con salida"
+          value={
+            conSalida
+          }
+        />
+
+        <Metric
+          label="Sin salida"
+          value={
+            abiertos
+          }
+        />
       </div>
 
-      {error ? <p className="text-sm text-rose-700 bg-rose-50 rounded-xl px-3 py-2">{error}</p> : null}
+      {query.error && (
+        <p className="rounded-xl bg-rose-50 px-3 py-2 text-sm text-rose-700">
+          {query.error instanceof Error
+            ? query.error.message
+            : 'No se pudieron cargar los ponches.'}
+        </p>
+      )}
 
       <Panel>
-        <form onSubmit={onSubmit} className="grid grid-cols-1 md:grid-cols-5 gap-3 items-end mb-4">
-          <label className="md:col-span-2 text-[11px] font-semibold text-zinc-500 uppercase">
+        <form
+          onSubmit={
+            event => {
+              event.preventDefault()
+
+              setSearch(
+                searchInput.trim(),
+              )
+            }
+          }
+          className="mb-4 grid grid-cols-1 items-end gap-3 md:grid-cols-5"
+        >
+          <label className="text-[11px] font-semibold uppercase text-zinc-500 md:col-span-2">
             Código / nombre
-            <span className="relative block mt-1">
-              <Search size={14} className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400" />
-              <input value={q} onChange={(e) => setQ(e.target.value)} className="w-full text-sm border rounded-xl pl-8 pr-3 py-2.5" placeholder="62627" />
+
+            <span className="relative mt-1 block">
+              <Search
+                size={14}
+                className="absolute left-3 top-1/2 -translate-y-1/2 text-zinc-400"
+              />
+
+              <input
+                value={
+                  searchInput
+                }
+                onChange={
+                  event =>
+                    setSearchInput(
+                      event.target.value,
+                    )
+                }
+                className="w-full rounded-xl border px-3 py-2.5 pl-8 text-sm"
+                placeholder="Código o colaborador"
+              />
             </span>
           </label>
-          <label className="text-[11px] font-semibold text-zinc-500 uppercase">
+
+          <label className="text-[11px] font-semibold uppercase text-zinc-500">
             Fecha
-            <input type="date" value={fecha} onChange={(e) => setFecha(e.target.value)} className="mt-1 w-full text-sm border rounded-xl px-3 py-2.5" />
+
+            <input
+              type="date"
+              value={
+                fecha
+              }
+              onChange={
+                event =>
+                  setFecha(
+                    event.target.value,
+                  )
+              }
+              className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+            />
           </label>
-          <label className="text-[11px] font-semibold text-zinc-500 uppercase">
-            Reloj
-            <select value={dispositivo} onChange={(e) => setDispositivo(e.target.value)} className="mt-1 w-full text-sm border rounded-xl px-3 py-2.5 bg-white">
-              <option value="todos">Todos</option>
-              {devices.map((d) => (
-                <option key={d.dispositivo} value={d.dispositivo}>{d.dispositivo}</option>
-              ))}
-            </select>
+
+          <label className="text-[11px] font-semibold uppercase text-zinc-500">
+            Dispositivo
+
+            <input
+              value={
+                dispositivo ===
+                'todos'
+                  ? ''
+                  : dispositivo
+              }
+              onChange={
+                event =>
+                  setDispositivo(
+                    event.target.value ||
+                    'todos',
+                  )
+              }
+              placeholder="Todos"
+              className="mt-1 w-full rounded-xl border px-3 py-2.5 text-sm"
+            />
           </label>
+
           <div className="flex gap-2">
-            <select value={limit} onChange={(e) => setLimit(Number(e.target.value))} className="text-sm border rounded-xl px-2 py-2.5 bg-white">
-              <option value={50}>50</option>
-              <option value={100}>100</option>
-              <option value={200}>200</option>
-              <option value={500}>500</option>
+            <select
+              value={
+                limit
+              }
+              onChange={
+                event =>
+                  setLimit(
+                    Number(
+                      event.target.value,
+                    ),
+                  )
+              }
+              className="rounded-xl border bg-white px-2 py-2.5 text-sm"
+            >
+              <option value={50}>
+                50
+              </option>
+
+              <option value={100}>
+                100
+              </option>
+
+              <option value={200}>
+                200
+              </option>
+
+              <option value={500}>
+                500
+              </option>
             </select>
-            <Btn type="submit" tone="primary">Filtrar</Btn>
+
+            <Btn
+              type="submit"
+              tone="primary"
+            >
+              Filtrar
+            </Btn>
           </div>
         </form>
 
-        <div className="overflow-auto max-h-[560px]">
+        <div className="max-h-[560px] overflow-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="text-[11px] uppercase text-zinc-500 text-left">
-                <th className="py-2">Código</th>
-                <th>Nombre</th>
-                <th>Depto</th>
-                <th>Fecha</th>
-                <th>Entrada</th>
-                <th>Salida</th>
-                <th>Reloj</th>
+              <tr className="text-left text-[11px] uppercase text-zinc-500">
+                <th className="py-2">
+                  Código
+                </th>
+
+                <th>
+                  Nombre
+                </th>
+
+                <th>
+                  Departamento
+                </th>
+
+                <th>
+                  Fecha
+                </th>
+
+                <th>
+                  Entrada
+                </th>
+
+                <th>
+                  Salida
+                </th>
+
+                <th>
+                  Reloj
+                </th>
               </tr>
             </thead>
+
             <tbody>
-              {loading && rows.length === 0 ? (
-                <tr><td colSpan={7} className="py-8 text-center text-zinc-400">Cargando…</td></tr>
-              ) : null}
-              {!loading && rows.length === 0 ? (
-                <tr><td colSpan={7} className="py-8 text-center text-zinc-400">Sin resultados</td></tr>
-              ) : null}
-              {rows.map((r) => (
-                <tr key={r.id} className="border-t border-zinc-100 hover:bg-zinc-50">
-                  <td className="py-2 font-mono text-xs">{r.codigo}</td>
-                  <td className="font-medium">{r.nombre || "—"}</td>
-                  <td className="text-zinc-500">{r.departamento || "—"}</td>
-                  <td>{formatDate(r.fecha)}</td>
-                  <td><span className="text-xs font-semibold text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full">{formatTime(r.entrada)}</span></td>
-                  <td><span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${r.salida ? "text-sky-700 bg-sky-50" : "text-amber-700 bg-amber-50"}`}>{formatTime(r.salida)}</span></td>
-                  <td className="text-xs text-zinc-500 max-w-[180px] truncate">{r.dispositivo_origen || "—"}</td>
+              {query.isLoading && (
+                <tr>
+                  <td
+                    colSpan={7}
+                    className="py-8 text-center text-zinc-400"
+                  >
+                    Cargando…
+                  </td>
                 </tr>
-              ))}
+              )}
+
+              {!query.isLoading &&
+                rows.length ===
+                  0 && (
+                  <tr>
+                    <td
+                      colSpan={7}
+                      className="py-8 text-center text-zinc-400"
+                    >
+                      Sin resultados
+                    </td>
+                  </tr>
+                )}
+
+              {rows.map(
+                row => (
+                  <tr
+                    key={
+                      row.id
+                    }
+                    className="border-t border-zinc-100 hover:bg-zinc-50"
+                  >
+                    <td className="py-2 font-mono text-xs">
+                      {
+                        row.codigo
+                      }
+                    </td>
+
+                    <td className="font-medium">
+                      {row.nombre ||
+                        '—'}
+                    </td>
+
+                    <td className="text-zinc-500">
+                      {row.departamento ||
+                        '—'}
+                    </td>
+
+                    <td>
+                      {formatDate(
+                        row.fecha,
+                      )}
+                    </td>
+
+                    <td>
+                      <span className="rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-semibold text-emerald-700">
+                        {formatTime(
+                          row.entrada,
+                        )}
+                      </span>
+                    </td>
+
+                    <td>
+                      <span
+                        className={
+                          `rounded-full px-2 py-0.5 text-xs font-semibold ${
+                            row.salida
+                              ? 'bg-sky-50 text-sky-700'
+                              : 'bg-amber-50 text-amber-700'
+                          }`
+                        }
+                      >
+                        {formatTime(
+                          row.salida,
+                        )}
+                      </span>
+                    </td>
+
+                    <td className="max-w-[180px] truncate text-xs text-zinc-500">
+                      {row.dispositivo_origen ||
+                        '—'}
+                    </td>
+                  </tr>
+                ),
+              )}
             </tbody>
           </table>
         </div>
       </Panel>
     </div>
-  );
+  )
+}
+
+function Metric({
+  label,
+  value,
+}: {
+  label: string
+  value: number
+}) {
+  return (
+    <div className="rounded-2xl border border-zinc-200 bg-white p-4 shadow-sm">
+      <p className="text-xs uppercase tracking-wide text-zinc-500">
+        {label}
+      </p>
+
+      <p className="mt-1 text-3xl font-black text-zinc-900">
+        {value}
+      </p>
+    </div>
+  )
 }
