@@ -23,6 +23,16 @@ export interface HelpdeskTicketListItem {
   slaBreached: boolean
 }
 
+export interface EntraLoginStatus {
+  enabled: boolean
+  tenantConfigured: boolean
+  clientConfigured: boolean
+  secretConfigured: boolean
+  frontendUrl?: string | null
+  callbackUrl?: string | null
+  frontendReturnUrl?: string | null
+}
+
 export interface HelpdeskComment {
   id: string
   authorUserId: string
@@ -103,6 +113,14 @@ export const helpdeskApi = {
 
     return response.data
   },
+  async getEntraLoginStatus() {
+  const response =
+    await apiClient.get<EntraLoginStatus>(
+      '/auth/entra/status',
+    )
+
+  return response.data
+},
 
   async getTicket(
     id: string,

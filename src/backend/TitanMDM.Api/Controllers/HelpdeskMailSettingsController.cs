@@ -18,22 +18,16 @@ namespace TitanMDM.Api.Controllers;
 public sealed class HelpdeskMailSettingsController
     : ControllerBase
 {
-    private readonly TitanMdmDbContext
-        _db;
-
-    private readonly IHttpClientFactory
-        _httpClientFactory;
-
-    private readonly IDataProtector
-        _protector;
+    private readonly TitanMdmDbContext _db;
+    private readonly IHttpClientFactory _httpClientFactory;
+    private readonly IDataProtector _protector;
 
     public HelpdeskMailSettingsController(
         TitanMdmDbContext db,
         IHttpClientFactory httpClientFactory,
         IDataProtectionProvider dataProtectionProvider)
     {
-        _db =
-            db;
+        _db = db;
 
         _httpClientFactory =
             httpClientFactory;
@@ -45,13 +39,12 @@ public sealed class HelpdeskMailSettingsController
     }
 
     // ============================================================
-    // GET SETTINGS + STATUS
+    // GET SETTINGS
     // ============================================================
 
     [HttpGet]
-    public async Task<IActionResult>
-        Get(
-            CancellationToken cancellationToken)
+    public async Task<IActionResult> Get(
+        CancellationToken cancellationToken)
     {
         if (!CanViewMail())
         {
@@ -102,74 +95,34 @@ public sealed class HelpdeskMailSettingsController
                 : null;
 
         var pending =
-            await _db
-                .Set<HelpdeskOutboundEmail>()
-                .AsNoTracking()
-                .CountAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId.Value
-                        &&
-                        x.Status ==
-                            HelpdeskOutboundEmail
-                                .PendingStatus,
-                    cancellationToken);
+            await CountOutboundAsync(
+                organizationId.Value,
+                HelpdeskOutboundEmail.PendingStatus,
+                cancellationToken);
 
         var retry =
-            await _db
-                .Set<HelpdeskOutboundEmail>()
-                .AsNoTracking()
-                .CountAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId.Value
-                        &&
-                        x.Status ==
-                            HelpdeskOutboundEmail
-                                .RetryStatus,
-                    cancellationToken);
+            await CountOutboundAsync(
+                organizationId.Value,
+                HelpdeskOutboundEmail.RetryStatus,
+                cancellationToken);
 
         var sending =
-            await _db
-                .Set<HelpdeskOutboundEmail>()
-                .AsNoTracking()
-                .CountAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId.Value
-                        &&
-                        x.Status ==
-                            HelpdeskOutboundEmail
-                                .SendingStatus,
-                    cancellationToken);
+            await CountOutboundAsync(
+                organizationId.Value,
+                HelpdeskOutboundEmail.SendingStatus,
+                cancellationToken);
 
         var deadLetter =
-            await _db
-                .Set<HelpdeskOutboundEmail>()
-                .AsNoTracking()
-                .CountAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId.Value
-                        &&
-                        x.Status ==
-                            HelpdeskOutboundEmail
-                                .DeadLetterStatus,
-                    cancellationToken);
+            await CountOutboundAsync(
+                organizationId.Value,
+                HelpdeskOutboundEmail.DeadLetterStatus,
+                cancellationToken);
 
         var sent =
-            await _db
-                .Set<HelpdeskOutboundEmail>()
-                .AsNoTracking()
-                .CountAsync(
-                    x =>
-                        x.OrganizationId ==
-                            organizationId.Value
-                        &&
-                        x.Status ==
-                            HelpdeskOutboundEmail
-                                .SentStatus,
-                    cancellationToken);
+            await CountOutboundAsync(
+                organizationId.Value,
+                HelpdeskOutboundEmail.SentStatus,
+                cancellationToken);
 
         var received =
             await _db.HelpdeskEmailMessages
@@ -226,12 +179,10 @@ public sealed class HelpdeskMailSettingsController
     // ============================================================
 
     [HttpPut]
-    public async Task<IActionResult>
-        Save(
-            [FromBody]
-            SaveMailSettingsRequest request,
-            CancellationToken cancellationToken)
-    
+    public async Task<IActionResult> Save(
+        [FromBody]
+        SaveMailSettingsRequest request,
+        CancellationToken cancellationToken)
     {
         if (!CanManageMail())
         {
@@ -287,7 +238,7 @@ public sealed class HelpdeskMailSettingsController
                     new
                     {
                         message =
-                            "El usuario técnico seleccionado no existe o está inactivo."
+                            "El actor del sistema seleccionado no existe o está inactivo."
                     });
             }
         }
@@ -346,9 +297,8 @@ public sealed class HelpdeskMailSettingsController
     // ============================================================
 
     [HttpPost("test")]
-    public async Task<IActionResult>
-        Test(
-            CancellationToken cancellationToken)
+    public async Task<IActionResult> Test(
+        CancellationToken cancellationToken)
     {
         if (!CanManageMail())
         {
@@ -379,8 +329,10 @@ public sealed class HelpdeskMailSettingsController
             return BadRequest(
                 new
                 {
+                    success = false,
+
                     message =
-                        "Configura primero el buzón de Helpdesk."
+                        "Configura primero el buzón de Mesa de Ayuda."
                 });
         }
 
@@ -393,9 +345,31 @@ public sealed class HelpdeskMailSettingsController
                             organizationId.Value,
                     cancellationToken);
 
-        if (entra is null ||
-            !entra.IsEnabled ||
-            string.IsNullOrWhiteSpace(
+        if (entra is null)
+        {
+            return Conflict(
+                new
+                {
+                    success = false,
+
+                    message =
+                        "No existe configuración de Microsoft Entra ID."
+                });
+        }
+
+        if (!entra.IsEnabled)
+        {
+            return Conflict(
+                new
+                {
+                    success = false,
+
+                    message =
+                        "Microsoft Entra ID está configurado pero deshabilitado."
+                });
+        }
+
+        if (string.IsNullOrWhiteSpace(
                 entra.TenantId) ||
             string.IsNullOrWhiteSpace(
                 entra.ClientId) ||
@@ -405,8 +379,30 @@ public sealed class HelpdeskMailSettingsController
             return Conflict(
                 new
                 {
+                    success = false,
+
                     message =
-                        "Entra ID no está configurado o habilitado para esta organización."
+                        "Falta Tenant ID, Client ID o Client Secret."
+                });
+        }
+
+        string secret;
+
+        try
+        {
+            secret =
+                _protector.Unprotect(
+                    entra.ClientSecretProtected);
+        }
+        catch
+        {
+            return Conflict(
+                new
+                {
+                    success = false,
+
+                    message =
+                        "El Client Secret no puede descifrarse con las claves actuales de TitanMDM. Guarda nuevamente el secreto de Entra ID."
                 });
         }
 
@@ -417,11 +413,11 @@ public sealed class HelpdeskMailSettingsController
                     .CreateClient(
                         "entra-id");
 
-            var secret =
-                _protector.Unprotect(
-                    entra.ClientSecretProtected);
+            // ====================================================
+            // TOKEN
+            // ====================================================
 
-            var token =
+            var tokenResult =
                 await GetAccessTokenAsync(
                     client,
                     entra.TenantId,
@@ -429,14 +425,38 @@ public sealed class HelpdeskMailSettingsController
                     secret,
                     cancellationToken);
 
-            /*
-             * Reading Inbox verifies:
-             *
-             * - Tenant/client/secret
-             * - Microsoft Graph connectivity
-             * - mailbox existence
-             * - application Mail.Read permission
-             */
+            if (!tokenResult.Success)
+            {
+                return StatusCode(
+                    StatusCodes.Status502BadGateway,
+                    new
+                    {
+                        success = false,
+
+                        stage =
+                            "entra-token",
+
+                        message =
+                            tokenResult.Message,
+
+                        tenantId =
+                            entra.TenantId,
+
+                        clientId =
+                            entra.ClientId,
+
+                        mailbox =
+                            mailSettings.Mailbox,
+
+                        requiredPermissions =
+                            RequiredPermissions
+                    });
+            }
+
+            // ====================================================
+            // GRAPH MAILBOX
+            // ====================================================
+
             var endpoint =
                 $"https://graph.microsoft.com/v1.0/users/" +
                 $"{Uri.EscapeDataString(mailSettings.Mailbox)}" +
@@ -451,7 +471,13 @@ public sealed class HelpdeskMailSettingsController
             graphRequest.Headers.Authorization =
                 new AuthenticationHeaderValue(
                     "Bearer",
-                    token);
+                    tokenResult.AccessToken);
+
+            graphRequest.Headers
+                .TryAddWithoutValidation(
+                    "client-request-id",
+                    Guid.NewGuid()
+                        .ToString());
 
             using var response =
                 await client.SendAsync(
@@ -463,25 +489,64 @@ public sealed class HelpdeskMailSettingsController
                     .ReadAsStringAsync(
                         cancellationToken);
 
+            var graphError =
+                ParseGraphError(
+                    content);
+
+            var requestId =
+                ReadHeader(
+                    response,
+                    "request-id")
+                ??
+                ReadHeader(
+                    response,
+                    "client-request-id");
+
             if (!response.IsSuccessStatusCode)
             {
                 return StatusCode(
-                    StatusCodes
-                        .Status502BadGateway,
+                    StatusCodes.Status502BadGateway,
                     new
                     {
-                        success =
-                            false,
+                        success = false,
+
+                        stage =
+                            "graph-mailbox",
+
+                        httpStatus =
+                            (int)response.StatusCode,
+
+                        graphCode =
+                            graphError.Code,
+
+                        graphMessage =
+                            graphError.Message,
+
+                        requestId,
+
+                        tenantId =
+                            entra.TenantId,
+
+                        clientId =
+                            entra.ClientId,
+
+                        mailbox =
+                            mailSettings.Mailbox,
 
                         message =
-                            $"Microsoft Graph devolvió HTTP {(int)response.StatusCode}.",
+                            BuildGraphDiagnosticMessage(
+                                response.StatusCode,
+                                graphError.Code,
+                                graphError.Message),
 
                         inboundVerified =
                             false,
 
                         outboundConfigured =
-                            mailSettings
-                                .OutboundEnabled
+                            mailSettings.OutboundEnabled,
+
+                        requiredPermissions =
+                            RequiredPermissions
                     });
             }
 
@@ -495,11 +560,19 @@ public sealed class HelpdeskMailSettingsController
             return Ok(
                 new
                 {
-                    success =
-                        true,
+                    success = true,
+
+                    stage =
+                        "complete",
 
                     message =
-                        "Conexión al buzón validada correctamente.",
+                        "Conexión con Microsoft Graph y acceso al Inbox validados correctamente.",
+
+                    tenantId =
+                        entra.TenantId,
+
+                    clientId =
+                        entra.ClientId,
 
                     mailbox =
                         mailSettings.Mailbox,
@@ -531,38 +604,50 @@ public sealed class HelpdeskMailSettingsController
                             ? unreadValue
                             : 0,
 
+                    requestId,
+
                     inboundVerified =
                         true,
 
-                    /*
-                     * Sending is deliberately not tested here
-                     * because a diagnostic endpoint should not
-                     * send unsolicited email.
-                     */
                     outboundConfigured =
-                        mailSettings
-                            .OutboundEnabled
+                        mailSettings.OutboundEnabled,
+
+                    requiredPermissions =
+                        RequiredPermissions
                 });
+        }
+        catch (OperationCanceledException)
+            when (
+                cancellationToken
+                    .IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception exception)
         {
             return StatusCode(
-                StatusCodes
-                    .Status502BadGateway,
+                StatusCodes.Status502BadGateway,
                 new
                 {
-                    success =
-                        false,
+                    success = false,
+
+                    stage =
+                        "unexpected",
 
                     message =
                         exception.Message,
+
+                    mailbox =
+                        mailSettings.Mailbox,
 
                     inboundVerified =
                         false,
 
                     outboundConfigured =
-                        mailSettings
-                            .OutboundEnabled
+                        mailSettings.OutboundEnabled,
+
+                    requiredPermissions =
+                        RequiredPermissions
                 });
         }
     }
@@ -572,9 +657,8 @@ public sealed class HelpdeskMailSettingsController
     // ============================================================
 
     [HttpGet("actors")]
-    public async Task<IActionResult>
-        Actors(
-            CancellationToken cancellationToken)
+    public async Task<IActionResult> Actors(
+        CancellationToken cancellationToken)
     {
         if (!CanManageMail())
         {
@@ -631,8 +715,25 @@ public sealed class HelpdeskMailSettingsController
     // HELPERS
     // ============================================================
 
-    private Guid?
-        GetOrganizationId()
+    private async Task<int> CountOutboundAsync(
+        Guid organizationId,
+        string status,
+        CancellationToken cancellationToken)
+    {
+        return await _db
+            .Set<HelpdeskOutboundEmail>()
+            .AsNoTracking()
+            .CountAsync(
+                x =>
+                    x.OrganizationId ==
+                        organizationId
+                    &&
+                    x.Status ==
+                        status,
+                cancellationToken);
+    }
+
+    private Guid? GetOrganizationId()
     {
         var value =
             User.FindFirstValue(
@@ -649,14 +750,15 @@ public sealed class HelpdeskMailSettingsController
     }
 
     private bool CanViewMail()
-{
-    return HasAnyPermission(
-        "helpdesk.mail.view",
-        "helpdesk.mail.manage",
-        "helpdesk.admin.access",
-        "helpdesk.manage",
-        "settings.manage");
-}
+    {
+        return HasAnyPermission(
+            "helpdesk.mail.view",
+            "helpdesk.mail.manage",
+            "helpdesk.admin.access",
+            "helpdesk.manage",
+            "settings.manage");
+    }
+
     private bool CanManageMail()
     {
         return HasAnyPermission(
@@ -682,7 +784,16 @@ public sealed class HelpdeskMailSettingsController
                             StringComparison.OrdinalIgnoreCase)));
     }
 
-    private static async Task<string>
+    private static readonly string[]
+        RequiredPermissions =
+        [
+            "User.Read.All (Application)",
+            "Group.Read.All (Application)",
+            "Mail.Read (Application)",
+            "Mail.Send (Application)"
+        ];
+
+    private static async Task<TokenResult>
         GetAccessTokenAsync(
             HttpClient client,
             string tenantId,
@@ -699,9 +810,7 @@ public sealed class HelpdeskMailSettingsController
             {
                 Content =
                     new FormUrlEncodedContent(
-                        new Dictionary<
-                            string,
-                            string>
+                        new Dictionary<string, string>
                         {
                             ["client_id"] =
                                 clientId,
@@ -722,16 +831,24 @@ public sealed class HelpdeskMailSettingsController
                 request,
                 cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
-        {
-            throw new InvalidOperationException(
-                $"Microsoft Entra rechazó la autenticación. HTTP {(int)response.StatusCode}.");
-        }
-
         var content =
             await response.Content
                 .ReadAsStringAsync(
                     cancellationToken);
+
+        if (!response.IsSuccessStatusCode)
+        {
+            var error =
+                ParseGraphError(
+                    content);
+
+            return new TokenResult(
+                false,
+                null,
+                error.Code is null
+                    ? $"Microsoft Entra rechazó la autenticación. HTTP {(int)response.StatusCode}."
+                    : $"{error.Code}: {error.Message}");
+        }
 
         using var json =
             JsonDocument.Parse(
@@ -745,12 +862,168 @@ public sealed class HelpdeskMailSettingsController
             string.IsNullOrWhiteSpace(
                 token.GetString()))
         {
-            throw new InvalidOperationException(
+            return new TokenResult(
+                false,
+                null,
                 "Microsoft Entra no devolvió access_token.");
         }
 
-        return token.GetString()!;
+        return new TokenResult(
+            true,
+            token.GetString(),
+            "OK");
     }
+
+    private static GraphError ParseGraphError(
+        string? content)
+    {
+        if (string.IsNullOrWhiteSpace(
+                content))
+        {
+            return new GraphError(
+                null,
+                null);
+        }
+
+        try
+        {
+            using var json =
+                JsonDocument.Parse(
+                    content);
+
+            var root =
+                json.RootElement;
+
+            /*
+             * Microsoft Graph:
+             * {
+             *   "error": {
+             *     "code": "...",
+             *     "message": "..."
+             *   }
+             * }
+             */
+            if (root.TryGetProperty(
+                    "error",
+                    out var error))
+            {
+                string? code =
+                    null;
+
+                string? message =
+                    null;
+
+                if (error.ValueKind ==
+                    JsonValueKind.Object)
+                {
+                    if (error.TryGetProperty(
+                            "code",
+                            out var codeValue))
+                    {
+                        code =
+                            codeValue.GetString();
+                    }
+
+                    if (error.TryGetProperty(
+                            "message",
+                            out var messageValue))
+                    {
+                        message =
+                            messageValue.GetString();
+                    }
+                }
+                else if (
+                    error.ValueKind ==
+                    JsonValueKind.String)
+                {
+                    code =
+                        error.GetString();
+
+                    if (root.TryGetProperty(
+                            "error_description",
+                            out var description))
+                    {
+                        message =
+                            description.GetString();
+                    }
+                }
+
+                return new GraphError(
+                    code,
+                    message);
+            }
+
+            return new GraphError(
+                null,
+                content.Length >
+                    1000
+                    ? content[..1000]
+                    : content);
+        }
+        catch
+        {
+            return new GraphError(
+                null,
+                content.Length >
+                    1000
+                    ? content[..1000]
+                    : content);
+        }
+    }
+
+    private static string BuildGraphDiagnosticMessage(
+        System.Net.HttpStatusCode status,
+        string? code,
+        string? graphMessage)
+    {
+        var prefix =
+            $"Microsoft Graph rechazó el acceso al buzón (HTTP {(int)status}).";
+
+        if (!string.IsNullOrWhiteSpace(
+                code))
+        {
+            prefix +=
+                $" Código: {code}.";
+        }
+
+        if (!string.IsNullOrWhiteSpace(
+                graphMessage))
+        {
+            prefix +=
+                $" {graphMessage}";
+        }
+
+        if ((int)status ==
+            403)
+        {
+            prefix +=
+                " Revisa Mail.Read/Mail.Send como permisos Application, " +
+                "Grant admin consent y cualquier restricción de Exchange sobre este buzón.";
+        }
+
+        return prefix;
+    }
+
+    private static string? ReadHeader(
+        HttpResponseMessage response,
+        string name)
+    {
+        return response.Headers
+            .TryGetValues(
+                name,
+                out var values)
+            ? values.FirstOrDefault()
+            : null;
+    }
+
+    private sealed record TokenResult(
+        bool Success,
+        string? AccessToken,
+        string Message);
+
+    private sealed record GraphError(
+        string? Code,
+        string? Message);
 
     public sealed record SaveMailSettingsRequest(
         string? Mailbox,
