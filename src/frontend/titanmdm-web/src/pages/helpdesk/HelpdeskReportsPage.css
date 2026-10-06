@@ -547,3 +547,134 @@
     height: 290px;
   }
 }
+/* ================================================================
+   REPORTS SEMANTIC COLORS
+   ================================================================ */
+
+.hd-kpi__metric--blue
+.hd-kpi__metric-icon {
+  color: #3f62d6;
+  background: #eaf0ff;
+}
+
+.hd-kpi__sla-card--good
+.hd-kpi__progress span {
+  background: #26a269;
+}
+
+.hd-kpi__sla-card--warning
+.hd-kpi__progress span {
+  background: #e3a43b;
+}
+
+.hd-kpi__sla-card--danger
+.hd-kpi__progress span {
+  background: #d94b57;
+}
+
+.hd-kpi__sla-card--good
+.hd-kpi__sla-head {
+  color: #26a269;
+}
+
+.hd-kpi__sla-card--warning
+.hd-kpi__sla-head {
+  color: #c8851c;
+}
+
+.hd-kpi__sla-card--danger
+.hd-kpi__sla-head {
+  color: #d94b57;
+}
+
+/* ================================================================
+   TABLE SEMANTIC VALUES
+   ================================================================ */
+
+.hd-kpi__value {
+  display: inline-flex;
+  min-width: 28px;
+  justify-content: center;
+  padding: 4px 7px;
+  border-radius: 7px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.hd-kpi__value--good {
+  background: #e8f7ef;
+  color: #18794e;
+}
+
+.hd-kpi__value--warning {
+  background: #fff2dd;
+  color: #a96d13;
+}
+
+.hd-kpi__value--danger {
+  background: #ffeaed;
+  color: #bd3f4a;
+}
+
+/* ================================================================
+   OPERATIONAL INSIGHTS
+   ================================================================ */
+
+.hd-kpi__insights {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+  gap: 12px;
+  margin-top: 18px;
+}
+
+.hd-kpi__insights article {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px;
+  border: 1px solid #e4eaf3;
+  border-radius: 14px;
+  background: #fafbfe;
+}
+
+.hd-kpi__insights svg {
+  flex: 0 0 auto;
+  color: #5872df;
+}
+
+.hd-kpi__insights div {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.hd-kpi__insights span {
+  color: #7a879b;
+  font-size: 10px;
+}
+
+.hd-kpi__insights strong {
+  color: #24344e;
+  font-size: 22px;
+}
+
+@media (max-width: 1100px) {
+  .hd-kpi__insights {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 620px) {
+  .hd-kpi__insights {
+    grid-template-columns:
+      1fr;
+  }
+}

@@ -1,8 +1,10 @@
 using System.Security.Claims;
 using System.Text.Json;
+
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+
 using TitanMDM.Domain.Entities;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -15,35 +17,69 @@ public sealed class HelpdeskRequestTemplatesController(
     TitanMdmDbContext db)
     : ControllerBase
 {
-    private bool Has(string code) =>
-        User.Claims.Any(
-            x =>
-                x.Type == "permission" &&
+    private bool Has(
+        string permission)
+    {
+        return User.Claims.Any(
+            claim =>
+                claim.Type == "permission"
+                &&
                 string.Equals(
-                    x.Value,
-                    code,
+                    claim.Value,
+                    permission,
                     StringComparison.OrdinalIgnoreCase));
+    }
 
-    private bool Manager =>
-        Has("helpdesk.manage") ||
+    private bool CanManage =>
+        Has("helpdesk.templates.manage")
+        ||
+        Has("helpdesk.admin.access")
+        ||
+        Has("helpdesk.manage")
+        ||
         Has("settings.manage");
 
-    private async Task<(Guid Org, Guid User)?> Identity(
-        CancellationToken cancellationToken)
+    private bool CanView =>
+        CanManage
+        ||
+        Has("helpdesk.templates.view")
+        ||
+        Has("helpdesk.request.create")
+        ||
+        Has("tickets.create")
+        ||
+        Has("tickets.view")
+        ||
+        Has("helpdesk.view");
+
+    private async Task<(Guid Org, Guid User)?>
+        Identity(
+            CancellationToken cancellationToken)
     {
         var organizationClaim =
-            User.FindFirstValue("organization_id") ??
-            User.FindFirstValue("organizationId");
+            User.FindFirstValue(
+                "organization_id")
+            ??
+            User.FindFirstValue(
+                "organizationId");
 
         var userClaim =
-            User.FindFirstValue(ClaimTypes.NameIdentifier) ??
-            User.FindFirstValue("sub") ??
-            User.FindFirstValue("user_id") ??
-            User.FindFirstValue("userId");
+            User.FindFirstValue(
+                ClaimTypes.NameIdentifier)
+            ??
+            User.FindFirstValue(
+                "sub")
+            ??
+            User.FindFirstValue(
+                "user_id")
+            ??
+            User.FindFirstValue(
+                "userId");
 
         if (!Guid.TryParse(
                 organizationClaim,
-                out var organizationId) ||
+                out var organizationId)
+            ||
             !Guid.TryParse(
                 userClaim,
                 out var userId))
@@ -51,23 +87,32 @@ public sealed class HelpdeskRequestTemplatesController(
             return null;
         }
 
-        var valid = await db.Users
-            .AsNoTracking()
-            .AnyAsync(
-                x =>
-                    x.Id == userId &&
-                    x.OrganizationId == organizationId &&
-                    x.IsActive,
-                cancellationToken);
+        var valid =
+            await db.Users
+                .AsNoTracking()
+                .AnyAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId
+                        &&
+                        x.Id ==
+                            userId
+                        &&
+                        x.IsActive,
+                    cancellationToken);
 
         return valid
-            ? (organizationId, userId)
+            ? (
+                organizationId,
+                userId
+            )
             : null;
     }
 
     private static object View(
-        HelpdeskRequestTemplate item) =>
-        new
+        HelpdeskRequestTemplate item)
+    {
+        return new
         {
             item.Id,
             item.Title,
@@ -78,136 +123,208 @@ public sealed class HelpdeskRequestTemplatesController(
             item.Revision,
 
             questions =
-                JsonSerializer.Deserialize<string[]>(
-                    item.QuestionsJson) ?? [],
+                JsonSerializer
+                    .Deserialize<string[]>(
+                        item.QuestionsJson)
+                ??
+                [],
 
             item.UpdatedAtUtc
         };
+    }
+
+    // ============================================================
+    // LIST
+    // ============================================================
 
     [HttpGet]
     public async Task<IActionResult> Get(
-        [FromQuery] bool all = false,
+        [FromQuery]
+        bool all = false,
+
         CancellationToken cancellationToken = default)
     {
-        if (!Manager &&
-            !Has("tickets.create") &&
-            !Has("tickets.view") &&
-            !Has("helpdesk.view"))
+        if (!CanView)
         {
             return Forbid();
         }
 
-        if (all && !Manager)
+        if (all &&
+            !CanManage)
+        {
             return Forbid();
+        }
 
         var identity =
-            await Identity(cancellationToken);
+            await Identity(
+                cancellationToken);
 
         if (identity is null)
+        {
             return Unauthorized();
+        }
 
-        var query = db.Set<HelpdeskRequestTemplate>()
-            .AsNoTracking()
-            .Where(
-                x =>
-                    x.OrganizationId ==
-                        identity.Value.Org);
+        var query =
+            db.Set<HelpdeskRequestTemplate>()
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            identity.Value.Org);
 
         if (!all)
-            query = query.Where(x => x.IsActive);
+        {
+            query =
+                query.Where(
+                    x =>
+                        x.IsActive);
+        }
 
-        var items = await query
-            .OrderBy(x => x.Title)
-            .ToListAsync(cancellationToken);
+        var items =
+            await query
+                .OrderByDescending(
+                    x =>
+                        x.IsActive)
+                .ThenBy(
+                    x =>
+                        x.Title)
+                .ToListAsync(
+                    cancellationToken);
 
         return Ok(
             new
             {
-                items = items.Select(View).ToArray(),
-                canManage = Manager
+                items =
+                    items
+                        .Select(
+                            View)
+                        .ToArray(),
+
+                canManage =
+                    CanManage
             });
     }
 
+    // ============================================================
+    // CREATE
+    // ============================================================
+
     [HttpPost]
     public async Task<IActionResult> Create(
-        [FromBody] TemplateRequest request,
+        [FromBody]
+        TemplateRequest request,
+
         CancellationToken cancellationToken)
     {
-        if (!Manager)
+        if (!CanManage)
+        {
             return Forbid();
+        }
 
         var identity =
-            await Identity(cancellationToken);
+            await Identity(
+                cancellationToken);
 
         if (identity is null)
+        {
             return Unauthorized();
+        }
 
-        var item = new HelpdeskRequestTemplate(
-            identity.Value.Org,
-            identity.Value.User);
+        var item =
+            new HelpdeskRequestTemplate(
+                identity.Value.Org,
+                identity.Value.User);
 
         try
         {
-            await Apply(
+            await ApplyAsync(
                 item,
                 request,
                 identity.Value.User,
                 cancellationToken);
 
-            db.Set<HelpdeskRequestTemplate>().Add(item);
+            db.Set<HelpdeskRequestTemplate>()
+                .Add(
+                    item);
 
             await db.SaveChangesAsync(
                 cancellationToken);
 
-            return Ok(View(item));
+            return Ok(
+                View(
+                    item));
         }
         catch (ArgumentException exception)
         {
             return BadRequest(
-                new { message = exception.Message });
+                new
+                {
+                    message =
+                        exception.Message
+                });
         }
     }
+
+    // ============================================================
+    // UPDATE
+    // ============================================================
 
     [HttpPut("{id:guid}")]
     public async Task<IActionResult> Update(
         Guid id,
-        [FromBody] TemplateRequest request,
+
+        [FromBody]
+        TemplateRequest request,
+
         CancellationToken cancellationToken)
     {
-        if (!Manager)
+        if (!CanManage)
+        {
             return Forbid();
+        }
 
         var identity =
-            await Identity(cancellationToken);
-
-        if (identity is null)
-            return Unauthorized();
-
-        var item = await db.Set<HelpdeskRequestTemplate>()
-            .FirstOrDefaultAsync(
-                x =>
-                    x.Id == id &&
-                    x.OrganizationId ==
-                        identity.Value.Org,
+            await Identity(
                 cancellationToken);
 
-        if (item is null)
-            return NotFound();
+        if (identity is null)
+        {
+            return Unauthorized();
+        }
 
-        if (request.Revision != item.Revision)
+        var item =
+            await db
+                .Set<HelpdeskRequestTemplate>()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            identity.Value.Org
+                        &&
+                        x.Id ==
+                            id,
+                    cancellationToken);
+
+        if (item is null)
+        {
+            return NotFound();
+        }
+
+        if (request.Revision.HasValue
+            &&
+            request.Revision.Value !=
+                item.Revision)
         {
             return Conflict(
                 new
                 {
                     message =
-                        "La plantilla cambió. Actualiza el " +
-                        "catálogo antes de editar nuevamente."
+                        "La plantilla cambió. Actualiza el catálogo antes de guardar nuevamente."
                 });
         }
 
         try
         {
-            await Apply(
+            await ApplyAsync(
                 item,
                 request,
                 identity.Value.User,
@@ -216,12 +333,18 @@ public sealed class HelpdeskRequestTemplatesController(
             await db.SaveChangesAsync(
                 cancellationToken);
 
-            return Ok(View(item));
+            return Ok(
+                View(
+                    item));
         }
         catch (ArgumentException exception)
         {
             return BadRequest(
-                new { message = exception.Message });
+                new
+                {
+                    message =
+                        exception.Message
+                });
         }
         catch (DbUpdateConcurrencyException)
         {
@@ -229,70 +352,176 @@ public sealed class HelpdeskRequestTemplatesController(
                 new
                 {
                     message =
-                        "Otro administrador modificó la " +
-                        "plantilla. Actualiza el catálogo."
+                        "Otro administrador modificó la plantilla. Actualiza la pantalla."
                 });
         }
     }
 
-    private async Task Apply(
+    // ============================================================
+    // VALIDATE / CONFIGURE
+    // ============================================================
+
+    private async Task ApplyAsync(
         HelpdeskRequestTemplate item,
         TemplateRequest request,
-        Guid actorId,
+        Guid actorUserId,
         CancellationToken cancellationToken)
     {
+        var title =
+            (
+                request.Title
+                ??
+                string.Empty
+            )
+            .Trim();
+
+        if (string.IsNullOrWhiteSpace(
+                title))
+        {
+            throw new ArgumentException(
+                "Indica el nombre de la plantilla.");
+        }
+
+        if (title.Length >
+            150)
+        {
+            throw new ArgumentException(
+                "El nombre no puede exceder 150 caracteres.");
+        }
+
+        var description =
+            (
+                request.Description
+                ??
+                string.Empty
+            )
+            .Trim();
+
+        if (description.Length >
+            1000)
+        {
+            throw new ArgumentException(
+                "La descripción no puede exceder 1000 caracteres.");
+        }
+
         var category =
-            (request.Category ?? "general")
-                .Trim()
-                .ToLowerInvariant();
+            (
+                request.Category
+                ??
+                "general"
+            )
+            .Trim()
+            .ToLowerInvariant();
 
-        var configured = await db.HelpdeskTeams
-            .AsNoTracking()
-            .Where(
-                x =>
-                    x.OrganizationId ==
-                        item.OrganizationId &&
-                    x.IsActive)
-            .Select(x => x.Categories)
-            .ToListAsync(cancellationToken);
+        var ticketType =
+            (
+                request.TicketType
+                ??
+                "incident"
+            )
+            .Trim()
+            .ToLowerInvariant();
 
-        var valid = configured
-            .SelectMany(
-                x =>
-                    (x ?? "").Split(
-                        '|',
-                        StringSplitOptions.RemoveEmptyEntries |
-                        StringSplitOptions.TrimEntries))
-            .Append("general")
-            .Any(
+        if (ticketType is not (
+                "incident"
+                or "request"))
+        {
+            throw new ArgumentException(
+                "Tipo de solicitud no válido.");
+        }
+
+        /*
+         * Categories are derived from active Helpdesk groups.
+         */
+        var configured =
+            await db.HelpdeskTeams
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OrganizationId ==
+                            item.OrganizationId
+                        &&
+                        x.IsActive)
+                .Select(
+                    x =>
+                        x.Categories)
+                .ToListAsync(
+                    cancellationToken);
+
+        var categories =
+            configured
+                .SelectMany(
+                    value =>
+                        (
+                            value
+                            ??
+                            string.Empty
+                        )
+                        .Split(
+                            '|',
+                            StringSplitOptions.RemoveEmptyEntries
+                            |
+                            StringSplitOptions.TrimEntries))
+                .Append(
+                    "general")
+                .Distinct(
+                    StringComparer.OrdinalIgnoreCase)
+                .ToArray();
+
+        if (!categories.Any(
                 x =>
                     string.Equals(
                         x,
                         category,
-                        StringComparison.OrdinalIgnoreCase));
-
-        if (!valid)
+                        StringComparison.OrdinalIgnoreCase)))
         {
             throw new ArgumentException(
-                "La categoría no existe en los grupos " +
-                "activos de esta organización.");
+                "La categoría no existe en los grupos activos de Mesa de Ayuda.");
         }
 
-        if (request.Questions is null ||
-            request.Questions.Any(x => x is null))
+        var questions =
+            (
+                request.Questions
+                ??
+                []
+            )
+            .Select(
+                x =>
+                    x?.Trim()
+                    ??
+                    string.Empty)
+            .Where(
+                x =>
+                    !string.IsNullOrWhiteSpace(
+                        x))
+            .Distinct(
+                StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        if (questions.Length >
+            30)
         {
             throw new ArgumentException(
-                "Indica las preguntas de la plantilla.");
+                "Una plantilla admite hasta 30 preguntas.");
+        }
+
+        if (questions.Any(
+                x =>
+                    x.Length >
+                        250))
+        {
+            throw new ArgumentException(
+                "Cada pregunta admite hasta 250 caracteres.");
         }
 
         item.Configure(
-            request.Title ?? "",
-            request.Description ?? "",
+            title,
+            description,
             category,
-            request.TicketType ?? "incident",
-            request.Questions,
+            ticketType,
+            questions,
             request.IsActive,
-            actorId);
+            actorUserId);
     }
 
     public sealed record TemplateRequest(

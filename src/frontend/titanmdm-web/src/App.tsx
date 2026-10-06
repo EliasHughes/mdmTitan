@@ -190,6 +190,9 @@ import {
 import {
   HelpdeskMailSettingsPage,
 } from './pages/helpdesk/HelpdeskMailSettingsPage'
+import {
+  HelpdeskTemplatesAdminPage,
+} from './pages/helpdesk/HelpdeskTemplatesAdminPage'
 
 interface ApplicationRoute {
   path: string
@@ -249,6 +252,31 @@ const applicationRoutes:
       helpdeskConsole:
         true,
     },
+    {
+  path:
+    'helpdesk/templates',
+
+  page:
+    <HelpdeskTemplatesAdminPage />,
+
+  permissions: [
+    helpdeskPermissions
+      .templatesView,
+
+    helpdeskPermissions
+      .templatesManage,
+
+    helpdeskPermissions
+      .adminAccess,
+
+    'helpdesk.manage',
+
+    'settings.manage',
+  ],
+
+  helpdeskConsole:
+    true,
+},
 
     {
       path:
@@ -282,24 +310,6 @@ const applicationRoutes:
       permissions: [
         helpdeskPermissions
           .kpiView,
-
-        'helpdesk.view',
-      ],
-
-      helpdeskConsole:
-        true,
-    },
-
-    {
-      path:
-        'helpdesk/centro/graficos',
-
-      page:
-        <HelpdeskCenterPage />,
-
-      permissions: [
-        helpdeskPermissions
-          .analyticsView,
 
         'helpdesk.view',
       ],

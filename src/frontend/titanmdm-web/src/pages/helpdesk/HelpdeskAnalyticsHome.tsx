@@ -1,7 +1,6 @@
 import {
   Activity,
   ArrowRight,
-  BarChart3,
   FileBarChart,
   Gauge,
   Timer,
@@ -25,8 +24,8 @@ interface AnalyticsCard {
   title: string
   description: string
   path: string
-  icon: typeof BarChart3
-  permission: string
+  icon: typeof Gauge
+  permissions: string[]
 }
 
 export function HelpdeskAnalyticsHome() {
@@ -45,7 +44,7 @@ export function HelpdeskAnalyticsHome() {
           'SLA y seguimiento',
 
         description:
-          'Casos en riesgo, vencimientos, tiempos de primera respuesta y resolución.',
+          'Casos en riesgo, vencimientos, primera respuesta, resolución y seguimiento del cumplimiento.',
 
         path:
           '/helpdesk/seguimiento?workspace=helpdesk',
@@ -53,8 +52,10 @@ export function HelpdeskAnalyticsHome() {
         icon:
           Timer,
 
-        permission:
-          helpdeskPermissions.slaView,
+        permissions: [
+          helpdeskPermissions
+            .slaView,
+        ],
       },
 
       {
@@ -62,7 +63,7 @@ export function HelpdeskAnalyticsHome() {
           'KPI operativos',
 
         description:
-          'Backlog, autoasignación, productividad, carga y desempeño por técnico.',
+          'Resumen rápido del backlog, tickets activos, autoasignación, carga y cumplimiento operativo.',
 
         path:
           '/helpdesk/centro/kpis?workspace=helpdesk',
@@ -70,33 +71,18 @@ export function HelpdeskAnalyticsHome() {
         icon:
           Gauge,
 
-        permission:
-          helpdeskPermissions.kpiView,
+        permissions: [
+          helpdeskPermissions
+            .kpiView,
+        ],
       },
 
       {
         title:
-          'Gráficos',
+          'Reportes y análisis',
 
         description:
-          'Tendencias de tickets, categorías, prioridades, Sites y carga de servicio.',
-
-        path:
-          '/helpdesk/centro/graficos?workspace=helpdesk',
-
-        icon:
-          BarChart3,
-
-        permission:
-          helpdeskPermissions.analyticsView,
-      },
-
-      {
-        title:
-          'Reportes',
-
-        description:
-          'Consulta consolidada y exportación de información operacional.',
+          'Panel detallado con tendencias, SLA, prioridades, categorías, Sites, técnicos, automatización y exportación.',
 
         path:
           '/helpdesk/reportes?workspace=helpdesk',
@@ -104,20 +90,26 @@ export function HelpdeskAnalyticsHome() {
         icon:
           FileBarChart,
 
-        permission:
-          helpdeskPermissions.reportsView,
+        permissions: [
+          helpdeskPermissions
+            .reportsView,
+
+          helpdeskPermissions
+            .analyticsView,
+        ],
       },
     ]
 
   const visible =
     cards.filter(
       card =>
-        hasPermission(
-          card.permission,
+        card.permissions.some(
+          hasPermission,
         )
         ||
         hasPermission(
-          helpdeskPermissions.adminAccess,
+          helpdeskPermissions
+            .adminAccess,
         ),
     )
 
@@ -148,11 +140,11 @@ export function HelpdeskAnalyticsHome() {
           </h1>
 
           <p>
-            Supervisa rendimiento,
-            cumplimiento SLA,
-            demanda y capacidad
-            operativa desde un único
-            centro de análisis.
+            Accede únicamente a vistas
+            que aportan una función
+            diferente: seguimiento SLA,
+            indicadores rápidos y
+            reportes detallados.
           </p>
         </div>
       </header>
@@ -189,7 +181,9 @@ export function HelpdeskAnalyticsHome() {
 
                 <div>
                   <h2>
-                    {card.title}
+                    {
+                      card.title
+                    }
                   </h2>
 
                   <p>

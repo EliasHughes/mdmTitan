@@ -502,51 +502,88 @@ export function ModuleNavigation() {
               item.path
                 .split('?')[0]
 
-            const active =
-              location.pathname ===
-                basePath
-              ||
-              (
-                basePath ===
-                  '/helpdesk/admin'
-                &&
-                location.pathname
-                  .startsWith(
-                    '/helpdesk/admin',
-                  )
-              )
-              ||
-              (
-                basePath ===
-                  '/helpdesk/analytics'
-                &&
-                (
-                  location.pathname
-                    .startsWith(
-                      '/helpdesk/analytics',
-                    )
-                  ||
-                  location.pathname
-                    .startsWith(
-                      '/helpdesk/centro/kpis',
-                    )
-                  ||
-                  location.pathname
-                    .startsWith(
-                      '/helpdesk/centro/graficos',
-                    )
-                  ||
-                  location.pathname
-                    .startsWith(
-                      '/helpdesk/reportes',
-                    )
-                  ||
-                  location.pathname
-                    .startsWith(
-                      '/helpdesk/seguimiento',
-                    )
-                )
-              )
+            const query =
+  new URLSearchParams(
+    item.path.split('?')[1]
+    ?? '',
+  )
+
+const itemView =
+  query.get(
+    'view',
+  )
+
+const currentView =
+  new URLSearchParams(
+    location.search,
+  ).get(
+    'view',
+  )
+
+const helpdeskInboxActive =
+  basePath ===
+    '/helpdesk'
+  &&
+  location.pathname ===
+    '/helpdesk'
+  &&
+  (
+    itemView
+      ? currentView ===
+          itemView
+      : !currentView
+        ||
+        currentView ===
+          'mine'
+  )
+
+const active =
+  helpdeskInboxActive
+  ||
+  (
+    basePath !==
+      '/helpdesk'
+    &&
+    location.pathname ===
+      basePath
+  )
+  ||
+  (
+    basePath ===
+      '/helpdesk/admin'
+    &&
+    location.pathname
+      .startsWith(
+        '/helpdesk/admin',
+      )
+  )
+  ||
+  (
+    basePath ===
+      '/helpdesk/analytics'
+    &&
+    (
+      location.pathname
+        .startsWith(
+          '/helpdesk/analytics',
+        )
+      ||
+      location.pathname
+        .startsWith(
+          '/helpdesk/centro/kpis',
+        )
+      ||
+      location.pathname
+        .startsWith(
+          '/helpdesk/reportes',
+        )
+      ||
+      location.pathname
+        .startsWith(
+          '/helpdesk/seguimiento',
+        )
+    )
+  )
 
             return (
               <NavLink

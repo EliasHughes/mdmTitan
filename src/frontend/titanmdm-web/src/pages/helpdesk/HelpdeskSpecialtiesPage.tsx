@@ -7,14 +7,36 @@ import {
 
 import {
   Link,
+  useSearchParams,
 } from 'react-router-dom'
 
-import axios from 'axios'
+import axios
+  from 'axios'
+
+import {
+  CalendarClock,
+  CheckCircle2,
+  Clock3,
+  FolderKanban,
+  MapPin,
+  Plus,
+  RefreshCw,
+  Save,
+  Tags,
+  Trash2,
+  UserPlus,
+  Users,
+} from 'lucide-react'
 
 import apiClient
   from '../../api/apiClient'
 
 import './HelpdeskSpecialtiesPage.css'
+
+type PlanningTab =
+  | 'groups'
+  | 'categories'
+  | 'schedules'
 
 type Slot = {
   day: number
@@ -122,7 +144,7 @@ type Catalog = {
   users: Staff[]
 }
 
-const days = [
+const DAYS = [
   'Domingo',
   'Lunes',
   'Martes',
@@ -132,35 +154,68 @@ const days = [
   'Sábado',
 ]
 
-const defaults =
-  (): Slot[] =>
-    [
-      1,
-      2,
-      3,
-      4,
-      5,
-    ].map(
-      day => ({
-        day,
-        start:
-          '08:00',
+const DEFAULT_TIME_ZONE =
+  'America/Santo_Domingo'
 
-        end:
-          '17:00',
-      }),
-    )
+const emptyCatalog:
+  Catalog = {
+    groups: [],
+    sites: [],
+    locations: [],
+    users: [],
+  }
 
-const clone =
-  (
-    group: Group,
-  ): Group => ({
+function resolveTab(
+  value:
+    string | null,
+): PlanningTab {
+  if (
+    value ===
+      'categories'
+  ) {
+    return 'categories'
+  }
+
+  if (
+    value ===
+      'schedules'
+  ) {
+    return 'schedules'
+  }
+
+  return 'groups'
+}
+
+function defaultSchedule():
+  Slot[] {
+  return [
+    1,
+    2,
+    3,
+    4,
+    5,
+  ].map(
+    day => ({
+      day,
+
+      start:
+        '08:00',
+
+      end:
+        '17:00',
+    }),
+  )
+}
+
+function cloneGroup(
+  group: Group,
+): Group {
+  return {
     ...group,
 
-    tasks:
-      [
-        ...group.tasks,
-      ],
+    tasks: [
+      ...group.tasks,
+    ],
 
     coverages:
       group.coverages.map(
@@ -182,44 +237,67 @@ const clone =
             ),
         }),
       ),
-  })
+  }
+}
 
-function message(
+function errorMessage(
   exception: unknown,
 ) {
-  return axios
-    .isAxiosError<{
+  if (
+    axios.isAxiosError<{
       message?: string
       detail?: string
     }>(
       exception,
     )
-      ? exception.response
-          ?.data
-          ?.message
-        ??
-        exception.response
-          ?.data
-          ?.detail
-        ??
-        'No se pudo completar la operación.'
-      : exception instanceof
-          Error
-        ? exception.message
-        : 'No se pudo completar la operación.'
+  ) {
+    return (
+      exception.response
+        ?.data
+        ?.message
+      ??
+      exception.response
+        ?.data
+        ?.detail
+      ??
+      `No se pudo completar la operación (${exception.response?.status ?? 'sin conexión'}).`
+    )
+  }
+
+  return exception instanceof Error
+    ? exception.message
+    : 'No se pudo completar la operación.'
 }
 
 export function HelpdeskSpecialtiesPage() {
   const [
+    searchParams,
+    setSearchParams,
+  ] =
+    useSearchParams()
+
+  const requestedTab =
+    resolveTab(
+      searchParams.get(
+        'tab',
+      ),
+    )
+
+  const [
+    tab,
+    setTab,
+  ] =
+    useState<PlanningTab>(
+      requestedTab,
+    )
+
+  const [
     catalog,
     setCatalog,
   ] =
-    useState<Catalog>({
-      groups: [],
-      sites: [],
-      locations: [],
-      users: [],
-    })
+    useState<Catalog>(
+      emptyCatalog,
+    )
 
   const [
     selected,
@@ -350,13 +428,85 @@ export function HelpdeskSpecialtiesPage() {
     )
 
   const busy =
-    loading ||
+    loading
+    ||
     saving
+
+  // ============================================================
+  // TAB <-> URL
+  // ============================================================
+
+  useEffect(
+    () => {
+      if (
+        requestedTab !==
+        tab
+      ) {
+        setTab(
+          requestedTab,
+        )
+      }
+    },
+    [
+      requestedTab,
+      tab,
+    ],
+  )
+
+  function changeTab(
+    next:
+      PlanningTab,
+  ) {
+    setTab(
+      next,
+    )
+
+    setError(
+      '',
+    )
+
+    setSuccess(
+      '',
+    )
+
+    const params =
+      new URLSearchParams(
+        searchParams,
+      )
+
+    if (
+      next ===
+      'groups'
+    ) {
+      params.delete(
+        'tab',
+      )
+    }
+    else {
+      params.set(
+        'tab',
+        next,
+      )
+    }
+
+    params.set(
+      'workspace',
+      'helpdesk',
+    )
+
+    setSearchParams(
+      params,
+    )
+  }
+
+  // ============================================================
+  // LOAD
+  // ============================================================
 
   const load =
     useCallback(
       async (
-        id?: string,
+        selectedId?: string,
       ) => {
         setLoading(
           true,
@@ -371,28 +521,36 @@ export function HelpdeskSpecialtiesPage() {
                 '/helpdesk/group-planning',
               )
 
-          data.groups =
-            data.groups.filter(
-              group =>
-                group.isActive,
-            )
+          const normalized:
+            Catalog = {
+              ...data,
+
+              groups:
+                data.groups
+                  .filter(
+                    group =>
+                      group.isActive,
+                  ),
+            }
 
           setCatalog(
-            data,
+            normalized,
           )
 
           const group =
-            data.groups.find(
+            normalized.groups.find(
               item =>
                 item.id ===
-                id,
+                  selectedId,
             )
             ??
-            data.groups[0]
+            normalized.groups[0]
+            ??
+            null
 
           setSelected(
             group
-              ? clone(
+              ? cloneGroup(
                   group,
                 )
               : null,
@@ -417,7 +575,7 @@ export function HelpdeskSpecialtiesPage() {
         .catch(
           exception =>
             setError(
-              message(
+              errorMessage(
                 exception,
               ),
             ),
@@ -428,204 +586,426 @@ export function HelpdeskSpecialtiesPage() {
     ],
   )
 
+  // ============================================================
+  // DERIVED DATA
+  // ============================================================
+
   const locationsForCoverage =
     useMemo(
       () =>
-        catalog.locations.filter(
-          location =>
-            location.siteId ===
-              coverageSiteId
-            &&
-            location.isActive,
-        ),
+        catalog.locations
+          .filter(
+            location =>
+              location.siteId ===
+                coverageSiteId
+              &&
+              location.isActive,
+          ),
       [
         catalog.locations,
         coverageSiteId,
       ],
     )
 
-  const update =
-    (
-      patch:
-        Partial<Group>,
-    ) => {
-      setSelected(
-        current =>
-          current
-            ? {
-                ...current,
-                ...patch,
-              }
-            : null,
-      )
-
-      setDirty(
-        true,
-      )
-
-      setSuccess(
-        '',
-      )
-
-      setError(
-        '',
-      )
-    }
-
-  const updateTech =
-    (
-      id: string,
-      patch:
-        Partial<Technician>,
-    ) => {
-      if (
-        !selected
-      ) {
-        return
-      }
-
-      update({
-        technicians:
-          selected.technicians.map(
-            item =>
-              item.userId ===
-                id
-                ? {
-                    ...item,
-                    ...patch,
-                  }
-                : item,
-          ),
-      })
-    }
-
-  const choose =
-    (
-      group: Group,
-    ) => {
-      if (
-        dirty
-        &&
-        !window.confirm(
-          '¿Descartar los cambios sin guardar?',
-        )
-      ) {
-        return
-      }
-
-      setSelected(
-        clone(
-          group,
-        ),
-      )
-
-      setDirty(
-        false,
-      )
-
-      setError(
-        '',
-      )
-
-      setSuccess(
-        '',
-      )
-
-      setTask(
-        '',
-      )
-
-      setStaffId(
-        '',
-      )
-    }
-
-  const addTask =
-    () => {
-      if (
-        !selected
-      ) {
-        return
-      }
-
-      const tasks =
-        [
-          ...new Set(
-            [
-              ...selected.tasks,
-
-              ...task
-                .split(
-                  /[,;\n]/,
-                )
-                .map(
-                  value =>
-                    value
-                      .trim()
-                      .toLowerCase(),
-                )
-                .filter(
-                  Boolean,
+  const eligibleStaff =
+    useMemo(
+      () =>
+        catalog.users
+          .filter(
+            user =>
+              user.eligible,
+          )
+          .filter(
+            user =>
+              !selected
+                ?.technicians
+                .some(
+                  technician =>
+                    technician.userId ===
+                      user.id,
                 ),
-            ],
           ),
-        ]
+      [
+        catalog.users,
+        selected,
+      ],
+    )
 
-      if (
-        tasks.length >
-          50
-        ||
-        tasks.some(
-          value =>
-            value.length >
-              100
-            ||
-            value.includes(
-              '|',
+  const filteredGroups =
+    useMemo(
+      () => {
+        const term =
+          search
+            .trim()
+            .toLowerCase()
+
+        if (!term) {
+          return catalog.groups
+        }
+
+        return catalog.groups
+          .filter(
+            group =>
+              group.name
+                .toLowerCase()
+                .includes(
+                  term,
+                )
+              ||
+              (
+                group.description
+                ??
+                ''
+              )
+                .toLowerCase()
+                .includes(
+                  term,
+                )
+              ||
+              group.tasks
+                .some(
+                  item =>
+                    item
+                      .toLowerCase()
+                      .includes(
+                        term,
+                      ),
+                ),
+          )
+      },
+      [
+        catalog.groups,
+        search,
+      ],
+    )
+
+  const totalCategories =
+    useMemo(
+      () =>
+        new Set(
+          catalog.groups
+            .flatMap(
+              group =>
+                group.tasks,
+            )
+            .map(
+              value =>
+                value
+                  .toLowerCase(),
             ),
         )
-      ) {
-        setError(
-          'Admite hasta 50 tareas de hasta 100 caracteres.',
+          .size,
+      [
+        catalog.groups,
+      ],
+    )
+
+  const totalTechnicians =
+    useMemo(
+      () =>
+        new Set(
+          catalog.groups
+            .flatMap(
+              group =>
+                group.technicians,
+            )
+            .map(
+              technician =>
+                technician.userId,
+            ),
         )
+          .size,
+      [
+        catalog.groups,
+      ],
+    )
 
-        return
-      }
+  const totalAutoAssignment =
+    useMemo(
+      () =>
+        catalog.groups
+          .flatMap(
+            group =>
+              group.technicians,
+          )
+          .filter(
+            technician =>
+              technician
+                .acceptsAutomaticAssignments,
+          )
+          .length,
+      [
+        catalog.groups,
+      ],
+    )
 
-      update({
-        tasks,
-      })
+  // ============================================================
+  // UPDATE HELPERS
+  // ============================================================
 
-      setTask(
-        '',
-      )
+  function update(
+    patch:
+      Partial<Group>,
+  ) {
+    setSelected(
+      current =>
+        current
+          ? {
+              ...current,
+              ...patch,
+            }
+          : null,
+    )
+
+    setDirty(
+      true,
+    )
+
+    setSuccess(
+      '',
+    )
+
+    setError(
+      '',
+    )
+  }
+
+  function updateTech(
+    userId: string,
+
+    patch:
+      Partial<Technician>,
+  ) {
+    if (!selected) {
+      return
     }
 
-  const addCoverage =
-    () => {
-      if (
-        !selected
-        ||
-        !coverageSiteId
-      ) {
-        return
-      }
+    update({
+      technicians:
+        selected.technicians.map(
+          technician =>
+            technician.userId ===
+              userId
+              ? {
+                  ...technician,
+                  ...patch,
+                }
+              : technician,
+        ),
+    })
+  }
 
-      const category =
-        coverageCategory
-          .trim()
-          .toLowerCase()
-        ||
-        null
+  // ============================================================
+  // GROUP SELECTION
+  // ============================================================
 
-      const duplicate =
-        selected.coverages.some(
+  function choose(
+    group: Group,
+  ) {
+    if (
+      dirty
+      &&
+      !window.confirm(
+        '¿Descartar los cambios sin guardar?',
+      )
+    ) {
+      return
+    }
+
+    setSelected(
+      cloneGroup(
+        group,
+      ),
+    )
+
+    setDirty(
+      false,
+    )
+
+    setError(
+      '',
+    )
+
+    setSuccess(
+      '',
+    )
+
+    setTask(
+      '',
+    )
+
+    setStaffId(
+      '',
+    )
+
+    setCoverageSiteId(
+      '',
+    )
+
+    setCoverageLocationId(
+      '',
+    )
+
+    setCoverageCategory(
+      '',
+    )
+  }
+
+  // ============================================================
+  // CATEGORIES / TASKS
+  // ============================================================
+
+  function addTask() {
+    if (!selected) {
+      return
+    }
+
+    const additions =
+      task
+        .split(
+          /[,;\n]/,
+        )
+        .map(
+          value =>
+            value
+              .trim()
+              .toLowerCase(),
+        )
+        .filter(
+          Boolean,
+        )
+
+    const tasks =
+      [
+        ...new Set(
+          [
+            ...selected.tasks,
+            ...additions,
+          ],
+        ),
+      ]
+
+    if (
+      tasks.length >
+        50
+    ) {
+      setError(
+        'Cada grupo admite hasta 50 categorías.',
+      )
+
+      return
+    }
+
+    if (
+      tasks.some(
+        value =>
+          value.length >
+            100
+          ||
+          value.includes(
+            '|',
+          ),
+      )
+    ) {
+      setError(
+        'Cada categoría admite hasta 100 caracteres y no puede contener "|".',
+      )
+
+      return
+    }
+
+    update({
+      tasks,
+    })
+
+    setTask(
+      '',
+    )
+  }
+
+  function removeTask(
+    value:
+      string,
+  ) {
+    if (!selected) {
+      return
+    }
+
+    const inCoverage =
+      selected.coverages.some(
+        coverage =>
+          coverage.category ===
+            value,
+      )
+
+    if (
+      inCoverage
+      &&
+      !window.confirm(
+        'Esta categoría está utilizada por una cobertura. ¿Quieres eliminarla igualmente del grupo?',
+      )
+    ) {
+      return
+    }
+
+    update({
+      tasks:
+        selected.tasks.filter(
           item =>
-            item.siteId ===
+            item !==
+              value,
+        ),
+    })
+  }
+
+  // ============================================================
+  // COVERAGE
+  // ============================================================
+
+  function addCoverage() {
+    if (
+      !selected
+      ||
+      !coverageSiteId
+    ) {
+      setError(
+        'Selecciona una localidad.',
+      )
+
+      return
+    }
+
+    const category =
+      coverageCategory
+        .trim()
+        .toLowerCase()
+      ||
+      null
+
+    if (
+      category
+      &&
+      !selected.tasks
+        .includes(
+          category,
+        )
+    ) {
+      setError(
+        'La categoría seleccionada debe existir dentro del grupo.',
+      )
+
+      return
+    }
+
+    const duplicate =
+      selected.coverages
+        .some(
+          coverage =>
+            coverage.siteId ===
               coverageSiteId
             &&
             (
-              item.siteLocationId
+              coverage.siteLocationId
               ??
               null
             ) ===
@@ -636,119 +1016,284 @@ export function HelpdeskSpecialtiesPage() {
               )
             &&
             (
-              item.category
+              coverage.category
               ??
               null
             ) ===
               category,
         )
 
-      if (
-        duplicate
-      ) {
-        setError(
-          'Esa cobertura ya está agregada al grupo.',
+    if (duplicate) {
+      setError(
+        'Esa cobertura ya está agregada al grupo.',
+      )
+
+      return
+    }
+
+    update({
+      coverages: [
+        ...selected.coverages,
+
+        {
+          siteId:
+            coverageSiteId,
+
+          siteLocationId:
+            coverageLocationId
+              ? coverageLocationId
+              : null,
+
+          category,
+
+          priority:
+            coveragePriority,
+        },
+      ],
+    })
+
+    setCoverageLocationId(
+      '',
+    )
+
+    setCoverageCategory(
+      '',
+    )
+
+    setCoveragePriority(
+      100,
+    )
+  }
+
+  function removeCoverage(
+    index:
+      number,
+  ) {
+    if (!selected) {
+      return
+    }
+
+    update({
+      coverages:
+        selected.coverages
+          .filter(
+            (
+              _,
+              position,
+            ) =>
+              position !==
+              index,
+          ),
+    })
+  }
+
+  // ============================================================
+  // TECHNICIANS
+  // ============================================================
+
+  function addTech() {
+    if (
+      !selected
+      ||
+      !staffId
+    ) {
+      return
+    }
+
+    if (
+      selected.technicians
+        .some(
+          technician =>
+            technician.userId ===
+              staffId,
+        )
+    ) {
+      setError(
+        'Ese técnico ya pertenece al grupo.',
+      )
+
+      return
+    }
+
+    const maxPriority =
+      Math.max(
+        0,
+        ...selected.technicians
+          .map(
+            technician =>
+              technician.priority,
+          ),
+      )
+
+    update({
+      technicians: [
+        ...selected.technicians,
+
+        {
+          userId:
+            staffId,
+
+          isAvailable:
+            true,
+
+          acceptsAutomaticAssignments:
+            true,
+
+          maxOpenTickets:
+            20,
+
+          priority:
+            Math.min(
+              100,
+              maxPriority +
+                1,
+            ),
+
+          timeZoneId:
+            DEFAULT_TIME_ZONE,
+
+          slots:
+            defaultSchedule(),
+        },
+      ],
+    })
+
+    setStaffId(
+      '',
+    )
+  }
+
+  function removeTech(
+    userId:
+      string,
+  ) {
+    if (!selected) {
+      return
+    }
+
+    const user =
+      catalog.users
+        .find(
+          item =>
+            item.id ===
+              userId,
         )
 
-        return
-      }
-
-      update({
-        coverages: [
-          ...selected.coverages,
-
-          {
-            siteId:
-              coverageSiteId,
-
-            siteLocationId:
-              coverageLocationId
-                ? coverageLocationId
-                : null,
-
-            category,
-
-            priority:
-              coveragePriority,
-          },
-        ],
-      })
-
-      setCoverageLocationId(
-        '',
+    if (
+      !window.confirm(
+        `¿Quitar a ${user?.name ?? 'este técnico'} del grupo?`,
       )
-
-      setCoverageCategory(
-        '',
-      )
-
-      setCoveragePriority(
-        100,
-      )
+    ) {
+      return
     }
 
-  const addTech =
-    () => {
-      if (
-        !selected
-        ||
-        !staffId
-        ||
+    update({
+      technicians:
         selected.technicians
-          .some(
+          .filter(
             technician =>
-              technician.userId ===
-                staffId,
-          )
-      ) {
-        return
-      }
+              technician.userId !==
+                userId,
+          ),
+    })
+  }
 
-      update({
-        technicians: [
-          ...selected.technicians,
+  // ============================================================
+  // SCHEDULES
+  // ============================================================
+
+  function toggleDay(
+    technician:
+      Technician,
+
+    day:
+      number,
+  ) {
+    const existing =
+      technician.slots
+        .find(
+          slot =>
+            slot.day ===
+              day,
+        )
+
+    if (existing) {
+      updateTech(
+        technician.userId,
+        {
+          slots:
+            technician.slots
+              .filter(
+                slot =>
+                  slot.day !==
+                    day,
+              ),
+        },
+      )
+
+      return
+    }
+
+    updateTech(
+      technician.userId,
+      {
+        slots: [
+          ...technician.slots,
 
           {
-            userId:
-              staffId,
+            day,
 
-            isAvailable:
-              true,
+            start:
+              '08:00',
 
-            acceptsAutomaticAssignments:
-              true,
-
-            maxOpenTickets:
-              20,
-
-            priority:
-              Math.min(
-                100,
-                Math.max(
-                  0,
-                  ...selected.technicians
-                    .map(
-                      technician =>
-                        technician.priority,
-                    ),
-                )
-                +
-                1,
-              ),
-
-            timeZoneId:
-              'America/Santo_Domingo',
-
-            slots:
-              defaults(),
+            end:
+              '17:00',
           },
-        ],
-      })
+        ]
+          .sort(
+            (
+              a,
+              b,
+            ) =>
+              a.day -
+              b.day,
+          ),
+      },
+    )
+  }
 
-      setStaffId(
-        '',
-      )
-    }
+  function updateSlot(
+    technician:
+      Technician,
+
+    day:
+      number,
+
+    patch:
+      Partial<Slot>,
+  ) {
+    updateTech(
+      technician.userId,
+      {
+        slots:
+          technician.slots
+            .map(
+              slot =>
+                slot.day ===
+                  day
+                  ? {
+                      ...slot,
+                      ...patch,
+                    }
+                  : slot,
+            ),
+      },
+    )
+  }
+
+  // ============================================================
+  // SAVE
+  // ============================================================
 
   async function save() {
     if (
@@ -760,19 +1305,17 @@ export function HelpdeskSpecialtiesPage() {
     }
 
     if (
-      !selected.tasks
-        .length
+      !selected.tasks.length
     ) {
       setError(
-        'Agrega al menos una tarea o categoría al grupo.',
+        'Agrega al menos una categoría al grupo.',
       )
 
       return
     }
 
     if (
-      !selected.coverages
-        .length
+      !selected.coverages.length
     ) {
       setError(
         'Agrega al menos una localidad de cobertura.',
@@ -782,18 +1325,40 @@ export function HelpdeskSpecialtiesPage() {
     }
 
     if (
-      selected.technicians
-        .some(
-          technician =>
-            technician
-              .acceptsAutomaticAssignments
-            &&
-            !technician.slots
-              .length,
-        )
+      selected.technicians.some(
+        technician =>
+          technician
+            .acceptsAutomaticAssignments
+          &&
+          !technician.slots.length,
+      )
     ) {
       setError(
-        'Cada técnico con asignación automática necesita un horario.',
+        'Cada técnico con asignación automática necesita al menos un día de horario.',
+      )
+
+      return
+    }
+
+    const invalidSlot =
+      selected.technicians
+        .flatMap(
+          technician =>
+            technician.slots,
+        )
+        .some(
+          slot =>
+            !slot.start
+            ||
+            !slot.end
+            ||
+            slot.start >=
+              slot.end,
+        )
+
+    if (invalidSlot) {
+      setError(
+        'Revisa los horarios: la hora de inicio debe ser anterior a la hora final.',
       )
 
       return
@@ -820,23 +1385,48 @@ export function HelpdeskSpecialtiesPage() {
 
           coverages:
             selected.coverages.map(
-              item => ({
+              coverage => ({
                 siteId:
-                  item.siteId,
+                  coverage.siteId,
 
                 siteLocationId:
-                  item.siteLocationId,
+                  coverage.siteLocationId,
 
                 category:
-                  item.category,
+                  coverage.category,
 
                 priority:
-                  item.priority,
+                  coverage.priority,
               }),
             ),
 
           technicians:
-            selected.technicians,
+            selected.technicians.map(
+              technician => ({
+                userId:
+                  technician.userId,
+
+                isAvailable:
+                  technician.isAvailable,
+
+                acceptsAutomaticAssignments:
+                  technician
+                    .acceptsAutomaticAssignments,
+
+                maxOpenTickets:
+                  technician
+                    .maxOpenTickets,
+
+                priority:
+                  technician.priority,
+
+                timeZoneId:
+                  technician.timeZoneId,
+
+                slots:
+                  technician.slots,
+              }),
+            ),
         },
       )
 
@@ -845,7 +1435,7 @@ export function HelpdeskSpecialtiesPage() {
       )
 
       setSuccess(
-        'Grupo, localidades, técnicos y turnos guardados correctamente.',
+        'Grupo, categorías, cobertura, técnicos y turnos guardados correctamente.',
       )
 
       await load(
@@ -856,7 +1446,7 @@ export function HelpdeskSpecialtiesPage() {
       exception
     ) {
       setError(
-        message(
+        errorMessage(
           exception,
         ),
       )
@@ -867,6 +1457,10 @@ export function HelpdeskSpecialtiesPage() {
       )
     }
   }
+
+  // ============================================================
+  // CREATE GROUP
+  // ============================================================
 
   async function create() {
     if (
@@ -889,25 +1483,30 @@ export function HelpdeskSpecialtiesPage() {
       '',
     )
 
+    setSuccess(
+      '',
+    )
+
     try {
       const {
         data,
       } =
-        await apiClient.post<{
-          id: string
-        }>(
-          '/helpdesk/group-planning/groups',
-          {
-            name:
-              name.trim(),
+        await apiClient
+          .post<{
+            id: string
+          }>(
+            '/helpdesk/group-planning/groups',
+            {
+              name:
+                name.trim(),
 
-            description:
-              description
-                .trim()
-              ||
-              null,
-          },
-        )
+              description:
+                description
+                  .trim()
+                ||
+                null,
+            },
+          )
 
       setShowCreate(
         false,
@@ -926,14 +1525,14 @@ export function HelpdeskSpecialtiesPage() {
       )
 
       setSuccess(
-        'Grupo creado. Configura su cobertura, técnicos y turnos.',
+        'Grupo creado. Agrega categorías, cobertura, técnicos y turnos.',
       )
     }
     catch (
       exception
     ) {
       setError(
-        message(
+        errorMessage(
           exception,
         ),
       )
@@ -944,6 +1543,10 @@ export function HelpdeskSpecialtiesPage() {
       )
     }
   }
+
+  // ============================================================
+  // DISPLAY HELPERS
+  // ============================================================
 
   function siteLabel(
     siteId:
@@ -963,21 +1566,19 @@ export function HelpdeskSpecialtiesPage() {
   }
 
   function locationLabel(
-    id:
+    locationId:
       string | null,
   ) {
-    if (
-      !id
-    ) {
+    if (!locationId) {
       return 'Toda la localidad'
     }
 
     return (
       catalog.locations
         .find(
-          item =>
-            item.id ===
-              id,
+          location =>
+            location.id ===
+              locationId,
         )
         ?.name
       ??
@@ -985,10 +1586,70 @@ export function HelpdeskSpecialtiesPage() {
     )
   }
 
+  function userLabel(
+    userId:
+      string,
+  ) {
+    return (
+      catalog.users
+        .find(
+          user =>
+            user.id ===
+              userId,
+        )
+        ?.name
+      ??
+      'Usuario no disponible'
+    )
+  }
+
+  function userEmail(
+    userId:
+      string,
+  ) {
+    return (
+      catalog.users
+        .find(
+          user =>
+            user.id ===
+              userId,
+        )
+        ?.email
+      ??
+      ''
+    )
+  }
+
+  // ============================================================
+  // PAGE TITLE
+  // ============================================================
+
+  const pageTitle =
+    tab ===
+      'categories'
+      ? 'Categorías y especialidades'
+      : tab ===
+          'schedules'
+        ? 'Turnos y capacidad'
+        : 'Grupos de trabajo'
+
+  const pageDescription =
+    tab ===
+      'categories'
+      ? 'Define qué tipos de solicitudes atiende cada grupo TIC.'
+      : tab ===
+          'schedules'
+        ? 'Configura técnicos, disponibilidad, capacidad y horarios de asignación.'
+        : 'Administra los grupos TIC, su cobertura y estructura operativa.'
+
   return (
     <main
       className="hdgp"
     >
+      {/* ========================================================
+          HEADER
+         ======================================================== */}
+
       <header
         className="hdgp-header"
       >
@@ -1000,13 +1661,11 @@ export function HelpdeskSpecialtiesPage() {
           </span>
 
           <h1>
-            Grupos, cobertura y turnos
+            {pageTitle}
           </h1>
 
           <p>
-            Configura qué atiende cada grupo,
-            qué localidades cubre y qué técnicos
-            reciben las solicitudes.
+            {pageDescription}
           </p>
         </div>
 
@@ -1016,25 +1675,34 @@ export function HelpdeskSpecialtiesPage() {
           <Link
             to="/helpdesk/operations?workspace=helpdesk"
           >
+            <MapPin
+              size={15}
+            />
+
             Localidades
           </Link>
 
           <button
+            type="button"
             disabled={
               busy
             }
             onClick={
               () =>
                 void load(
-                  selected
-                    ?.id,
+                  selected?.id,
                 )
             }
           >
+            <RefreshCw
+              size={15}
+            />
+
             Actualizar
           </button>
 
           <button
+            type="button"
             className="hdgp-primary"
             disabled={
               busy
@@ -1047,10 +1715,18 @@ export function HelpdeskSpecialtiesPage() {
                 )
             }
           >
+            <Plus
+              size={15}
+            />
+
             Crear grupo
           </button>
         </div>
       </header>
+
+      {/* ========================================================
+          STATUS
+         ======================================================== */}
 
       {error && (
         <div
@@ -1066,9 +1742,158 @@ export function HelpdeskSpecialtiesPage() {
           className="hdgp-alert hdgp-success"
           role="status"
         >
+          <CheckCircle2
+            size={16}
+          />
+
           {success}
         </div>
       )}
+
+      {/* ========================================================
+          METRICS
+         ======================================================== */}
+
+      <section
+        className="hdgp-metrics"
+      >
+        <article>
+          <FolderKanban
+            size={18}
+          />
+
+          <span>
+            Grupos activos
+          </span>
+
+          <strong>
+            {
+              catalog.groups.length
+            }
+          </strong>
+        </article>
+
+        <article>
+          <Tags
+            size={18}
+          />
+
+          <span>
+            Categorías
+          </span>
+
+          <strong>
+            {
+              totalCategories
+            }
+          </strong>
+        </article>
+
+        <article>
+          <Users
+            size={18}
+          />
+
+          <span>
+            Técnicos
+          </span>
+
+          <strong>
+            {
+              totalTechnicians
+            }
+          </strong>
+        </article>
+
+        <article>
+          <CalendarClock
+            size={18}
+          />
+
+          <span>
+            Autoasignación
+          </span>
+
+          <strong>
+            {
+              totalAutoAssignment
+            }
+          </strong>
+        </article>
+      </section>
+
+      {/* ========================================================
+          TABS
+         ======================================================== */}
+
+      <nav
+        className="hdgp-tabs"
+        aria-label="Configuración de grupos"
+      >
+        <button
+          type="button"
+          aria-pressed={
+            tab ===
+            'groups'
+          }
+          onClick={
+            () =>
+              changeTab(
+                'groups',
+              )
+          }
+        >
+          <FolderKanban
+            size={16}
+          />
+
+          Grupos
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={
+            tab ===
+            'categories'
+          }
+          onClick={
+            () =>
+              changeTab(
+                'categories',
+              )
+          }
+        >
+          <Tags
+            size={16}
+          />
+
+          Categorías
+        </button>
+
+        <button
+          type="button"
+          aria-pressed={
+            tab ===
+            'schedules'
+          }
+          onClick={
+            () =>
+              changeTab(
+                'schedules',
+              )
+          }
+        >
+          <CalendarClock
+            size={16}
+          />
+
+          Turnos y capacidad
+        </button>
+      </nav>
+
+      {/* ========================================================
+          CREATE GROUP
+         ======================================================== */}
 
       {showCreate && (
         <section
@@ -1088,23 +1913,18 @@ export function HelpdeskSpecialtiesPage() {
               Nombre
 
               <input
-                maxLength={
-                  120
-                }
+                maxLength={120}
                 value={
                   name
                 }
                 onChange={
                   event =>
                     setName(
-                      event
-                        .target
+                      event.target
                         .value,
                     )
                 }
-                placeholder={
-                  'Ej.: Soporte Parque 1'
-                }
+                placeholder="Ej.: Soporte TIC"
               />
             </label>
 
@@ -1112,24 +1932,23 @@ export function HelpdeskSpecialtiesPage() {
               Descripción
 
               <input
-                maxLength={
-                  500
-                }
+                maxLength={500}
                 value={
                   description
                 }
                 onChange={
                   event =>
                     setDescription(
-                      event
-                        .target
+                      event.target
                         .value,
                     )
                 }
+                placeholder="Responsabilidad principal del grupo"
               />
             </label>
 
             <button
+              type="button"
               className="hdgp-primary"
               onClick={
                 () =>
@@ -1142,9 +1961,15 @@ export function HelpdeskSpecialtiesPage() {
         </section>
       )}
 
+      {/* ========================================================
+          WORKSPACE
+         ======================================================== */}
+
       <div
         className="hdgp-layout"
       >
+        {/* GROUP SIDEBAR */}
+
         <aside
           className="hdgp-panel hdgp-sidebar"
         >
@@ -1161,36 +1986,31 @@ export function HelpdeskSpecialtiesPage() {
             onChange={
               event =>
                 setSearch(
-                  event
-                    .target
+                  event.target
                     .value,
                 )
             }
           />
 
-          {catalog.groups
-            .filter(
-              group =>
-                group.name
-                  .toLowerCase()
-                  .includes(
-                    search
-                      .toLowerCase(),
-                  ),
-            )
-            .map(
+          {!filteredGroups
+              .length ? (
+            <p>
+              No hay grupos.
+            </p>
+          ) : (
+            filteredGroups.map(
               group => (
                 <button
                   key={
                     group.id
                   }
+                  type="button"
                   disabled={
                     busy
                   }
                   className={
                     `hdgp-group ${
-                      selected
-                        ?.id ===
+                      selected?.id ===
                       group.id
                         ? 'selected'
                         : ''
@@ -1212,18 +2032,23 @@ export function HelpdeskSpecialtiesPage() {
                   <span>
                     {
                       group.tasks.length
-                    } tareas ·{' '}
-                    {
-                      group.coverages.length
-                    } localidades ·{' '}
+                    }
+                    {' '}
+                    categorías ·
+                    {' '}
                     {
                       group.technicians.length
-                    } técnicos
+                    }
+                    {' '}
+                    técnicos
                   </span>
                 </button>
               ),
-            )}
+            )
+          )}
         </aside>
+
+        {/* EDITOR */}
 
         <section
           className="hdgp-editor"
@@ -1251,383 +2076,471 @@ export function HelpdeskSpecialtiesPage() {
                 busy
               }
             >
-              <section
-                className="hdgp-panel"
-              >
-                <h2>
-                  {
-                    selected.name
-                  }
-                </h2>
+              {/* ================================================
+                  GROUPS TAB
+                 ================================================ */}
 
-                <p>
-                  {
-                    selected.description
-                    ||
-                    'Grupo de atención.'
-                  }
-                </p>
+              {tab ===
+                'groups' && (
+                <>
+                  <section
+                    className="hdgp-panel"
+                  >
+                    <div
+                      className="hdgp-section-heading"
+                    >
+                      <div>
+                        <h2>
+                          {
+                            selected.name
+                          }
+                        </h2>
 
-                <details
-                  open
+                        <p>
+                          {
+                            selected.description
+                            ??
+                            'Sin descripción.'
+                          }
+                        </p>
+                      </div>
+
+                      <span>
+                        {
+                          selected.isActive
+                            ? 'Activo'
+                            : 'Inactivo'
+                        }
+                      </span>
+                    </div>
+                  </section>
+
+                  <section
+                    className="hdgp-panel"
+                  >
+                    <h2>
+                      Cobertura territorial
+                    </h2>
+
+                    <p>
+                      Define dónde puede recibir
+                      tickets este grupo.
+                    </p>
+
+                    <div
+                      className="hdgp-grid"
+                    >
+                      <label>
+                        Localidad
+
+                        <select
+                          value={
+                            coverageSiteId
+                          }
+                          onChange={
+                            event => {
+                              setCoverageSiteId(
+                                event.target
+                                  .value,
+                              )
+
+                              setCoverageLocationId(
+                                '',
+                              )
+                            }
+                          }
+                        >
+                          <option value="">
+                            Selecciona
+                          </option>
+
+                          {catalog.sites
+                            .filter(
+                              site =>
+                                site.isActive,
+                            )
+                            .map(
+                              site => (
+                                <option
+                                  key={
+                                    site.id
+                                  }
+                                  value={
+                                    site.id
+                                  }
+                                >
+                                  {
+                                    site.name
+                                  }
+                                </option>
+                              ),
+                            )}
+                        </select>
+                      </label>
+
+                      <label>
+                        Sublocalidad
+
+                        <select
+                          value={
+                            coverageLocationId
+                          }
+                          disabled={
+                            !coverageSiteId
+                          }
+                          onChange={
+                            event =>
+                              setCoverageLocationId(
+                                event.target
+                                  .value,
+                              )
+                          }
+                        >
+                          <option value="">
+                            Toda la localidad
+                          </option>
+
+                          {locationsForCoverage.map(
+                            location => (
+                              <option
+                                key={
+                                  location.id
+                                }
+                                value={
+                                  location.id
+                                }
+                              >
+                                {
+                                  location.name
+                                }
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+
+                      <label>
+                        Categoría
+
+                        <select
+                          value={
+                            coverageCategory
+                          }
+                          onChange={
+                            event =>
+                              setCoverageCategory(
+                                event.target
+                                  .value,
+                              )
+                          }
+                        >
+                          <option value="">
+                            Todas
+                          </option>
+
+                          {selected.tasks.map(
+                            item => (
+                              <option
+                                key={
+                                  item
+                                }
+                                value={
+                                  item
+                                }
+                              >
+                                {
+                                  item
+                                }
+                              </option>
+                            ),
+                          )}
+                        </select>
+                      </label>
+
+                      <label>
+                        Prioridad routing
+
+                        <input
+                          type="number"
+                          min={1}
+                          max={1000}
+                          value={
+                            coveragePriority
+                          }
+                          onChange={
+                            event =>
+                              setCoveragePriority(
+                                Number(
+                                  event.target
+                                    .value,
+                                ),
+                              )
+                          }
+                        />
+                      </label>
+                    </div>
+
+                    <button
+                      type="button"
+                      className="hdgp-secondary"
+                      onClick={
+                        addCoverage
+                      }
+                    >
+                      <Plus
+                        size={15}
+                      />
+
+                      Agregar cobertura
+                    </button>
+
+                    <div
+                      className="hdgp-table"
+                    >
+                      <table>
+                        <thead>
+                          <tr>
+                            <th>
+                              Localidad
+                            </th>
+
+                            <th>
+                              Sublocalidad
+                            </th>
+
+                            <th>
+                              Categoría
+                            </th>
+
+                            <th>
+                              Prioridad
+                            </th>
+
+                            <th />
+                          </tr>
+                        </thead>
+
+                        <tbody>
+                          {!selected.coverages
+                              .length ? (
+                            <tr>
+                              <td
+                                colSpan={5}
+                              >
+                                Sin cobertura configurada.
+                              </td>
+                            </tr>
+                          ) : (
+                            selected.coverages.map(
+                              (
+                                coverage,
+                                index,
+                              ) => (
+                                <tr
+                                  key={
+                                    `${coverage.siteId}-${coverage.siteLocationId}-${coverage.category}-${index}`
+                                  }
+                                >
+                                  <td>
+                                    {siteLabel(
+                                      coverage.siteId,
+                                    )}
+                                  </td>
+
+                                  <td>
+                                    {locationLabel(
+                                      coverage.siteLocationId,
+                                    )}
+                                  </td>
+
+                                  <td>
+                                    {
+                                      coverage.category
+                                      ??
+                                      'Todas'
+                                    }
+                                  </td>
+
+                                  <td>
+                                    {
+                                      coverage.priority
+                                    }
+                                  </td>
+
+                                  <td>
+                                    <button
+                                      type="button"
+                                      className="hdgp-icon-danger"
+                                      onClick={
+                                        () =>
+                                          removeCoverage(
+                                            index,
+                                          )
+                                      }
+                                    >
+                                      <Trash2
+                                        size={15}
+                                      />
+                                    </button>
+                                  </td>
+                                </tr>
+                              ),
+                            )
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </section>
+                </>
+              )}
+
+              {/* ================================================
+                  CATEGORIES TAB
+                 ================================================ */}
+
+              {tab ===
+                'categories' && (
+                <section
+                  className="hdgp-panel"
                 >
-                  <summary>
-                    1. Tareas y categorías
-                  </summary>
+                  <h2>
+                    Categorías de
+                    {
+                      ' '
+                    }
+                    {
+                      selected.name
+                    }
+                  </h2>
+
+                  <p>
+                    Estas categorías determinan
+                    qué tipo de solicitudes puede
+                    recibir este grupo y también
+                    alimentan Plantillas y Routing.
+                  </p>
 
                   <div
-                    className="hdgp-inline"
+                    className="hdgp-task-add"
                   >
-                    <input
+                    <textarea
+                      rows={3}
                       value={
                         task
-                      }
-                      placeholder={
-                        'Telefonía, cableado, ERP, impresoras…'
                       }
                       onChange={
                         event =>
                           setTask(
-                            event
-                              .target
+                            event.target
                               .value,
                           )
+                      }
+                      placeholder={
+                        'Ej.: redes, accesos, hardware, software'
                       }
                     />
 
                     <button
+                      type="button"
+                      className="hdgp-primary"
                       onClick={
                         addTask
                       }
                     >
+                      <Plus
+                        size={15}
+                      />
+
                       Agregar
                     </button>
                   </div>
 
                   <div
-                    className="hdgp-chips"
+                    className="hdgp-task-list"
                   >
-                    {selected.tasks.map(
-                      value => (
-                        <span
-                          key={
-                            value
-                          }
-                        >
-                          {value}
-
-                          <button
-                            onClick={
-                              () =>
-                                update({
-                                  tasks:
-                                    selected.tasks
-                                      .filter(
-                                        item =>
-                                          item !==
-                                          value,
-                                      ),
-                                })
-                            }
-                          >
-                            ×
-                          </button>
-                        </span>
-                      ),
-                    )}
-                  </div>
-                </details>
-              </section>
-
-              <section
-                className="hdgp-panel"
-              >
-                <details
-                  open
-                >
-                  <summary>
-                    2. Cobertura por localidad
-                  </summary>
-
-                  <p>
-                    Estas localidades son las mismas
-                    definidas en Configuración → Localidades.
-                  </p>
-
-                  <div
-                    className="hdgp-inline"
-                  >
-                    <select
-                      value={
-                        coverageSiteId
-                      }
-                      onChange={
-                        event => {
-                          setCoverageSiteId(
-                            event
-                              .target
-                              .value,
-                          )
-
-                          setCoverageLocationId(
-                            '',
-                          )
-                        }
-                      }
-                    >
-                      <option
-                        value=""
-                      >
-                        Selecciona localidad…
-                      </option>
-
-                      {catalog.sites
-                        .filter(
-                          site =>
-                            site.isActive,
-                        )
-                        .map(
-                          site => (
-                            <option
-                              key={
-                                site.id
-                              }
-                              value={
-                                site.id
-                              }
-                            >
-                              {
-                                site.name
-                              }
-                            </option>
-                          ),
-                        )}
-                    </select>
-
-                    <select
-                      value={
-                        coverageLocationId
-                      }
-                      disabled={
-                        !coverageSiteId
-                      }
-                      onChange={
-                        event =>
-                          setCoverageLocationId(
-                            event
-                              .target
-                              .value,
-                          )
-                      }
-                    >
-                      <option
-                        value=""
-                      >
-                        Toda la localidad
-                      </option>
-
-                      {locationsForCoverage.map(
-                        location => (
-                          <option
+                    {!selected.tasks
+                        .length ? (
+                      <p>
+                        No hay categorías configuradas.
+                      </p>
+                    ) : (
+                      selected.tasks.map(
+                        item => (
+                          <article
                             key={
-                              location.id
-                            }
-                            value={
-                              location.id
+                              item
                             }
                           >
-                            {
-                              location.name
-                            }
-                          </option>
-                        ),
-                      )}
-                    </select>
-                  </div>
+                            <Tags
+                              size={16}
+                            />
 
-                  <div
-                    className="hdgp-inline"
-                  >
-                    <input
-                      placeholder={
-                        'Categoría opcional'
-                      }
-                      value={
-                        coverageCategory
-                      }
-                      onChange={
-                        event =>
-                          setCoverageCategory(
-                            event
-                              .target
-                              .value,
-                          )
-                      }
-                    />
-
-                    <input
-                      type="number"
-                      min={
-                        1
-                      }
-                      max={
-                        1000
-                      }
-                      value={
-                        coveragePriority
-                      }
-                      onChange={
-                        event =>
-                          setCoveragePriority(
-                            Number(
-                              event
-                                .target
-                                .value,
-                            ),
-                          )
-                      }
-                    />
-
-                    <button
-                      disabled={
-                        !coverageSiteId
-                      }
-                      onClick={
-                        addCoverage
-                      }
-                    >
-                      Agregar cobertura
-                    </button>
-                  </div>
-
-                  <div
-                    className="hdgp-technicians"
-                  >
-                    {selected.coverages.map(
-                      (
-                        coverage,
-                        index,
-                      ) => (
-                        <article
-                          key={
-                            `${
-                              coverage.siteId
-                            }-${
-                              coverage.siteLocationId
-                              ??
-                              'all'
-                            }-${
-                              coverage.category
-                              ??
-                              'all'
-                            }-${index}`
-                          }
-                          className="hdgp-technician"
-                        >
-                          <div
-                            className="hdgp-title"
-                          >
-                            <div>
-                              <h3>
-                                {siteLabel(
-                                  coverage.siteId,
-                                )}
-                              </h3>
-
-                              <small>
-                                {locationLabel(
-                                  coverage.siteLocationId,
-                                )}
-
-                                {' · '}
-
-                                {
-                                  coverage.category
-                                  ??
-                                  'Todas las categorías'
-                                }
-
-                                {' · Prioridad '}
-
-                                {
-                                  coverage.priority
-                                }
-                              </small>
-                            </div>
+                            <strong>
+                              {
+                                item
+                              }
+                            </strong>
 
                             <button
-                              className="hdgp-remove"
+                              type="button"
                               onClick={
                                 () =>
-                                  update({
-                                    coverages:
-                                      selected.coverages
-                                        .filter(
-                                          (
-                                            _,
-                                            current,
-                                          ) =>
-                                            current !==
-                                            index,
-                                        ),
-                                  })
+                                  removeTask(
+                                    item,
+                                  )
                               }
                             >
-                              Quitar
+                              <Trash2
+                                size={14}
+                              />
                             </button>
-                          </div>
-                        </article>
-                      ),
+                          </article>
+                        ),
+                      )
                     )}
                   </div>
-                </details>
-              </section>
+                </section>
+              )}
 
-              <section
-                className="hdgp-panel"
-              >
-                <details
-                  open
-                >
-                  <summary>
-                    3. Técnicos, capacidad y turnos
-                  </summary>
+              {/* ================================================
+                  SCHEDULES TAB
+                 ================================================ */}
 
-                  <div
-                    className="hdgp-inline"
+              {tab ===
+                'schedules' && (
+                <>
+                  <section
+                    className="hdgp-panel"
                   >
-                    <select
-                      value={
-                        staffId
-                      }
-                      onChange={
-                        event =>
-                          setStaffId(
-                            event
-                              .target
-                              .value,
-                          )
-                      }
-                    >
-                      <option
-                        value=""
-                      >
-                        Selecciona técnico…
-                      </option>
+                    <h2>
+                      Técnicos del grupo
+                    </h2>
 
-                      {catalog.users
-                        .filter(
-                          user =>
-                            user.eligible
-                            &&
-                            !selected.technicians
-                              .some(
-                                technician =>
-                                  technician.userId ===
-                                    user.id,
-                              ),
-                        )
-                        .map(
+                    <p>
+                      Agrega técnicos habilitados
+                      para recibir tickets.
+                    </p>
+
+                    <div
+                      className="hdgp-tech-add"
+                    >
+                      <select
+                        value={
+                          staffId
+                        }
+                        onChange={
+                          event =>
+                            setStaffId(
+                              event.target
+                                .value,
+                            )
+                        }
+                      >
+                        <option value="">
+                          Selecciona técnico
+                        </option>
+
+                        {eligibleStaff.map(
                           user => (
                             <option
                               key={
@@ -1639,473 +2552,369 @@ export function HelpdeskSpecialtiesPage() {
                             >
                               {
                                 user.name
-                              } · {
+                              }
+                              {
                                 user.email
+                                  ? ` · ${user.email}`
+                                  : ''
                               }
                             </option>
                           ),
                         )}
-                    </select>
+                      </select>
 
-                    <button
-                      disabled={
-                        !staffId
-                      }
-                      onClick={
-                        addTech
-                      }
+                      <button
+                        type="button"
+                        className="hdgp-primary"
+                        onClick={
+                          addTech
+                        }
+                      >
+                        <UserPlus
+                          size={15}
+                        />
+
+                        Agregar técnico
+                      </button>
+                    </div>
+                  </section>
+
+                  {!selected.technicians
+                      .length ? (
+                    <section
+                      className="hdgp-panel"
                     >
-                      Agregar técnico
-                    </button>
-                  </div>
-
-                  <div
-                    className="hdgp-technicians"
-                  >
-                    {selected.technicians.map(
-                      technician => {
-                        const user =
-                          catalog.users
-                            .find(
-                              item =>
-                                item.id ===
-                                  technician.userId,
-                            )
-
-                        return (
-                          <article
-                            key={
-                              technician.userId
-                            }
-                            className="hdgp-technician"
+                      No hay técnicos
+                      configurados en este grupo.
+                    </section>
+                  ) : (
+                    selected.technicians.map(
+                      technician => (
+                        <section
+                          key={
+                            technician.userId
+                          }
+                          className="hdgp-panel hdgp-technician"
+                        >
+                          <header
+                            className="hdgp-tech-header"
                           >
-                            <div
-                              className="hdgp-title"
-                            >
-                              <div>
-                                <h3>
-                                  {
-                                    user?.name
-                                    ??
-                                    'Cuenta no disponible'
-                                  }
-                                </h3>
+                            <div>
+                              <strong>
+                                {userLabel(
+                                  technician.userId,
+                                )}
+                              </strong>
 
-                                <small>
-                                  {
-                                    user?.siteName
-                                    ??
-                                    'Sin localidad'
-                                  }
-
-                                  {user?.siteLocationName
-                                    ? ` / ${user.siteLocationName}`
-                                    : ''}
-
-                                  {' · '}
-
-                                  {
-                                    user?.email
-                                  }
-                                </small>
-                              </div>
-
-                              <button
-                                className="hdgp-remove"
-                                onClick={
-                                  () =>
-                                    update({
-                                      technicians:
-                                        selected.technicians
-                                          .filter(
-                                            item =>
-                                              item.userId !==
-                                              technician.userId,
-                                          ),
-                                    })
-                                }
-                              >
-                                Quitar
-                              </button>
-                            </div>
-
-                            <div
-                              className="hdgp-tech-settings"
-                            >
-                              <label>
-                                Prioridad
-
-                                <input
-                                  type="number"
-                                  min={
-                                    1
-                                  }
-                                  max={
-                                    100
-                                  }
-                                  value={
-                                    technician.priority
-                                  }
-                                  onChange={
-                                    event =>
-                                      updateTech(
-                                        technician.userId,
-                                        {
-                                          priority:
-                                            Number(
-                                              event
-                                                .target
-                                                .value,
-                                            ),
-                                        },
-                                      )
-                                  }
-                                />
-                              </label>
-
-                              <label>
-                                Máximo abiertos
-
-                                <input
-                                  type="number"
-                                  min={
-                                    1
-                                  }
-                                  max={
-                                    500
-                                  }
-                                  value={
-                                    technician.maxOpenTickets
-                                  }
-                                  onChange={
-                                    event =>
-                                      updateTech(
-                                        technician.userId,
-                                        {
-                                          maxOpenTickets:
-                                            Number(
-                                              event
-                                                .target
-                                                .value,
-                                            ),
-                                        },
-                                      )
-                                  }
-                                />
-                              </label>
-
-                              <label>
-                                Zona horaria
-
-                                <input
-                                  value={
-                                    technician.timeZoneId
-                                  }
-                                  onChange={
-                                    event =>
-                                      updateTech(
-                                        technician.userId,
-                                        {
-                                          timeZoneId:
-                                            event
-                                              .target
-                                              .value,
-                                        },
-                                      )
-                                  }
-                                />
-                              </label>
-
-                              <label
-                                className="hdgp-check"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    technician.isAvailable
-                                  }
-                                  onChange={
-                                    event =>
-                                      updateTech(
-                                        technician.userId,
-                                        {
-                                          isAvailable:
-                                            event
-                                              .target
-                                              .checked,
-                                        },
-                                      )
-                                  }
-                                />
-
-                                Disponible
-                              </label>
-
-                              <label
-                                className="hdgp-check"
-                              >
-                                <input
-                                  type="checkbox"
-                                  checked={
-                                    technician.acceptsAutomaticAssignments
-                                  }
-                                  onChange={
-                                    event =>
-                                      updateTech(
-                                        technician.userId,
-                                        {
-                                          acceptsAutomaticAssignments:
-                                            event
-                                              .target
-                                              .checked,
-                                        },
-                                      )
-                                  }
-                                />
-
-                                Autoasignación
-                              </label>
-                            </div>
-
-                            <h4>
-                              Horario semanal
-                            </h4>
-
-                            <div
-                              className="hdgp-slots"
-                            >
-                              {technician.slots.map(
-                                (
-                                  slot,
-                                  index,
-                                ) => (
-                                  <div
-                                    className="hdgp-slot"
-                                    key={
-                                      index
-                                    }
-                                  >
-                                    <select
-                                      value={
-                                        slot.day
-                                      }
-                                      onChange={
-                                        event =>
-                                          updateTech(
-                                            technician.userId,
-                                            {
-                                              slots:
-                                                technician.slots.map(
-                                                  (
-                                                    current,
-                                                    currentIndex,
-                                                  ) =>
-                                                    currentIndex ===
-                                                      index
-                                                      ? {
-                                                          ...current,
-                                                          day:
-                                                            Number(
-                                                              event
-                                                                .target
-                                                                .value,
-                                                            ),
-                                                        }
-                                                      : current,
-                                                ),
-                                            },
-                                          )
-                                      }
-                                    >
-                                      {days.map(
-                                        (
-                                          day,
-                                          dayIndex,
-                                        ) => (
-                                          <option
-                                            key={
-                                              day
-                                            }
-                                            value={
-                                              dayIndex
-                                            }
-                                          >
-                                            {
-                                              day
-                                            }
-                                          </option>
-                                        ),
-                                      )}
-                                    </select>
-
-                                    <input
-                                      type="time"
-                                      value={
-                                        slot.start
-                                      }
-                                      onChange={
-                                        event =>
-                                          updateTech(
-                                            technician.userId,
-                                            {
-                                              slots:
-                                                technician.slots.map(
-                                                  (
-                                                    current,
-                                                    currentIndex,
-                                                  ) =>
-                                                    currentIndex ===
-                                                      index
-                                                      ? {
-                                                          ...current,
-                                                          start:
-                                                            event
-                                                              .target
-                                                              .value,
-                                                        }
-                                                      : current,
-                                                ),
-                                            },
-                                          )
-                                      }
-                                    />
-
-                                    <input
-                                      type="time"
-                                      value={
-                                        slot.end
-                                      }
-                                      onChange={
-                                        event =>
-                                          updateTech(
-                                            technician.userId,
-                                            {
-                                              slots:
-                                                technician.slots.map(
-                                                  (
-                                                    current,
-                                                    currentIndex,
-                                                  ) =>
-                                                    currentIndex ===
-                                                      index
-                                                      ? {
-                                                          ...current,
-                                                          end:
-                                                            event
-                                                              .target
-                                                              .value,
-                                                        }
-                                                      : current,
-                                                ),
-                                            },
-                                          )
-                                      }
-                                    />
-
-                                    <button
-                                      onClick={
-                                        () =>
-                                          updateTech(
-                                            technician.userId,
-                                            {
-                                              slots:
-                                                technician.slots
-                                                  .filter(
-                                                    (
-                                                      _,
-                                                      currentIndex,
-                                                    ) =>
-                                                      currentIndex !==
-                                                      index,
-                                                  ),
-                                            },
-                                          )
-                                      }
-                                    >
-                                      Quitar
-                                    </button>
-                                  </div>
-                                ),
-                              )}
-                            </div>
-
-                            <div
-                              className="hdgp-actions"
-                            >
-                              <button
-                                onClick={
-                                  () =>
-                                    updateTech(
-                                      technician.userId,
-                                      {
-                                        slots: [
-                                          ...technician.slots,
-
-                                          {
-                                            day:
-                                              1,
-
-                                            start:
-                                              '08:00',
-
-                                            end:
-                                              '17:00',
-                                          },
-                                        ],
-                                      },
-                                    )
-                                }
-                              >
-                                Agregar franja
-                              </button>
-
-                              <button
-                                onClick={
-                                  () =>
-                                    updateTech(
-                                      technician.userId,
-                                      {
-                                        slots:
-                                          defaults(),
-                                      },
-                                    )
-                                }
-                              >
-                                Lunes a viernes
-                              </button>
-
-                              <span
-                                className="hdgp-tag"
-                              >
-                                {
-                                  technician.onDuty
-                                    ? 'Dentro de horario'
-                                    : 'Fuera de horario'
-                                }
+                              <span>
+                                {userEmail(
+                                  technician.userId,
+                                )}
                               </span>
                             </div>
-                          </article>
-                        )
-                      },
-                    )}
-                  </div>
-                </details>
-              </section>
 
-              <footer
-                className="hdgp-save"
+                            <button
+                              type="button"
+                              className="hdgp-icon-danger"
+                              onClick={
+                                () =>
+                                  removeTech(
+                                    technician.userId,
+                                  )
+                              }
+                            >
+                              <Trash2
+                                size={15}
+                              />
+                            </button>
+                          </header>
+
+                          <div
+                            className="hdgp-grid"
+                          >
+                            <label>
+                              Disponible
+
+                              <select
+                                value={
+                                  technician.isAvailable
+                                    ? 'yes'
+                                    : 'no'
+                                }
+                                onChange={
+                                  event =>
+                                    updateTech(
+                                      technician.userId,
+                                      {
+                                        isAvailable:
+                                          event.target
+                                            .value ===
+                                          'yes',
+                                      },
+                                    )
+                                }
+                              >
+                                <option value="yes">
+                                  Sí
+                                </option>
+
+                                <option value="no">
+                                  No
+                                </option>
+                              </select>
+                            </label>
+
+                            <label>
+                              Autoasignación
+
+                              <select
+                                value={
+                                  technician
+                                    .acceptsAutomaticAssignments
+                                    ? 'yes'
+                                    : 'no'
+                                }
+                                onChange={
+                                  event =>
+                                    updateTech(
+                                      technician.userId,
+                                      {
+                                        acceptsAutomaticAssignments:
+                                          event.target
+                                            .value ===
+                                          'yes',
+                                      },
+                                    )
+                                }
+                              >
+                                <option value="yes">
+                                  Activada
+                                </option>
+
+                                <option value="no">
+                                  Desactivada
+                                </option>
+                              </select>
+                            </label>
+
+                            <label>
+                              Capacidad máxima
+
+                              <input
+                                type="number"
+                                min={1}
+                                max={500}
+                                value={
+                                  technician
+                                    .maxOpenTickets
+                                }
+                                onChange={
+                                  event =>
+                                    updateTech(
+                                      technician.userId,
+                                      {
+                                        maxOpenTickets:
+                                          Number(
+                                            event.target
+                                              .value,
+                                          ),
+                                      },
+                                    )
+                                }
+                              />
+                            </label>
+
+                            <label>
+                              Prioridad
+
+                              <input
+                                type="number"
+                                min={0}
+                                max={1000}
+                                value={
+                                  technician.priority
+                                }
+                                onChange={
+                                  event =>
+                                    updateTech(
+                                      technician.userId,
+                                      {
+                                        priority:
+                                          Number(
+                                            event.target
+                                              .value,
+                                          ),
+                                      },
+                                    )
+                                }
+                              />
+                            </label>
+
+                            <label>
+                              Zona horaria
+
+                              <input
+                                value={
+                                  technician.timeZoneId
+                                }
+                                onChange={
+                                  event =>
+                                    updateTech(
+                                      technician.userId,
+                                      {
+                                        timeZoneId:
+                                          event.target
+                                            .value,
+                                      },
+                                    )
+                                }
+                              />
+                            </label>
+                          </div>
+
+                          <div
+                            className="hdgp-schedule"
+                          >
+                            <h3>
+                              <Clock3
+                                size={16}
+                              />
+
+                              Horario semanal
+                            </h3>
+
+                            {DAYS.map(
+                              (
+                                dayName,
+                                day,
+                              ) => {
+                                const slot =
+                                  technician.slots
+                                    .find(
+                                      item =>
+                                        item.day ===
+                                          day,
+                                    )
+
+                                return (
+                                  <div
+                                    key={
+                                      day
+                                    }
+                                    className="hdgp-slot"
+                                  >
+                                    <label>
+                                      <input
+                                        type="checkbox"
+                                        checked={
+                                          Boolean(
+                                            slot,
+                                          )
+                                        }
+                                        onChange={
+                                          () =>
+                                            toggleDay(
+                                              technician,
+                                              day,
+                                            )
+                                        }
+                                      />
+
+                                      {
+                                        dayName
+                                      }
+                                    </label>
+
+                                    <input
+                                      type="time"
+                                      disabled={
+                                        !slot
+                                      }
+                                      value={
+                                        slot?.start
+                                        ??
+                                        '08:00'
+                                      }
+                                      onChange={
+                                        event =>
+                                          updateSlot(
+                                            technician,
+                                            day,
+                                            {
+                                              start:
+                                                event.target
+                                                  .value,
+                                            },
+                                          )
+                                      }
+                                    />
+
+                                    <span>
+                                      a
+                                    </span>
+
+                                    <input
+                                      type="time"
+                                      disabled={
+                                        !slot
+                                      }
+                                      value={
+                                        slot?.end
+                                        ??
+                                        '17:00'
+                                      }
+                                      onChange={
+                                        event =>
+                                          updateSlot(
+                                            technician,
+                                            day,
+                                            {
+                                              end:
+                                                event.target
+                                                  .value,
+                                            },
+                                          )
+                                      }
+                                    />
+                                  </div>
+                                )
+                              },
+                            )}
+                          </div>
+                        </section>
+                      ),
+                    )
+                  )}
+                </>
+              )}
+
+              {/* ================================================
+                  SAVE BAR
+                 ================================================ */}
+
+              <div
+                className="hdgp-savebar"
               >
-                <span>
-                  {
-                    dirty
-                      ? 'Cambios pendientes'
-                      : 'Configuración guardada'
-                  }
-                </span>
+                <div>
+                  <Save
+                    size={17}
+                  />
+
+                  <span>
+                    {
+                      dirty
+                        ? 'Hay cambios pendientes.'
+                        : 'Configuración guardada.'
+                    }
+                  </span>
+                </div>
 
                 <button
+                  type="button"
                   className="hdgp-primary"
                   disabled={
+                    saving
+                    ||
                     !dirty
                   }
                   onClick={
@@ -2113,13 +2922,17 @@ export function HelpdeskSpecialtiesPage() {
                       void save()
                   }
                 >
+                  <Save
+                    size={15}
+                  />
+
                   {
                     saving
                       ? 'Guardando…'
-                      : 'Guardar configuración completa'
+                      : 'Guardar configuración'
                   }
                 </button>
-              </footer>
+              </div>
             </fieldset>
           )}
         </section>

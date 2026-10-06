@@ -1,15 +1,12 @@
 import {
   ArrowRight,
-  Bot,
   Building2,
-  ClipboardList,
   Clock3,
+  CloudCog,
   Mail,
   Settings,
-  Sparkles,
   Tags,
   Users,
-  Workflow,
 } from 'lucide-react'
 
 import {
@@ -56,7 +53,7 @@ export function HelpdeskAdminHome() {
           'Organización operativa',
 
         description:
-          'Define dónde se presta soporte y quién atiende cada área.',
+          'Define dónde se presta soporte, quién atiende y cómo se distribuye el trabajo.',
 
         actions: [
           {
@@ -64,7 +61,7 @@ export function HelpdeskAdminHome() {
               'Localidades y cobertura',
 
             description:
-              'Sites, ubicaciones y alcance territorial de los grupos.',
+              'Sites, sublocalidades y cobertura territorial de Mesa de Ayuda.',
 
             path:
               '/helpdesk/operations?workspace=helpdesk',
@@ -73,27 +70,11 @@ export function HelpdeskAdminHome() {
               Building2,
 
             permissions: [
-              helpdeskPermissions.sitesView,
-              helpdeskPermissions.sitesManage,
-            ],
-          },
+              helpdeskPermissions
+                .sitesView,
 
-          {
-            title:
-              'Grupos de trabajo',
-
-            description:
-              'Áreas TIC, tareas atendidas y relación con cobertura.',
-
-            path:
-              '/helpdesk/especialidades?workspace=helpdesk',
-
-            icon:
-              Users,
-
-            permissions: [
-              helpdeskPermissions.groupsView,
-              helpdeskPermissions.groupsManage,
+              helpdeskPermissions
+                .sitesManage,
             ],
           },
 
@@ -102,7 +83,7 @@ export function HelpdeskAdminHome() {
               'Técnicos',
 
             description:
-              'Disponibilidad, capacidad, permisos y participación por grupo.',
+              'Disponibilidad, capacidad y ubicación del personal TIC.',
 
             path:
               '/helpdesk/operations?tab=technicians&workspace=helpdesk',
@@ -111,75 +92,77 @@ export function HelpdeskAdminHome() {
               Users,
 
             permissions: [
-              helpdeskPermissions.techniciansView,
-              helpdeskPermissions.techniciansManage,
+              helpdeskPermissions
+                .techniciansView,
+
+              helpdeskPermissions
+                .techniciansManage,
             ],
           },
 
           {
             title:
-              'Turnos',
+              'Grupos de trabajo',
 
             description:
-              'Horario de servicio, prioridad y relevos de cada técnico.',
+              'Áreas TIC, cobertura, integrantes y distribución de solicitudes.',
 
             path:
-              '/helpdesk/especialidades?tab=schedules&workspace=helpdesk',
+              '/helpdesk/especialidades?workspace=helpdesk',
 
             icon:
-              Clock3,
+              Users,
 
             permissions: [
-              helpdeskPermissions.schedulesView,
-              helpdeskPermissions.schedulesManage,
+              helpdeskPermissions
+                .groupsView,
+
+              helpdeskPermissions
+                .groupsManage,
             ],
           },
-        ],
-      },
 
-      {
-        title:
-          'Catálogo de servicio',
-
-        description:
-          'Controla cómo se clasifica y crea cada solicitud.',
-
-        actions: [
           {
             title:
               'Categorías',
 
             description:
-              'Catálogo de incidencias, solicitudes y especialidades.',
+              'Tareas y especialidades atendidas por cada grupo TIC.',
 
             path:
-              '/helpdesk/especialidades?tab=categories&workspace=helpdesk',
+              '/helpdesk/especialidades?workspace=helpdesk',
 
             icon:
               Tags,
 
             permissions: [
-              helpdeskPermissions.categoriesView,
-              helpdeskPermissions.categoriesManage,
+              helpdeskPermissions
+                .categoriesView,
+
+              helpdeskPermissions
+                .categoriesManage,
             ],
           },
 
           {
             title:
-              'Plantillas',
+              'Turnos y capacidad',
 
             description:
-              'Plantillas reutilizables para acelerar solicitudes recurrentes.',
+              'Horarios, disponibilidad, prioridad y capacidad de técnicos.',
 
             path:
-              '/helpdesk/centro/configuracion?tab=templates&workspace=helpdesk',
+              '/helpdesk/especialidades?workspace=helpdesk',
 
             icon:
-              ClipboardList,
+              Clock3,
 
             permissions: [
-              helpdeskPermissions.templatesView,
-              helpdeskPermissions.templatesManage,
+              helpdeskPermissions
+                .schedulesView,
+
+              helpdeskPermissions
+                .schedulesManage,
             ],
           },
         ],
@@ -187,56 +170,41 @@ export function HelpdeskAdminHome() {
 
       {
         title:
-          'Automatización',
+          'Integraciones',
 
         description:
-          'Reglas, flujos y servicios automáticos de Mesa de Ayuda.',
+          'Conecta TitanMDM con el directorio corporativo y el buzón de Mesa de Ayuda.',
 
         actions: [
           {
             title:
-              'Reglas automáticas',
+              'Microsoft Entra ID',
 
             description:
-              'Clasificación, asignación, recordatorios y escalamiento.',
+              'Directorio, sincronización de usuarios y acceso corporativo.',
 
             path:
-              '/helpdesk/centro/alertas?workspace=helpdesk',
+              '/helpdesk/entra?workspace=helpdesk',
 
             icon:
-              Sparkles,
+              CloudCog,
 
             permissions: [
-              helpdeskPermissions.automationView,
-              helpdeskPermissions.automationManage,
+              helpdeskPermissions
+                .adminAccess,
+
+              'helpdesk.manage',
+
+              'settings.manage',
             ],
           },
 
           {
             title:
-              'Workflows',
+              'Correo Microsoft 365',
 
             description:
-              'Estados, transiciones y ciclo de vida de los tickets.',
-
-            path:
-              '/helpdesk/centro/configuracion?tab=workflows&workspace=helpdesk',
-
-            icon:
-              Workflow,
-
-            permissions: [
-              helpdeskPermissions.workflowsView,
-              helpdeskPermissions.workflowsManage,
-            ],
-          },
-
-          {
-            title:
-              'Correo',
-
-            description:
-              'Creación de tickets por email y notificaciones salientes.',
+              'Buzón de Mesa de Ayuda, entrada, salida, reintentos y diagnóstico Graph.',
 
             path:
               '/helpdesk/mail?workspace=helpdesk',
@@ -245,27 +213,11 @@ export function HelpdeskAdminHome() {
               Mail,
 
             permissions: [
-              helpdeskPermissions.mailView,
-              helpdeskPermissions.mailManage,
-            ],
-          },
+              helpdeskPermissions
+                .mailView,
 
-          {
-            title:
-              'Titan AI',
-
-            description:
-              'OpenRouter, clasificación, sugerencias y automatización asistida.',
-
-            path:
-              '/helpdesk/centro/configuracion?tab=ai&workspace=helpdesk',
-
-            icon:
-              Bot,
-
-            permissions: [
-              helpdeskPermissions.aiView,
-              helpdeskPermissions.aiManage,
+              helpdeskPermissions
+                .mailManage,
             ],
           },
         ],
@@ -273,18 +225,18 @@ export function HelpdeskAdminHome() {
 
       {
         title:
-          'Configuración avanzada',
+          'Configuración de servicio',
 
         description:
-          'Parámetros globales y reglas administrativas.',
+          'Parámetros operativos que ya están disponibles en TitanMDM.',
 
         actions: [
           {
             title:
-              'Configuración de Helpdesk',
+              'SLA y reapertura',
 
             description:
-              'SLA, reapertura, políticas operativas y preferencias.',
+              'Tiempos de respuesta, resolución, pausas, escalamiento y reapertura.',
 
             path:
               '/helpdesk/centro/configuracion?workspace=helpdesk',
@@ -293,7 +245,11 @@ export function HelpdeskAdminHome() {
               Settings,
 
             permissions: [
-              helpdeskPermissions.adminAccess,
+              helpdeskPermissions
+                .adminAccess,
+
+              helpdeskPermissions
+                .slaManage,
             ],
           },
         ],
@@ -327,10 +283,10 @@ export function HelpdeskAdminHome() {
           </h1>
 
           <p>
-            Configura la operación
-            sin mezclar estas tareas
-            con la bandeja diaria de
-            los técnicos.
+            Configura únicamente
+            funciones operativas
+            disponibles y listas para
+            utilizar.
           </p>
         </div>
       </header>
@@ -349,7 +305,8 @@ export function HelpdeskAdminHome() {
                     )
                   ||
                   hasPermission(
-                    helpdeskPermissions.adminAccess,
+                    helpdeskPermissions
+                      .adminAccess,
                   ),
               )
 
@@ -368,7 +325,9 @@ export function HelpdeskAdminHome() {
               >
                 <header>
                   <h2>
-                    {section.title}
+                    {
+                      section.title
+                    }
                   </h2>
 
                   <p>

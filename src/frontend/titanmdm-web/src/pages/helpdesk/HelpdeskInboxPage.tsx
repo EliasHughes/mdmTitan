@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from 'react'
 
@@ -12,6 +13,7 @@ import {
 import {
   ArrowRight,
   ClipboardList,
+  LayoutGrid,
   Plus,
   RefreshCw,
   Search,
@@ -40,6 +42,7 @@ type View =
   | 'mine'
   | 'unassigned'
   | 'all'
+  | 'kanban'
 
 interface Ticket {
   id: string
@@ -57,6 +60,8 @@ interface Ticket {
 interface Result {
   items: Ticket[]
   total: number
+  page: number
+  pageSize: number
 }
 
 interface Workload {
@@ -105,9 +110,64 @@ const PRIORITY:
     high:
       'Alta',
 
+    critical:
+      'Crítica',
+
     urgent:
       'Urgente',
   }
+
+const KANBAN_COLUMNS =
+  [
+    {
+      key:
+        'new',
+
+      label:
+        'Nuevos',
+    },
+
+    {
+      key:
+        'open',
+
+      label:
+        'Abiertos',
+    },
+
+    {
+      key:
+        'inprogress',
+
+      label:
+        'En proceso',
+    },
+
+    {
+      key:
+        'pendinguser',
+
+      label:
+        'Esperando usuario',
+    },
+  ] as const
+
+function resolveView(
+  value:
+    string |
+    null,
+): View {
+  return value ===
+      'unassigned'
+    ||
+    value ===
+      'all'
+    ||
+    value ===
+      'kanban'
+      ? value
+      : 'mine'
+}
 
 function formatDate(
   value: string,
@@ -115,9 +175,12 @@ function formatDate(
   const parsed =
     new Date(
       /(?:Z|[+-]\d{2}:?\d{2})$/i
-        .test(value)
+        .test(
+          value,
+        )
         ? value
-        : value + 'Z',
+        : value +
+          'Z',
     )
 
   if (
@@ -159,27 +222,28 @@ export function HelpdeskInboxPage() {
   } =
     useAuth()
 
-  const requestedView =
-    searchParams.get(
-      'view',
-    )
+  /*
+   * ============================================================
+   * URL IS THE SOURCE OF TRUTH
+   *
+   * Previously this value was copied only once into local state.
+   * Clicking the top navigation changed the URL but not the view.
+   * ============================================================
+   */
 
-  const initialView:
-    View =
-      requestedView ===
-        'unassigned'
-      ||
-      requestedView ===
-        'all'
-        ? requestedView
-        : 'mine'
+  const requestedView =
+    resolveView(
+      searchParams.get(
+        'view',
+      ),
+    )
 
   const [
     view,
     setView,
   ] =
     useState<View>(
-      initialView,
+      requestedView,
     )
 
   const [
@@ -278,6 +342,31 @@ export function HelpdeskInboxPage() {
       false,
     )
 
+  /*
+   * React Router keeps the component mounted when only query
+   * parameters change. Keep local state synchronized explicitly.
+   */
+  useEffect(
+    () => {
+      if (
+        requestedView !==
+        view
+      ) {
+        setView(
+          requestedView,
+        )
+
+        setPage(
+          1,
+        )
+      }
+    },
+    [
+      requestedView,
+      view,
+    ],
+  )
+
   const canCreate =
     hasPermission(
       helpdeskPermissions
@@ -331,17 +420,41 @@ export function HelpdeskInboxPage() {
         .adminAccess,
     )
 
+  const canViewKanban =
+    hasPermission(
+      helpdeskPermissions
+        .kanbanView,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions
+        .agentAccess,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions
+        .adminAccess,
+    )
+
+  const pageSize =
+    view ===
+      'kanban'
+      ? 100
+      : 25
+
   const pages =
     Math.max(
       1,
       Math.ceil(
-        total / 25,
+        total /
+        pageSize,
       ),
     )
 
   const openTicket =
     (
-      id: string,
+      id:
+        string,
     ) =>
       navigate(
         `/helpdesk/tickets/${id}?workspace=helpdesk`,
@@ -349,7 +462,8 @@ export function HelpdeskInboxPage() {
 
   const changeView =
     (
-      next: View,
+      next:
+        View,
     ) => {
       setView(
         next,
@@ -410,6 +524,7 @@ export function HelpdeskInboxPage() {
                 {
                   params: {
                     view,
+
                     search:
                       search ||
                       undefined,
@@ -424,8 +539,7 @@ export function HelpdeskInboxPage() {
 
                     page,
 
-                    pageSize:
-                      25,
+                    pageSize,
                   },
                 },
               )
@@ -463,6 +577,7 @@ export function HelpdeskInboxPage() {
         status,
         priority,
         page,
+        pageSize,
       ],
     )
 
@@ -577,16 +692,54 @@ export function HelpdeskInboxPage() {
                 ?.active,
           }
         : null,
+
+      canViewKanban
+        ? {
+            key:
+              'kanban' as const,
+
+            label:
+              'Kanban',
+
+            count:
+              workload
+                ?.active,
+          }
+        : null,
     ]
       .filter(
         Boolean,
       ) as {
-        key: View
-        label: string
+        key:
+          View
+
+        label:
+          string
+
         count:
-          number
-          | undefined
+          number |
+          undefined
       }[]
+
+  const kanban =
+    useMemo(
+      () =>
+        KANBAN_COLUMNS.map(
+          column => ({
+            ...column,
+
+            tickets:
+              tickets.filter(
+                ticket =>
+                  ticket.status ===
+                  column.key,
+              ),
+          }),
+        ),
+      [
+        tickets,
+      ],
+    )
 
   return (
     <main
@@ -604,22 +757,40 @@ export function HelpdeskInboxPage() {
           <span
             className="helpdesk-inbox__eyebrow"
           >
-            <ClipboardList
-              size={15}
-            />
+            {
+              view ===
+                'kanban'
+                ? (
+                  <LayoutGrid
+                    size={15}
+                  />
+                )
+                : (
+                  <ClipboardList
+                    size={15}
+                  />
+                )
+            }
 
             OPERACIÓN TIC
           </span>
 
           <h1>
-            Bandeja de Mesa de Ayuda
+            {
+              view ===
+                'kanban'
+                ? 'Tablero Kanban'
+                : 'Bandeja de Mesa de Ayuda'
+            }
           </h1>
 
           <p>
-            Atiende solicitudes,
-            prioriza casos,
-            controla el backlog y
-            trabaja con tu equipo.
+            {
+              view ===
+                'kanban'
+                ? 'Visualiza el trabajo activo según su estado operativo.'
+                : 'Atiende solicitudes, prioriza casos, controla el backlog y trabaja con tu equipo.'
+            }
           </p>
         </div>
 
@@ -740,40 +911,17 @@ export function HelpdeskInboxPage() {
       </nav>
 
       <div
-        className="helpdesk-work__layout"
+        className={
+          view ===
+            'kanban'
+            ? 'helpdesk-work__layout helpdesk-work__layout--kanban'
+            : 'helpdesk-work__layout'
+        }
       >
         <section
           className="helpdesk-inbox__panel"
           aria-label="Solicitudes"
         >
-          <div
-            className="helpdesk-inbox__panel-heading"
-          >
-            <div>
-              <h2>
-                {view ===
-                  'mine'
-                  ? 'Asignadas a mí'
-                  : view ===
-                      'unassigned'
-                    ? 'Pendientes de asignación'
-                    : 'Todas las solicitudes'}
-              </h2>
-
-              <p>
-                Abre un caso para
-                atenderlo y consultar
-                su historial.
-              </p>
-            </div>
-
-            <span
-              className="helpdesk-inbox__total"
-            >
-              {total} resultados
-            </span>
-          </div>
-
           <div
             className="helpdesk-inbox__filters"
           >
@@ -797,8 +945,7 @@ export function HelpdeskInboxPage() {
                 onChange={
                   event =>
                     setInput(
-                      event
-                        .target
+                      event.target
                         .value,
                     )
                 }
@@ -812,66 +959,64 @@ export function HelpdeskInboxPage() {
                     }
                   }
                 }
-                placeholder={
-                  'Número, asunto, categoría o solicitante'
-                }
+                placeholder="Número, asunto o categoría"
               />
             </label>
 
-            <label>
-              <span
-                className="sr-only"
-              >
-                Estado
-              </span>
-
-              <select
-                value={
-                  status
-                }
-                onChange={
-                  event => {
-                    setStatus(
-                      event
-                        .target
-                        .value,
-                    )
-
-                    setPage(
-                      1,
-                    )
-                  }
-                }
-              >
-                <option
-                  value=""
+            {view !==
+              'kanban' && (
+              <label>
+                <span
+                  className="sr-only"
                 >
-                  Todos los estados
-                </option>
+                  Estado
+                </span>
 
-                {Object.entries(
-                  STATUS,
-                ).map(
-                  (
-                    [
-                      key,
-                      label,
-                    ],
-                  ) => (
-                    <option
-                      key={
-                        key
-                      }
-                      value={
-                        key
-                      }
-                    >
-                      {label}
-                    </option>
-                  ),
-                )}
-              </select>
-            </label>
+                <select
+                  value={
+                    status
+                  }
+                  onChange={
+                    event => {
+                      setStatus(
+                        event.target
+                          .value,
+                      )
+
+                      setPage(
+                        1,
+                      )
+                    }
+                  }
+                >
+                  <option value="">
+                    Todos los estados
+                  </option>
+
+                  {Object.entries(
+                    STATUS,
+                  ).map(
+                    (
+                      [
+                        key,
+                        label,
+                      ],
+                    ) => (
+                      <option
+                        key={
+                          key
+                        }
+                        value={
+                          key
+                        }
+                      >
+                        {label}
+                      </option>
+                    ),
+                  )}
+                </select>
+              </label>
+            )}
 
             <label>
               <span
@@ -887,8 +1032,7 @@ export function HelpdeskInboxPage() {
                 onChange={
                   event => {
                     setPriority(
-                      event
-                        .target
+                      event.target
                         .value,
                     )
 
@@ -898,9 +1042,7 @@ export function HelpdeskInboxPage() {
                   }
                 }
               >
-                <option
-                  value=""
-                >
+                <option value="">
                   Todas las prioridades
                 </option>
 
@@ -972,316 +1114,556 @@ export function HelpdeskInboxPage() {
             </button>
           </div>
 
-          <div
-            className="helpdesk-inbox__table-wrap"
-          >
-            <table
-              className="helpdesk-inbox__table"
-            >
-              <thead>
-                <tr>
-                  <th>
-                    Solicitud
-                  </th>
-
-                  <th>
-                    Estado
-                  </th>
-
-                  <th>
-                    Prioridad
-                  </th>
-
-                  <th>
-                    Solicitante
-                  </th>
-
-                  <th>
-                    Asignado
-                  </th>
-
-                  <th>
-                    Actualizado
-                  </th>
-
-                  <th>
-                    <span
-                      className="sr-only"
-                    >
-                      Abrir
-                    </span>
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {loading ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="helpdesk-inbox__empty"
-                    >
-                      Cargando…
-                    </td>
-                  </tr>
-                ) : !tickets.length ? (
-                  <tr>
-                    <td
-                      colSpan={7}
-                      className="helpdesk-inbox__empty"
-                    >
-                      <ClipboardList
-                        size={27}
-                      />
-
-                      <strong>
-                        Sin solicitudes
-                        en esta vista
-                      </strong>
-
-                      <span>
-                        Prueba otros
-                        filtros.
-                      </span>
-                    </td>
-                  </tr>
-                ) : (
-                  tickets.map(
-                    item => (
-                      <tr
+          {view ===
+            'kanban' ? (
+            <>
+              {loading ? (
+                <div
+                  className="helpdesk-inbox__empty"
+                >
+                  Cargando tablero…
+                </div>
+              ) : (
+                <div
+                  className="helpdesk-kanban"
+                >
+                  {kanban.map(
+                    column => (
+                      <section
                         key={
-                          item.id
+                          column.key
+                        }
+                        className={
+                          `helpdesk-kanban__column ` +
+                          `helpdesk-kanban__column--${column.key}`
                         }
                       >
-                        <td>
-                          <button
-                            type="button"
-                            className="helpdesk-inbox__ticket-link"
-                            onClick={
-                              () =>
-                                openTicket(
-                                  item.id,
-                                )
-                            }
-                          >
-                            <span>
-                              {
-                                item.number
-                              }
-                            </span>
-
-                            <strong>
-                              {
-                                item.subject
-                              }
-                            </strong>
-
-                            {item.slaBreached && (
-                              <small>
-                                SLA vencido
-                              </small>
-                            )}
-                          </button>
-                        </td>
-
-                        <td>
-                          <span
-                            className={
-                              `helpdesk-inbox__badge ` +
-                              `helpdesk-inbox__badge--${item.status}`
-                            }
-                          >
+                        <header>
+                          <strong>
                             {
-                              STATUS[
-                                item.status
-                              ]
-                              ??
-                              item.status
+                              column.label
+                            }
+                          </strong>
+
+                          <span>
+                            {
+                              column
+                                .tickets
+                                .length
                             }
                           </span>
-                        </td>
+                        </header>
 
-                        <td>
+                        <div
+                          className="helpdesk-kanban__cards"
+                        >
                           {
-                            PRIORITY[
-                              item.priority
-                            ]
-                            ??
-                            item.priority
+                            column.tickets
+                              .length ===
+                              0 ? (
+                              <p
+                                className="helpdesk-kanban__empty"
+                              >
+                                Sin tickets.
+                              </p>
+                            ) : (
+                              column.tickets.map(
+                                item => (
+                                  <button
+                                    key={
+                                      item.id
+                                    }
+                                    type="button"
+                                    className="helpdesk-kanban__card"
+                                    onClick={
+                                      () =>
+                                        openTicket(
+                                          item.id,
+                                        )
+                                    }
+                                  >
+                                    <div
+                                      className="helpdesk-kanban__card-top"
+                                    >
+                                      <span>
+                                        {
+                                          item.number
+                                        }
+                                      </span>
+
+                                      <span
+                                        className={
+                                          `helpdesk-kanban__priority ` +
+                                          `helpdesk-kanban__priority--${item.priority}`
+                                        }
+                                      >
+                                        {
+                                          PRIORITY[
+                                            item.priority
+                                          ]
+                                          ??
+                                          item.priority
+                                        }
+                                      </span>
+                                    </div>
+
+                                    <strong>
+                                      {
+                                        item.subject
+                                      }
+                                    </strong>
+
+                                    <small>
+                                      {
+                                        item.category
+                                      }
+                                    </small>
+
+                                    <div
+                                      className="helpdesk-kanban__meta"
+                                    >
+                                      <span>
+                                        {
+                                          item.assigneeName
+                                          ??
+                                          'Sin asignar'
+                                        }
+                                      </span>
+
+                                      <span>
+                                        {
+                                          formatDate(
+                                            item.updatedAtUtc,
+                                          )
+                                        }
+                                      </span>
+                                    </div>
+
+                                    {item.slaBreached && (
+                                      <span
+                                        className="helpdesk-kanban__sla"
+                                      >
+                                        SLA vencido
+                                      </span>
+                                    )}
+                                  </button>
+                                ),
+                              )
+                            )
                           }
-                        </td>
-
-                        <td>
-                          {
-                            item.requesterName
-                          }
-                        </td>
-
-                        <td>
-                          {
-                            item.assigneeName
-                            ??
-                            'Sin asignar'
-                          }
-                        </td>
-
-                        <td>
-                          {formatDate(
-                            item.updatedAtUtc,
-                          )}
-                        </td>
-
-                        <td>
-                          <button
-                            type="button"
-                            className="helpdesk-inbox__open"
-                            aria-label={
-                              `Abrir ${item.number}`
-                            }
-                            onClick={
-                              () =>
-                                openTicket(
-                                  item.id,
-                                )
-                            }
-                          >
-                            <ArrowRight
-                              size={17}
-                            />
-                          </button>
-                        </td>
-                      </tr>
+                        </div>
+                      </section>
                     ),
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+                  )}
+                </div>
+              )}
 
-          <footer
-            className="helpdesk-inbox__footer"
-          >
-            <span>
-              Página {page} de {pages}
-            </span>
+              <footer
+                className="helpdesk-inbox__footer"
+              >
+                <span>
+                  Página {page} de {pages}
+                  {' · '}
+                  {total} tickets activos
+                </span>
 
-            <button
-              type="button"
-              disabled={
-                loading ||
-                page <= 1
-              }
-              onClick={
-                () =>
-                  setPage(
-                    value =>
-                      value - 1,
-                  )
-              }
-            >
-              Anterior
-            </button>
-
-            <button
-              type="button"
-              disabled={
-                loading ||
-                page >=
-                  pages
-              }
-              onClick={
-                () =>
-                  setPage(
-                    value =>
-                      value + 1,
-                  )
-              }
-            >
-              Siguiente
-            </button>
-          </footer>
-        </section>
-
-        <aside
-          className="helpdesk-work__agents"
-          aria-label="Carga del equipo"
-        >
-          <div>
-            <Users
-              size={19}
-            />
-
-            <div>
-              <h2>
-                Equipo TIC
-              </h2>
-
-              <p>
-                Carga activa y
-                disponibilidad
-              </p>
-            </div>
-          </div>
-
-          {!workload ? (
-            <p>
-              {
-                workloadError
-                  ? 'Carga no disponible.'
-                  : 'Cargando equipo…'
-              }
-            </p>
-          ) : !workload
-              .agents
-              .length ? (
-            <p>
-              Todavía no hay
-              agentes configurados.
-            </p>
-          ) : (
-            workload.agents.map(
-              agent => (
-                <article
-                  key={
-                    agent.userId
+                <button
+                  type="button"
+                  disabled={
+                    loading
+                    ||
+                    page <=
+                      1
+                  }
+                  onClick={
+                    () =>
+                      setPage(
+                        value =>
+                          value -
+                          1,
+                      )
                   }
                 >
-                  <div>
-                    <strong>
-                      {
-                        agent.name
-                      }
-                    </strong>
+                  Anterior
+                </button>
 
-                    <span
-                      className={
-                        agent.isAvailable
-                          ? 'is-available'
-                          : ''
-                      }
-                    >
-                      {
-                        agent.isAvailable
-                          ? 'Disponible'
-                          : 'No disponible'
-                      }
-                    </span>
-                  </div>
+                <button
+                  type="button"
+                  disabled={
+                    loading
+                    ||
+                    page >=
+                      pages
+                  }
+                  onClick={
+                    () =>
+                      setPage(
+                        value =>
+                          value +
+                          1,
+                      )
+                  }
+                >
+                  Siguiente
+                </button>
+              </footer>
+            </>
+          ) : (
+            <>
+              <div
+                className="helpdesk-inbox__panel-heading"
+              >
+                <div>
+                  <h2>
+                    {
+                      view ===
+                        'mine'
+                        ? 'Asignadas a mí'
+                        : view ===
+                            'unassigned'
+                          ? 'Pendientes de asignación'
+                          : 'Todas las solicitudes'
+                    }
+                  </h2>
 
                   <p>
-                    {
-                      agent.openTickets
-                    }{' '}
-                    activos · capacidad{' '}
-                    {
-                      agent.capacity
-                    }
+                    Abre un caso para
+                    atenderlo y consultar
+                    su historial.
                   </p>
-                </article>
-              ),
-            )
+                </div>
+
+                <span
+                  className="helpdesk-inbox__total"
+                >
+                  {total} resultados
+                </span>
+              </div>
+
+              <div
+                className="helpdesk-inbox__table-wrap"
+              >
+                <table
+                  className="helpdesk-inbox__table"
+                >
+                  <thead>
+                    <tr>
+                      <th>
+                        Solicitud
+                      </th>
+
+                      <th>
+                        Estado
+                      </th>
+
+                      <th>
+                        Prioridad
+                      </th>
+
+                      <th>
+                        Solicitante
+                      </th>
+
+                      <th>
+                        Asignado
+                      </th>
+
+                      <th>
+                        Actualizado
+                      </th>
+
+                      <th>
+                        <span
+                          className="sr-only"
+                        >
+                          Abrir
+                        </span>
+                      </th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {loading ? (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="helpdesk-inbox__empty"
+                        >
+                          Cargando…
+                        </td>
+                      </tr>
+                    ) : !tickets.length ? (
+                      <tr>
+                        <td
+                          colSpan={7}
+                          className="helpdesk-inbox__empty"
+                        >
+                          <ClipboardList
+                            size={27}
+                          />
+
+                          <strong>
+                            Sin solicitudes
+                            en esta vista
+                          </strong>
+
+                          <span>
+                            Prueba otros
+                            filtros.
+                          </span>
+                        </td>
+                      </tr>
+                    ) : (
+                      tickets.map(
+                        item => (
+                          <tr
+                            key={
+                              item.id
+                            }
+                          >
+                            <td>
+                              <button
+                                type="button"
+                                className="helpdesk-inbox__ticket-link"
+                                onClick={
+                                  () =>
+                                    openTicket(
+                                      item.id,
+                                    )
+                                }
+                              >
+                                <span>
+                                  {
+                                    item.number
+                                  }
+                                </span>
+
+                                <strong>
+                                  {
+                                    item.subject
+                                  }
+                                </strong>
+
+                                {item.slaBreached && (
+                                  <small>
+                                    SLA vencido
+                                  </small>
+                                )}
+                              </button>
+                            </td>
+
+                            <td>
+                              <span
+                                className={
+                                  `helpdesk-inbox__badge ` +
+                                  `helpdesk-inbox__badge--${item.status}`
+                                }
+                              >
+                                {
+                                  STATUS[
+                                    item.status
+                                  ]
+                                  ??
+                                  item.status
+                                }
+                              </span>
+                            </td>
+
+                            <td>
+                              {
+                                PRIORITY[
+                                  item.priority
+                                ]
+                                ??
+                                item.priority
+                              }
+                            </td>
+
+                            <td>
+                              {
+                                item.requesterName
+                              }
+                            </td>
+
+                            <td>
+                              {
+                                item.assigneeName
+                                ??
+                                'Sin asignar'
+                              }
+                            </td>
+
+                            <td>
+                              {
+                                formatDate(
+                                  item.updatedAtUtc,
+                                )
+                              }
+                            </td>
+
+                            <td>
+                              <button
+                                type="button"
+                                className="helpdesk-inbox__open"
+                                aria-label={
+                                  `Abrir ${item.number}`
+                                }
+                                onClick={
+                                  () =>
+                                    openTicket(
+                                      item.id,
+                                    )
+                                }
+                              >
+                                <ArrowRight
+                                  size={17}
+                                />
+                              </button>
+                            </td>
+                          </tr>
+                        ),
+                      )
+                    )}
+                  </tbody>
+                </table>
+              </div>
+
+              <footer
+                className="helpdesk-inbox__footer"
+              >
+                <span>
+                  Página {page} de {pages}
+                </span>
+
+                <button
+                  type="button"
+                  disabled={
+                    loading
+                    ||
+                    page <=
+                      1
+                  }
+                  onClick={
+                    () =>
+                      setPage(
+                        value =>
+                          value -
+                          1,
+                      )
+                  }
+                >
+                  Anterior
+                </button>
+
+                <button
+                  type="button"
+                  disabled={
+                    loading
+                    ||
+                    page >=
+                      pages
+                  }
+                  onClick={
+                    () =>
+                      setPage(
+                        value =>
+                          value +
+                          1,
+                      )
+                  }
+                >
+                  Siguiente
+                </button>
+              </footer>
+            </>
           )}
-        </aside>
+        </section>
+
+        {view !==
+          'kanban' && (
+          <aside
+            className="helpdesk-work__agents"
+            aria-label="Carga del equipo"
+          >
+            <div>
+              <Users
+                size={19}
+              />
+
+              <div>
+                <h2>
+                  Equipo TIC
+                </h2>
+
+                <p>
+                  Carga activa y
+                  disponibilidad
+                </p>
+              </div>
+            </div>
+
+            {!workload ? (
+              <p>
+                {
+                  workloadError
+                    ? 'Carga no disponible.'
+                    : 'Cargando equipo…'
+                }
+              </p>
+            ) : !workload
+                .agents
+                .length ? (
+              <p>
+                Todavía no hay
+                agentes configurados.
+              </p>
+            ) : (
+              workload.agents.map(
+                agent => (
+                  <article
+                    key={
+                      agent.userId
+                    }
+                  >
+                    <div>
+                      <strong>
+                        {
+                          agent.name
+                        }
+                      </strong>
+
+                      <span
+                        className={
+                          agent.isAvailable
+                            ? 'is-available'
+                            : ''
+                        }
+                      >
+                        {
+                          agent.isAvailable
+                            ? 'Disponible'
+                            : 'No disponible'
+                        }
+                      </span>
+                    </div>
+
+                    <p>
+                      {
+                        agent.openTickets
+                      }
+                      {' '}
+                      activos · capacidad
+                      {' '}
+                      {
+                        agent.capacity
+                      }
+                    </p>
+                  </article>
+                ),
+              )
+            )}
+          </aside>
+        )}
       </div>
 
       {showCreate &&

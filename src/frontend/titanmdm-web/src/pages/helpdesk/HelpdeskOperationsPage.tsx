@@ -6,7 +6,12 @@ import {
   type FormEvent,
 } from 'react'
 
-import axios from 'axios'
+import {
+  useSearchParams,
+} from 'react-router-dom'
+
+import axios
+  from 'axios'
 
 import {
   Building2,
@@ -17,10 +22,16 @@ import {
   UserRound,
 } from 'lucide-react'
 
-import apiClient from '../../api/apiClient'
+import apiClient
+  from '../../api/apiClient'
 
 import './HelpdeskPages.css'
 import './HelpdeskOperationsPage.css'
+
+type OperationsTab =
+  | 'sites'
+  | 'coverage'
+  | 'technicians'
 
 type Site = {
   id: string
@@ -79,11 +90,33 @@ type Catalog = {
   coverages: Coverage[]
 }
 
-const emptyCatalog: Catalog = {
-  sites: [],
-  siteLocations: [],
-  teams: [],
-  coverages: [],
+const emptyCatalog:
+  Catalog = {
+    sites: [],
+    siteLocations: [],
+    teams: [],
+    coverages: [],
+  }
+
+function resolveTab(
+  value:
+    string | null,
+): OperationsTab {
+  if (
+    value ===
+      'coverage'
+  ) {
+    return 'coverage'
+  }
+
+  if (
+    value ===
+      'technicians'
+  ) {
+    return 'technicians'
+  }
+
+  return 'sites'
 }
 
 function errorMessage(
@@ -117,6 +150,19 @@ function errorMessage(
 }
 
 export function HelpdeskOperationsPage() {
+  const [
+    searchParams,
+    setSearchParams,
+  ] =
+    useSearchParams()
+
+  const requestedTab =
+    resolveTab(
+      searchParams.get(
+        'tab',
+      ),
+    )
+
   const [
     catalog,
     setCatalog,
@@ -169,12 +215,8 @@ export function HelpdeskOperationsPage() {
     tab,
     setTab,
   ] =
-    useState<
-      | 'sites'
-      | 'coverage'
-      | 'technicians'
-    >(
-      'sites',
+    useState<OperationsTab>(
+      requestedTab,
     )
 
   const [
@@ -218,8 +260,80 @@ export function HelpdeskOperationsPage() {
     )
 
   const disabled =
-    loading ||
+    loading
+    ||
     saving
+
+  // ============================================================
+  // URL <-> TAB
+  // ============================================================
+
+  useEffect(
+    () => {
+      if (
+        requestedTab !==
+        tab
+      ) {
+        setTab(
+          requestedTab,
+        )
+      }
+    },
+    [
+      requestedTab,
+      tab,
+    ],
+  )
+
+  function changeTab(
+    next:
+      OperationsTab,
+  ) {
+    setTab(
+      next,
+    )
+
+    setError(
+      '',
+    )
+
+    setMessage(
+      '',
+    )
+
+    const params =
+      new URLSearchParams(
+        searchParams,
+      )
+
+    if (
+      next ===
+      'sites'
+    ) {
+      params.delete(
+        'tab',
+      )
+    }
+    else {
+      params.set(
+        'tab',
+        next,
+      )
+    }
+
+    params.set(
+      'workspace',
+      'helpdesk',
+    )
+
+    setSearchParams(
+      params,
+    )
+  }
+
+  // ============================================================
+  // DERIVED DATA
+  // ============================================================
 
   const activeSites =
     useMemo(
@@ -262,6 +376,37 @@ export function HelpdeskOperationsPage() {
       ],
     )
 
+  const activeLocationsCount =
+    useMemo(
+      () =>
+        catalog.siteLocations
+          .filter(
+            item =>
+              item.isActive,
+          )
+          .length,
+      [
+        catalog.siteLocations,
+      ],
+    )
+
+  const enabledTechniciansCount =
+    useMemo(
+      () =>
+        staff.filter(
+          item =>
+            item.canWorkTickets,
+        )
+          .length,
+      [
+        staff,
+      ],
+    )
+
+  // ============================================================
+  // LOAD
+  // ============================================================
+
   const load =
     useCallback(
       async () => {
@@ -276,13 +421,15 @@ export function HelpdeskOperationsPage() {
           ] =
             await Promise.all(
               [
-                apiClient.get<Catalog>(
-                  '/helpdesk/site-coverage/catalog',
-                ),
+                apiClient
+                  .get<Catalog>(
+                    '/helpdesk/site-coverage/catalog',
+                  ),
 
-                apiClient.get<Staff[]>(
-                  '/helpdesk/staff/users',
-                ),
+                apiClient
+                  .get<Staff[]>(
+                    '/helpdesk/staff/users',
+                  ),
               ],
             )
 
@@ -336,6 +483,10 @@ export function HelpdeskOperationsPage() {
       refresh,
     ],
   )
+
+  // ============================================================
+  // SAVE HELPER
+  // ============================================================
 
   async function save(
     action:
@@ -392,6 +543,10 @@ export function HelpdeskOperationsPage() {
     }
   }
 
+  // ============================================================
+  // COVERAGE CREATE
+  // ============================================================
+
   function handleSubmit(
     event:
       FormEvent<HTMLFormElement>,
@@ -403,6 +558,24 @@ export function HelpdeskOperationsPage() {
       ||
       !coverageSiteId
     ) {
+      setError(
+        'Selecciona un grupo y una localidad.',
+      )
+
+      return
+    }
+
+    if (
+      coveragePriority <
+        1
+      ||
+      coveragePriority >
+        1000
+    ) {
+      setError(
+        'La prioridad debe estar entre 1 y 1000.',
+      )
+
       return
     }
 
@@ -425,6 +598,7 @@ export function HelpdeskOperationsPage() {
             category:
               coverageCategory
                 .trim()
+                .toLowerCase()
                 ||
                 null,
 
@@ -446,6 +620,10 @@ export function HelpdeskOperationsPage() {
       },
     )
   }
+
+  // ============================================================
+  // COVERAGE REMOVE
+  // ============================================================
 
   function removeCoverage(
     coverage:
@@ -469,6 +647,10 @@ export function HelpdeskOperationsPage() {
     )
   }
 
+  // ============================================================
+  // NAME HELPERS
+  // ============================================================
+
   function siteName(
     id:
       string,
@@ -476,7 +658,8 @@ export function HelpdeskOperationsPage() {
     return (
       catalog.sites.find(
         item =>
-          item.id === id,
+          item.id ===
+          id,
       )
         ?.name
       ??
@@ -488,16 +671,15 @@ export function HelpdeskOperationsPage() {
     id:
       string | null,
   ) {
-    if (
-      !id
-    ) {
+    if (!id) {
       return 'Toda la localidad'
     }
 
     return (
       catalog.siteLocations.find(
         item =>
-          item.id === id,
+          item.id ===
+          id,
       )
         ?.name
       ??
@@ -512,13 +694,40 @@ export function HelpdeskOperationsPage() {
     return (
       catalog.teams.find(
         item =>
-          item.id === id,
+          item.id ===
+          id,
       )
         ?.name
       ??
       'Grupo no disponible'
     )
   }
+
+  // ============================================================
+  // PAGE TITLE BY TAB
+  // ============================================================
+
+  const pageTitle =
+    tab ===
+      'technicians'
+      ? 'Técnicos de Mesa de Ayuda'
+      : tab ===
+          'coverage'
+        ? 'Cobertura operativa'
+        : 'Localidades y cobertura'
+
+  const pageDescription =
+    tab ===
+      'technicians'
+      ? 'Consulta el personal TIC habilitado, su ubicación y disponibilidad para atender tickets.'
+      : tab ===
+          'coverage'
+        ? 'Define qué grupos atienden cada localidad, sublocalidad y categoría.'
+        : 'La Mesa de Ayuda utiliza las mismas localidades corporativas de TitanMDM.'
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <main
@@ -543,14 +752,11 @@ export function HelpdeskOperationsPage() {
           </span>
 
           <h1>
-            Localidades y cobertura
+            {pageTitle}
           </h1>
 
           <p>
-            La Mesa de Ayuda utiliza
-            las mismas localidades de
-            TitanMDM. No existe un
-            catálogo separado.
+            {pageDescription}
           </p>
         </div>
 
@@ -616,12 +822,7 @@ export function HelpdeskOperationsPage() {
 
           <strong>
             {
-              catalog.siteLocations
-                .filter(
-                  item =>
-                    item.isActive,
-                )
-                .length
+              activeLocationsCount
             }
           </strong>
         </div>
@@ -645,11 +846,7 @@ export function HelpdeskOperationsPage() {
 
           <strong>
             {
-              staff.filter(
-                item =>
-                  item.canWorkTickets,
-              )
-                .length
+              enabledTechniciansCount
             }
           </strong>
         </div>
@@ -667,7 +864,7 @@ export function HelpdeskOperationsPage() {
           }
           onClick={
             () =>
-              setTab(
+              changeTab(
                 'sites',
               )
           }
@@ -687,7 +884,7 @@ export function HelpdeskOperationsPage() {
           }
           onClick={
             () =>
-              setTab(
+              changeTab(
                 'coverage',
               )
           }
@@ -707,7 +904,7 @@ export function HelpdeskOperationsPage() {
           }
           onClick={
             () =>
-              setTab(
+              changeTab(
                 'technicians',
               )
           }
@@ -721,10 +918,16 @@ export function HelpdeskOperationsPage() {
       </nav>
 
       {loading && (
-        <p role="status">
+        <p
+          role="status"
+        >
           Cargando configuración…
         </p>
       )}
+
+      {/* ========================================================
+          SITES
+         ======================================================== */}
 
       {!loading &&
         tab ===
@@ -771,52 +974,64 @@ export function HelpdeskOperationsPage() {
               </thead>
 
               <tbody>
-                {catalog.sites.map(
-                  site => (
-                    <tr
-                      key={
-                        site.id
-                      }
+                {!catalog.sites
+                    .length ? (
+                  <tr>
+                    <td
+                      colSpan={5}
                     >
-                      <td>
-                        {
-                          site.code
+                      No hay localidades
+                      configuradas.
+                    </td>
+                  </tr>
+                ) : (
+                  catalog.sites.map(
+                    site => (
+                      <tr
+                        key={
+                          site.id
                         }
-                      </td>
-
-                      <td>
-                        <strong>
+                      >
+                        <td>
                           {
-                            site.name
+                            site.code
                           }
-                        </strong>
-                      </td>
+                        </td>
 
-                      <td>
-                        {
-                          site.city
-                          ??
-                          '—'
-                        }
-                      </td>
+                        <td>
+                          <strong>
+                            {
+                              site.name
+                            }
+                          </strong>
+                        </td>
 
-                      <td>
-                        {
-                          site.province
-                          ??
-                          '—'
-                        }
-                      </td>
+                        <td>
+                          {
+                            site.city
+                            ??
+                            '—'
+                          }
+                        </td>
 
-                      <td>
-                        {
-                          site.isActive
-                            ? 'Activa'
-                            : 'Inactiva'
-                        }
-                      </td>
-                    </tr>
-                  ),
+                        <td>
+                          {
+                            site.province
+                            ??
+                            '—'
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            site.isActive
+                              ? 'Activa'
+                              : 'Inactiva'
+                          }
+                        </td>
+                      </tr>
+                    ),
+                  )
                 )}
               </tbody>
             </table>
@@ -851,48 +1066,68 @@ export function HelpdeskOperationsPage() {
               </thead>
 
               <tbody>
-                {catalog.siteLocations.map(
-                  location => (
-                    <tr
-                      key={
-                        location.id
-                      }
+                {!catalog
+                    .siteLocations
+                    .length ? (
+                  <tr>
+                    <td
+                      colSpan={4}
                     >
-                      <td>
-                        {siteName(
-                          location.siteId,
-                        )}
-                      </td>
+                      No hay sublocalidades
+                      configuradas.
+                    </td>
+                  </tr>
+                ) : (
+                  catalog
+                    .siteLocations
+                    .map(
+                      location => (
+                        <tr
+                          key={
+                            location.id
+                          }
+                        >
+                          <td>
+                            {siteName(
+                              location
+                                .siteId,
+                            )}
+                          </td>
 
-                      <td>
-                        {
-                          location.name
-                        }
-                      </td>
+                          <td>
+                            {
+                              location.name
+                            }
+                          </td>
 
-                      <td>
-                        {
-                          location.description
-                          ??
-                          '—'
-                        }
-                      </td>
+                          <td>
+                            {
+                              location.description
+                              ??
+                              '—'
+                            }
+                          </td>
 
-                      <td>
-                        {
-                          location.isActive
-                            ? 'Activa'
-                            : 'Inactiva'
-                        }
-                      </td>
-                    </tr>
-                  ),
+                          <td>
+                            {
+                              location.isActive
+                                ? 'Activa'
+                                : 'Inactiva'
+                            }
+                          </td>
+                        </tr>
+                      ),
+                    )
                 )}
               </tbody>
             </table>
           </div>
         </section>
       )}
+
+      {/* ========================================================
+          COVERAGE
+         ======================================================== */}
 
       {!loading &&
         tab ===
@@ -906,8 +1141,8 @@ export function HelpdeskOperationsPage() {
 
           <p>
             Define qué grupo atiende
-            cada localidad o
-            sublocalidad.
+            cada localidad,
+            sublocalidad y categoría.
           </p>
 
           <form
@@ -920,6 +1155,9 @@ export function HelpdeskOperationsPage() {
 
               <select
                 required
+                disabled={
+                  disabled
+                }
                 value={
                   coverageTeamId
                 }
@@ -932,9 +1170,7 @@ export function HelpdeskOperationsPage() {
                     )
                 }
               >
-                <option
-                  value=""
-                >
+                <option value="">
                   Selecciona grupo
                 </option>
 
@@ -962,6 +1198,9 @@ export function HelpdeskOperationsPage() {
 
               <select
                 required
+                disabled={
+                  disabled
+                }
                 value={
                   coverageSiteId
                 }
@@ -979,9 +1218,7 @@ export function HelpdeskOperationsPage() {
                   }
                 }
               >
-                <option
-                  value=""
-                >
+                <option value="">
                   Selecciona localidad
                 </option>
 
@@ -1012,6 +1249,8 @@ export function HelpdeskOperationsPage() {
                   coverageLocationId
                 }
                 disabled={
+                  disabled
+                  ||
                   !coverageSiteId
                 }
                 onChange={
@@ -1023,9 +1262,7 @@ export function HelpdeskOperationsPage() {
                     )
                 }
               >
-                <option
-                  value=""
-                >
+                <option value="">
                   Toda la localidad
                 </option>
 
@@ -1055,6 +1292,9 @@ export function HelpdeskOperationsPage() {
                 value={
                   coverageCategory
                 }
+                disabled={
+                  disabled
+                }
                 onChange={
                   event =>
                     setCoverageCategory(
@@ -1063,9 +1303,7 @@ export function HelpdeskOperationsPage() {
                         .value,
                     )
                 }
-                placeholder={
-                  'Ej.: redes'
-                }
+                placeholder="Ej.: redes"
               />
             </label>
 
@@ -1076,6 +1314,9 @@ export function HelpdeskOperationsPage() {
                 type="number"
                 min={1}
                 max={1000}
+                disabled={
+                  disabled
+                }
                 value={
                   coveragePriority
                 }
@@ -1143,82 +1384,102 @@ export function HelpdeskOperationsPage() {
               </thead>
 
               <tbody>
-                {catalog.coverages.map(
-                  coverage => (
-                    <tr
-                      key={
-                        coverage.id
-                      }
+                {!catalog.coverages
+                    .length ? (
+                  <tr>
+                    <td
+                      colSpan={7}
                     >
-                      <td>
-                        {teamName(
-                          coverage.teamId,
-                        )}
-                      </td>
-
-                      <td>
-                        {siteName(
-                          coverage.siteId,
-                        )}
-                      </td>
-
-                      <td>
-                        {locationName(
-                          coverage.siteLocationId,
-                        )}
-                      </td>
-
-                      <td>
-                        {
-                          coverage.category
-                          ??
-                          'Todas'
+                      No hay coberturas
+                      configuradas.
+                    </td>
+                  </tr>
+                ) : (
+                  catalog.coverages.map(
+                    coverage => (
+                      <tr
+                        key={
+                          coverage.id
                         }
-                      </td>
+                      >
+                        <td>
+                          {teamName(
+                            coverage.teamId,
+                          )}
+                        </td>
 
-                      <td>
-                        {
-                          coverage.priority
-                        }
-                      </td>
+                        <td>
+                          {siteName(
+                            coverage.siteId,
+                          )}
+                        </td>
 
-                      <td>
-                        {
-                          coverage.isActive
-                            ? 'Activa'
-                            : 'Inactiva'
-                        }
-                      </td>
+                        <td>
+                          {locationName(
+                            coverage
+                              .siteLocationId,
+                          )}
+                        </td>
 
-                      <td>
-                        <button
-                          type="button"
-                          className={
-                            'helpdesk-ui-button ' +
-                            'helpdesk-ui-button--secondary'
+                        <td>
+                          {
+                            coverage.category
+                            ??
+                            'Todas'
                           }
-                          onClick={
-                            () =>
-                              removeCoverage(
-                                coverage,
-                              )
-                          }
-                        >
-                          <Trash2
-                            size={14}
-                          />
+                        </td>
 
-                          Eliminar
-                        </button>
-                      </td>
-                    </tr>
-                  ),
+                        <td>
+                          {
+                            coverage.priority
+                          }
+                        </td>
+
+                        <td>
+                          {
+                            coverage.isActive
+                              ? 'Activa'
+                              : 'Inactiva'
+                          }
+                        </td>
+
+                        <td>
+                          <button
+                            type="button"
+                            className={
+                              'helpdesk-ui-button ' +
+                              'helpdesk-ui-button--secondary'
+                            }
+                            disabled={
+                              disabled
+                            }
+                            onClick={
+                              () =>
+                                removeCoverage(
+                                  coverage,
+                                )
+                            }
+                          >
+                            <Trash2
+                              size={14}
+                            />
+
+                            Eliminar
+                          </button>
+                        </td>
+                      </tr>
+                    ),
+                  )
                 )}
               </tbody>
             </table>
           </div>
         </section>
       )}
+
+      {/* ========================================================
+          TECHNICIANS
+         ======================================================== */}
 
       {!loading &&
         tab ===
@@ -1233,7 +1494,10 @@ export function HelpdeskOperationsPage() {
           <p>
             La ubicación del técnico
             se toma directamente del
-            usuario corporativo.
+            usuario corporativo. La
+            capacidad, turnos y
+            autoasignación se administran
+            desde Grupos y especialidades.
           </p>
 
           <div
@@ -1261,56 +1525,83 @@ export function HelpdeskOperationsPage() {
                   <th>
                     Puede atender
                   </th>
+
+                  <th>
+                    Asistente
+                  </th>
                 </tr>
               </thead>
 
               <tbody>
-                {staff.map(
-                  technician => (
-                    <tr
-                      key={
-                        technician.id
-                      }
+                {!staff.length ? (
+                  <tr>
+                    <td
+                      colSpan={6}
                     >
-                      <td>
-                        <strong>
+                      No hay usuarios
+                      disponibles para
+                      Mesa de Ayuda.
+                    </td>
+                  </tr>
+                ) : (
+                  staff.map(
+                    technician => (
+                      <tr
+                        key={
+                          technician.id
+                        }
+                      >
+                        <td>
+                          <strong>
+                            {
+                              technician.name
+                            }
+                          </strong>
+                        </td>
+
+                        <td>
                           {
-                            technician.name
+                            technician.email
                           }
-                        </strong>
-                      </td>
+                        </td>
 
-                      <td>
-                        {
-                          technician.email
-                        }
-                      </td>
+                        <td>
+                          {
+                            technician.siteName
+                            ??
+                            'Sin localidad'
+                          }
+                        </td>
 
-                      <td>
-                        {
-                          technician.siteName
-                          ??
-                          'Sin localidad'
-                        }
-                      </td>
+                        <td>
+                          {
+                            technician
+                              .siteLocationName
+                            ??
+                            '—'
+                          }
+                        </td>
 
-                      <td>
-                        {
-                          technician.siteLocationName
-                          ??
-                          '—'
-                        }
-                      </td>
+                        <td>
+                          {
+                            technician
+                              .canWorkTickets
+                              ? 'Sí'
+                              : 'No'
+                          }
+                        </td>
 
-                      <td>
-                        {
-                          technician.canWorkTickets
-                            ? 'Sí'
-                            : 'No'
-                        }
-                      </td>
-                    </tr>
-                  ),
+                        <td>
+                          {
+                            technician
+                              .assistantEnabled
+                              ? 'Habilitado'
+                              : 'Deshabilitado'
+                          }
+                        </td>
+                      </tr>
+                    ),
+                  )
                 )}
               </tbody>
             </table>
