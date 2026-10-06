@@ -951,7 +951,8 @@ public sealed class HelpdeskGroupPlanningController
                     technician.Priority,
                     technician.AcceptsAutomaticAssignments,
                     technician.TimeZoneId,
-                    technician.Slots);
+                    technician.Slots
+                    ?? Array.Empty<HelpdeskWeeklySlot>());
             }
         }
 

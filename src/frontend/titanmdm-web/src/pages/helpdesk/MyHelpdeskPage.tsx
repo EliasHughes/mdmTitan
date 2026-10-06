@@ -11,13 +11,19 @@ import {
 } from 'react-router-dom'
 
 import {
+  AlertTriangle,
   ArrowLeft,
   ArrowRight,
+  CheckCircle2,
+  Clock3,
   Headphones,
   MessageSquare,
+  PauseCircle,
   Plus,
+  RotateCcw,
   Send,
   Ticket,
+  X,
 } from 'lucide-react'
 
 import axios
@@ -35,6 +41,7 @@ import {
 } from '../../auth/helpdeskAccess'
 
 import './HelpdeskPages.css'
+import './MyHelpdeskWorkflow.css'
 
 interface MyTicket {
   id: string
@@ -50,6 +57,19 @@ interface MyTicket {
 
 interface MyTicketDetails
   extends MyTicket {
+  firstResponseDueAtUtc?:
+    string | null
+
+  resolveDueAtUtc?:
+    string | null
+
+  resolvedAtUtc?:
+    string | null
+
+  canReopen: boolean
+
+  reopenWindowDays: number
+
   comments: {
     id: string
     authorUserId: string
@@ -88,8 +108,14 @@ const statusNames:
   }
 
 function formatDate(
-  value: string,
+  value?: string | null,
 ) {
+  if (
+    !value
+  ) {
+    return '—'
+  }
+
   const parsed =
     new Date(
       /(?:Z|[+-]\d{2}:?\d{2})$/i
@@ -166,7 +192,10 @@ export function MyHelpdeskPage() {
     ticket,
     setTicket,
   ] =
-    useState<MyTicketDetails | null>(
+    useState<
+      MyTicketDetails |
+      null
+    >(
       null,
     )
 
@@ -195,8 +224,32 @@ export function MyHelpdeskPage() {
     )
 
   const [
+    notice,
+    setNotice,
+  ] =
+    useState(
+      '',
+    )
+
+  const [
     reply,
     setReply,
+  ] =
+    useState(
+      '',
+    )
+
+  const [
+    showReopen,
+    setShowReopen,
+  ] =
+    useState(
+      false,
+    )
+
+  const [
+    reopenReason,
+    setReopenReason,
   ] =
     useState(
       '',
@@ -223,6 +276,17 @@ export function MyHelpdeskPage() {
         .portalAccess,
     )
 
+  const canRequestReopen =
+    hasPermission(
+      helpdeskPermissions
+        .requestOwnReopen,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions
+        .portalAccess,
+    )
+
   const load =
     useCallback(
       async (
@@ -237,6 +301,10 @@ export function MyHelpdeskPage() {
           '',
         )
 
+        setNotice(
+          '',
+        )
+
         setTicket(
           null,
         )
@@ -246,9 +314,9 @@ export function MyHelpdeskPage() {
             ticketId
           ) {
             /*
-             * IMPORTANTE:
-             * usuario común usa SIEMPRE
-             * /api/my/helpdesk.
+             * Usuario común:
+             * siempre utiliza su endpoint
+             * personal.
              */
             const result =
               await apiClient
@@ -326,6 +394,14 @@ export function MyHelpdeskPage() {
         '',
       )
 
+      setReopenReason(
+        '',
+      )
+
+      setShowReopen(
+        false,
+      )
+
       void load(
         controller.signal,
       )
@@ -362,6 +438,10 @@ export function MyHelpdeskPage() {
       '',
     )
 
+    setNotice(
+      '',
+    )
+
     try {
       const result =
         await apiClient
@@ -380,6 +460,13 @@ export function MyHelpdeskPage() {
       setReply(
         '',
       )
+
+      setNotice(
+        ticket?.status ===
+          'pendinguser'
+          ? 'Tu respuesta fue enviada. La solicitud volvió a estar en proceso.'
+          : 'Tu respuesta fue enviada correctamente.',
+      )
     }
     catch (
       exception
@@ -388,6 +475,80 @@ export function MyHelpdeskPage() {
         errorMessage(
           exception,
           'No pudimos publicar tu respuesta.',
+        ),
+      )
+    }
+    finally {
+      setSaving(
+        false,
+      )
+    }
+  }
+
+  async function reopenTicket(
+    event:
+      FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault()
+
+    if (
+      !ticketId
+      ||
+      reopenReason
+        .trim()
+        .length < 5
+      ||
+      saving
+    ) {
+      return
+    }
+
+    setSaving(
+      true,
+    )
+
+    setError(
+      '',
+    )
+
+    setNotice(
+      '',
+    )
+
+    try {
+      const result =
+        await apiClient
+          .post<MyTicketDetails>(
+            `/my/helpdesk/tickets/${ticketId}/reopen`,
+            {
+              reason:
+                reopenReason.trim(),
+            },
+          )
+
+      setTicket(
+        result.data,
+      )
+
+      setShowReopen(
+        false,
+      )
+
+      setReopenReason(
+        '',
+      )
+
+      setNotice(
+        'La solicitud fue reabierta correctamente y volvió a la bandeja del equipo TIC.',
+      )
+    }
+    catch (
+      exception
+    ) {
+      setError(
+        errorMessage(
+          exception,
+          'No pudimos reabrir la solicitud.',
         ),
       )
     }
@@ -427,6 +588,31 @@ export function MyHelpdeskPage() {
   if (
     ticketId
   ) {
+    const normalizedStatus =
+      ticket?.status
+        ?.trim()
+        .toLowerCase()
+      ??
+      ''
+
+    const terminal =
+      normalizedStatus ===
+        'resolved'
+      ||
+      normalizedStatus ===
+        'closed'
+
+    const waitingUser =
+      normalizedStatus ===
+        'pendinguser'
+
+    const reopenExpired =
+      terminal
+      &&
+      ticket
+      &&
+      !ticket.canReopen
+
     return (
       <main
         className={
@@ -457,7 +643,24 @@ export function MyHelpdeskPage() {
             className="helpdesk-inbox__error"
             role="alert"
           >
+            <AlertTriangle
+              size={17}
+            />
+
             {error}
+          </div>
+        )}
+
+        {notice && (
+          <div
+            className="my-helpdesk-workflow__success"
+            role="status"
+          >
+            <CheckCircle2
+              size={18}
+            />
+
+            {notice}
           </div>
         )}
 
@@ -509,7 +712,7 @@ export function MyHelpdeskPage() {
                 className="my-helpdesk__meta"
               >
                 {badge(
-                  ticket.status,
+                  normalizedStatus,
                 )}
 
                 <span>
@@ -518,8 +721,122 @@ export function MyHelpdeskPage() {
                     ticket.createdAtUtc,
                   )}
                 </span>
+
+                <span>
+                  Actualizada{' '}
+                  {formatDate(
+                    ticket.updatedAtUtc,
+                  )}
+                </span>
               </div>
             </header>
+
+            {waitingUser && (
+              <section
+                className="my-helpdesk-workflow__attention"
+              >
+                <PauseCircle
+                  size={22}
+                />
+
+                <div>
+                  <strong>
+                    El equipo TIC necesita
+                    una respuesta tuya
+                  </strong>
+
+                  <span>
+                    El SLA de resolución
+                    está pausado mientras
+                    espera tu respuesta.
+                    Al responder, el ticket
+                    volverá automáticamente
+                    a proceso.
+                  </span>
+                </div>
+              </section>
+            )}
+
+            {terminal && (
+              <section
+                className={
+                  ticket.canReopen
+                    ? 'my-helpdesk-workflow__resolved'
+                    : 'my-helpdesk-workflow__closed'
+                }
+              >
+                <CheckCircle2
+                  size={22}
+                />
+
+                <div>
+                  <strong>
+                    {
+                      normalizedStatus ===
+                        'closed'
+                        ? 'Esta solicitud está cerrada'
+                        : 'Esta solicitud fue resuelta'
+                    }
+                  </strong>
+
+                  {ticket.canReopen ? (
+                    <span>
+                      Si el problema continúa,
+                      puedes reabrirla dentro
+                      del período permitido
+                      de {
+                        ticket.reopenWindowDays
+                      } días.
+                    </span>
+                  ) : (
+                    <span>
+                      El período disponible
+                      para reabrir esta
+                      solicitud ya terminó.
+                      Si necesitas ayuda
+                      nuevamente, crea una
+                      nueva solicitud.
+                    </span>
+                  )}
+                </div>
+
+                {canRequestReopen &&
+                  ticket.canReopen && (
+                  <button
+                    type="button"
+                    className={
+                      'helpdesk-ui-button ' +
+                      'helpdesk-ui-button--secondary'
+                    }
+                    onClick={
+                      () => {
+                        setError(
+                          '',
+                        )
+
+                        setNotice(
+                          '',
+                        )
+
+                        setReopenReason(
+                          '',
+                        )
+
+                        setShowReopen(
+                          true,
+                        )
+                      }
+                    }
+                  >
+                    <RotateCcw
+                      size={16}
+                    />
+
+                    Reabrir solicitud
+                  </button>
+                )}
+              </section>
+            )}
 
             <section
               className="my-helpdesk__card"
@@ -535,6 +852,42 @@ export function MyHelpdeskPage() {
                   ticket.description
                 }
               </p>
+
+              <div
+                className="my-helpdesk-workflow__request-meta"
+              >
+                <span>
+                  <strong>
+                    Prioridad
+                  </strong>
+
+                  {
+                    ticket.priority
+                  }
+                </span>
+
+                <span>
+                  <strong>
+                    Categoría
+                  </strong>
+
+                  {
+                    ticket.category
+                  }
+                </span>
+
+                {ticket.resolvedAtUtc && (
+                  <span>
+                    <strong>
+                      Resolución
+                    </strong>
+
+                    {formatDate(
+                      ticket.resolvedAtUtc,
+                    )}
+                  </span>
+                )}
+              </div>
             </section>
 
             <section
@@ -602,12 +955,7 @@ export function MyHelpdeskPage() {
               )}
 
               {canReply &&
-                ![
-                  'resolved',
-                  'closed',
-                ].includes(
-                  ticket.status,
-                ) && (
+                !terminal && (
                 <form
                   className="my-helpdesk__form"
                   onSubmit={
@@ -620,12 +968,22 @@ export function MyHelpdeskPage() {
                   <label
                     htmlFor="helpdesk-reply"
                   >
-                    Responder al
-                    equipo TIC
+                    {
+                      waitingUser
+                        ? 'Responder para continuar la atención'
+                        : 'Responder al equipo TIC'
+                    }
                   </label>
 
                   <textarea
                     id="helpdesk-reply"
+                    required
+                    maxLength={
+                      4000
+                    }
+                    rows={
+                      4
+                    }
                     value={
                       reply
                     }
@@ -638,7 +996,9 @@ export function MyHelpdeskPage() {
                         )
                     }
                     placeholder={
-                      'Escribe información adicional…'
+                      waitingUser
+                        ? 'Escribe la información solicitada por el equipo TIC…'
+                        : 'Escribe información adicional…'
                     }
                   />
 
@@ -649,7 +1009,8 @@ export function MyHelpdeskPage() {
                       'helpdesk-ui-button--primary'
                     }
                     disabled={
-                      saving ||
+                      saving
+                      ||
                       !reply.trim()
                     }
                   >
@@ -660,13 +1021,295 @@ export function MyHelpdeskPage() {
                     {
                       saving
                         ? 'Enviando…'
-                        : 'Enviar respuesta'
+                        : waitingUser
+                          ? 'Responder y continuar'
+                          : 'Enviar respuesta'
                     }
                   </button>
                 </form>
               )}
             </section>
+
+            <section
+              className="my-helpdesk__card"
+            >
+              <div
+                className="my-helpdesk-workflow__section-heading"
+              >
+                <div>
+                  <h2>
+                    Actividad
+                  </h2>
+
+                  <p>
+                    Seguimiento de los cambios
+                    principales de tu solicitud.
+                  </p>
+                </div>
+
+                <Clock3
+                  size={19}
+                />
+              </div>
+
+              {!ticket
+                .activity
+                .length ? (
+                <div
+                  className="my-helpdesk__empty"
+                >
+                  <Clock3
+                    size={25}
+                  />
+
+                  <strong>
+                    Sin actividad todavía
+                  </strong>
+                </div>
+              ) : (
+                <ol
+                  className="my-helpdesk-workflow__timeline"
+                >
+                  {ticket.activity.map(
+                    item => (
+                      <li
+                        key={
+                          item.id
+                        }
+                      >
+                        <span
+                          className="my-helpdesk-workflow__timeline-dot"
+                        />
+
+                        <div>
+                          <strong>
+                            {
+                              item.summary
+                            }
+                          </strong>
+
+                          <time>
+                            {formatDate(
+                              item.createdAtUtc,
+                            )}
+                          </time>
+                        </div>
+                      </li>
+                    ),
+                  )}
+                </ol>
+              )}
+            </section>
+
+            {reopenExpired && (
+              <section
+                className="my-helpdesk-workflow__expired"
+              >
+                <AlertTriangle
+                  size={19}
+                />
+
+                <span>
+                  Esta solicitud ya no puede
+                  reabrirse desde el portal.
+                  Puedes crear una nueva si
+                  necesitas asistencia adicional.
+                </span>
+              </section>
+            )}
           </>
+        )}
+
+        {showReopen &&
+          ticket && (
+          <div
+            className="my-helpdesk-workflow-modal"
+            role="presentation"
+            onMouseDown={
+              event => {
+                if (
+                  event.target ===
+                  event.currentTarget
+                ) {
+                  setShowReopen(
+                    false,
+                  )
+                }
+              }
+            }
+          >
+            <form
+              className="my-helpdesk-workflow-modal__dialog"
+              onSubmit={
+                event =>
+                  void reopenTicket(
+                    event,
+                  )
+              }
+            >
+              <header
+                className="my-helpdesk-workflow-modal__header"
+              >
+                <div
+                  className="my-helpdesk-workflow-modal__icon"
+                >
+                  <RotateCcw
+                    size={21}
+                  />
+                </div>
+
+                <div>
+                  <h2>
+                    Reabrir solicitud
+                  </h2>
+
+                  <p>
+                    El equipo TIC volverá
+                    a recibir este caso.
+                  </p>
+                </div>
+
+                <button
+                  type="button"
+                  className="my-helpdesk-workflow-modal__close"
+                  aria-label="Cerrar"
+                  onClick={
+                    () =>
+                      setShowReopen(
+                        false,
+                      )
+                  }
+                >
+                  <X
+                    size={19}
+                  />
+                </button>
+              </header>
+
+              <div
+                className="my-helpdesk-workflow-modal__body"
+              >
+                <div
+                  className="my-helpdesk-workflow-modal__ticket"
+                >
+                  <strong>
+                    {
+                      ticket.number
+                    }
+                  </strong>
+
+                  <span>
+                    {
+                      ticket.subject
+                    }
+                  </span>
+                </div>
+
+                <label
+                  htmlFor="my-helpdesk-reopen-reason"
+                >
+                  ¿Por qué necesitas
+                  reabrirla?
+                </label>
+
+                <textarea
+                  id="my-helpdesk-reopen-reason"
+                  autoFocus
+                  required
+                  minLength={
+                    5
+                  }
+                  maxLength={
+                    1000
+                  }
+                  rows={
+                    5
+                  }
+                  value={
+                    reopenReason
+                  }
+                  onChange={
+                    event =>
+                      setReopenReason(
+                        event
+                          .target
+                          .value,
+                      )
+                  }
+                  placeholder={
+                    'Ejemplo: el inconveniente volvió a presentarse después de aplicar la solución…'
+                  }
+                />
+
+                <div
+                  className="my-helpdesk-workflow-modal__hint"
+                >
+                  <Clock3
+                    size={15}
+                  />
+
+                  <span>
+                    La reapertura quedará
+                    registrada en el historial.
+                    La ventana actual es de{' '}
+                    <strong>
+                      {
+                        ticket.reopenWindowDays
+                      } días
+                    </strong>.
+                  </span>
+                </div>
+              </div>
+
+              <footer
+                className="my-helpdesk-workflow-modal__footer"
+              >
+                <button
+                  type="button"
+                  className={
+                    'helpdesk-ui-button ' +
+                    'helpdesk-ui-button--secondary'
+                  }
+                  disabled={
+                    saving
+                  }
+                  onClick={
+                    () =>
+                      setShowReopen(
+                        false,
+                      )
+                  }
+                >
+                  Cancelar
+                </button>
+
+                <button
+                  type="submit"
+                  className={
+                    'helpdesk-ui-button ' +
+                    'helpdesk-ui-button--primary'
+                  }
+                  disabled={
+                    saving
+                    ||
+                    reopenReason
+                      .trim()
+                      .length < 5
+                  }
+                >
+                  <RotateCcw
+                    size={16}
+                  />
+
+                  {
+                    saving
+                      ? 'Reabriendo…'
+                      : 'Confirmar reapertura'
+                  }
+                </button>
+              </footer>
+            </form>
+          </div>
         )}
       </main>
     )
@@ -743,6 +1386,10 @@ export function MyHelpdeskPage() {
           className="helpdesk-inbox__error"
           role="alert"
         >
+          <AlertTriangle
+            size={17}
+          />
+
           {error}
         </div>
       )}

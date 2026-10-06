@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using TitanMDM.Infrastructure.Persistence;
 
@@ -11,9 +12,11 @@ using TitanMDM.Infrastructure.Persistence;
 namespace TitanMDM.Infrastructure.Persistence.Migrations
 {
     [DbContext(typeof(TitanMdmDbContext))]
-    partial class TitanMdmDbContextModelSnapshot : ModelSnapshot
+    [Migration("20261005174651_HD_R9_3_EnterpriseSla")]
+    partial class HD_R9_3_EnterpriseSla
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -1696,70 +1699,6 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                         .IsUnique();
 
                     b.ToTable("HelpdeskEmailMessages", (string)null);
-                });
-
-            modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskMailSettings", b =>
-                {
-                    b.Property<Guid>("OrganizationId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<Guid?>("ActorUserId")
-                        .HasColumnType("uniqueidentifier");
-
-                    b.Property<int>("BatchSize")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("InboundEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("InboundPollSeconds")
-                        .HasColumnType("int");
-
-                    b.Property<DateTime?>("LastInboundAttemptAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LastInboundError")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<DateTime?>("LastInboundSuccessAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<DateTime?>("LastOutboundAttemptAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("LastOutboundError")
-                        .HasMaxLength(2000)
-                        .HasColumnType("nvarchar(2000)");
-
-                    b.Property<DateTime?>("LastOutboundSuccessAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.Property<string>("Mailbox")
-                        .HasMaxLength(320)
-                        .HasColumnType("nvarchar(320)");
-
-                    b.Property<int>("MaxAttempts")
-                        .HasColumnType("int");
-
-                    b.Property<bool>("OutboundEnabled")
-                        .HasColumnType("bit");
-
-                    b.Property<int>("OutboundPollSeconds")
-                        .HasColumnType("int");
-
-                    b.Property<int>("Revision")
-                        .IsConcurrencyToken()
-                        .HasColumnType("int");
-
-                    b.Property<DateTime>("UpdatedAtUtc")
-                        .HasColumnType("datetime2");
-
-                    b.HasKey("OrganizationId");
-
-                    b.HasIndex("ActorUserId");
-
-                    b.ToTable("HelpdeskMailSettings", (string)null);
                 });
 
             modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskOutboundEmail", b =>
@@ -3747,15 +3686,6 @@ namespace TitanMDM.Infrastructure.Persistence.Migrations
                     b.HasOne("TitanMDM.Domain.Entities.HelpdeskTicket", null)
                         .WithMany()
                         .HasForeignKey("TicketId")
-                        .OnDelete(DeleteBehavior.Restrict)
-                        .IsRequired();
-                });
-
-            modelBuilder.Entity("TitanMDM.Domain.Entities.HelpdeskMailSettings", b =>
-                {
-                    b.HasOne("TitanMDM.Domain.Entities.Organization", null)
-                        .WithMany()
-                        .HasForeignKey("OrganizationId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
                 });

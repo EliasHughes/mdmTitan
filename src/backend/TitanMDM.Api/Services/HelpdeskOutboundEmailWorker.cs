@@ -13,6 +13,9 @@ namespace TitanMDM.Api.Services;
 public sealed class HelpdeskOutboundEmailWorker
     : BackgroundService
 {
+    private const int WorkerTickSeconds =
+        10;
+
     private readonly IServiceScopeFactory
         _scopeFactory;
 
@@ -22,9 +25,6 @@ public sealed class HelpdeskOutboundEmailWorker
     private readonly IDataProtector
         _protector;
 
-    private readonly IConfiguration
-        _configuration;
-
     private readonly ILogger<
         HelpdeskOutboundEmailWorker>
         _logger;
@@ -33,7 +33,6 @@ public sealed class HelpdeskOutboundEmailWorker
         IServiceScopeFactory scopeFactory,
         IHttpClientFactory httpClientFactory,
         IDataProtectionProvider protectionProvider,
-        IConfiguration configuration,
         ILogger<HelpdeskOutboundEmailWorker> logger)
     {
         _scopeFactory =
@@ -46,9 +45,6 @@ public sealed class HelpdeskOutboundEmailWorker
             protectionProvider.CreateProtector(
                 "TitanMDM.Helpdesk.Entra.ClientSecret.v1");
 
-        _configuration =
-            configuration;
-
         _logger =
             logger;
     }
@@ -56,18 +52,18 @@ public sealed class HelpdeskOutboundEmailWorker
     protected override async Task ExecuteAsync(
         CancellationToken stoppingToken)
     {
-        while (!stoppingToken.IsCancellationRequested)
+        while (!stoppingToken
+            .IsCancellationRequested)
         {
             try
             {
-                if (IsEnabled())
-                {
-                    await ExecuteCycleAsync(
-                        stoppingToken);
-                }
+                await ExecuteDueOrganizationsAsync(
+                    stoppingToken);
             }
             catch (OperationCanceledException)
-                when (stoppingToken.IsCancellationRequested)
+                when (
+                    stoppingToken
+                        .IsCancellationRequested)
             {
                 break;
             }
@@ -75,51 +71,31 @@ public sealed class HelpdeskOutboundEmailWorker
             {
                 _logger.LogError(
                     exception,
-                    "Error durante el procesamiento de correo saliente de Helpdesk.");
+                    "Error general del worker de correo saliente de Helpdesk.");
             }
 
             try
             {
                 await Task.Delay(
                     TimeSpan.FromSeconds(
-                        PollSeconds()),
+                        WorkerTickSeconds),
                     stoppingToken);
             }
             catch (OperationCanceledException)
-                when (stoppingToken.IsCancellationRequested)
+                when (
+                    stoppingToken
+                        .IsCancellationRequested)
             {
                 break;
             }
         }
     }
 
-    private async Task ExecuteCycleAsync(
-        CancellationToken cancellationToken)
-    {
-        await DiscoverMessagesAsync(
-            cancellationToken);
+    // ============================================================
+    // SCHEDULER
+    // ============================================================
 
-        await RecoverAbandonedMessagesAsync(
-            cancellationToken);
-
-        await SendPendingMessagesAsync(
-            cancellationToken);
-    }
-
-    /*
-     * ============================================================
-     * DISCOVERY
-     * ============================================================
-     *
-     * Detectamos respuestas públicas escritas en TitanMDM.
-     *
-     * Se excluyen:
-     * - notas internas
-     * - mensajes entrantes por email
-     * - comentarios escritos por el propio solicitante
-     * - comentarios ya colocados en Outbox
-     */
-    private async Task DiscoverMessagesAsync(
+    private async Task ExecuteDueOrganizationsAsync(
         CancellationToken cancellationToken)
     {
         using var scope =
@@ -130,12 +106,209 @@ public sealed class HelpdeskOutboundEmailWorker
                 .GetRequiredService<
                     TitanMdmDbContext>();
 
-        var outbox =
-            db.Set<
-                HelpdeskOutboundEmail>();
+        var now =
+            DateTime.UtcNow;
+
+        var configurations =
+            await db.HelpdeskMailSettings
+                .AsNoTracking()
+                .Where(
+                    x =>
+                        x.OutboundEnabled
+                        &&
+                        x.Mailbox !=
+                            null)
+                .Select(
+                    x =>
+                        new
+                        {
+                            x.OrganizationId,
+                            x.OutboundPollSeconds,
+                            x.LastOutboundAttemptAtUtc
+                        })
+                .ToListAsync(
+                    cancellationToken);
+
+        var dueOrganizations =
+            configurations
+                .Where(
+                    x =>
+                        !x.LastOutboundAttemptAtUtc
+                            .HasValue
+                        ||
+                        x.LastOutboundAttemptAtUtc
+                            .Value
+                            .AddSeconds(
+                                Math.Clamp(
+                                    x.OutboundPollSeconds,
+                                    10,
+                                    3600))
+                        <= now)
+                .Select(
+                    x =>
+                        x.OrganizationId)
+                .ToArray();
+
+        foreach (
+            var organizationId
+            in dueOrganizations)
+        {
+            cancellationToken
+                .ThrowIfCancellationRequested();
+
+            await ProcessOrganizationAsync(
+                organizationId,
+                cancellationToken);
+        }
+    }
+
+    // ============================================================
+    // ORGANIZATION
+    // ============================================================
+
+    private async Task ProcessOrganizationAsync(
+        Guid organizationId,
+        CancellationToken cancellationToken)
+    {
+        using var scope =
+            _scopeFactory.CreateScope();
+
+        var db =
+            scope.ServiceProvider
+                .GetRequiredService<
+                    TitanMdmDbContext>();
+
+        var mailSettings =
+            await db.HelpdeskMailSettings
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId,
+                    cancellationToken);
+
+        if (mailSettings is null ||
+            !mailSettings.OutboundEnabled ||
+            string.IsNullOrWhiteSpace(
+                mailSettings.Mailbox))
+        {
+            return;
+        }
+
+        var mailbox =
+            mailSettings.Mailbox
+                .Trim()
+                .ToLowerInvariant();
 
         var batchSize =
-            BatchSize();
+            Math.Clamp(
+                mailSettings.BatchSize,
+                1,
+                100);
+
+        var maxAttempts =
+            Math.Clamp(
+                mailSettings.MaxAttempts,
+                1,
+                20);
+
+        mailSettings
+            .MarkOutboundAttempt();
+
+        await TrySaveRuntimeStatusAsync(
+            db,
+            cancellationToken);
+
+        try
+        {
+            await DiscoverMessagesAsync(
+                db,
+                organizationId,
+                batchSize,
+                cancellationToken);
+
+            await RecoverAbandonedMessagesAsync(
+                db,
+                organizationId,
+                batchSize,
+                cancellationToken);
+
+            var failed =
+                await SendPendingMessagesAsync(
+                    db,
+                    organizationId,
+                    mailbox,
+                    batchSize,
+                    maxAttempts,
+                    cancellationToken);
+
+            /*
+             * Reload after all queue operations so a concurrent
+             * administrator update does not get overwritten.
+             */
+            await ReloadMailSettingsAsync(
+                db,
+                mailSettings,
+                cancellationToken);
+
+            if (failed >
+                0)
+            {
+                mailSettings
+                    .MarkOutboundFailure(
+                        $"{failed} mensaje(s) no pudieron enviarse durante el ciclo.");
+            }
+            else
+            {
+                mailSettings
+                    .MarkOutboundSuccess();
+            }
+
+            await TrySaveRuntimeStatusAsync(
+                db,
+                cancellationToken);
+        }
+        catch (OperationCanceledException)
+            when (
+                cancellationToken
+                    .IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception exception)
+        {
+            await ReloadMailSettingsAsync(
+                db,
+                mailSettings,
+                CancellationToken.None);
+
+            mailSettings
+                .MarkOutboundFailure(
+                    exception.Message);
+
+            await TrySaveRuntimeStatusAsync(
+                db,
+                CancellationToken.None);
+
+            _logger.LogError(
+                exception,
+                "Error procesando correo saliente para organización {OrganizationId}, buzón {Mailbox}.",
+                organizationId,
+                mailbox);
+        }
+    }
+
+    // ============================================================
+    // OUTBOX DISCOVERY
+    // ============================================================
+
+    private async Task DiscoverMessagesAsync(
+        TitanMdmDbContext db,
+        Guid organizationId,
+        int batchSize,
+        CancellationToken cancellationToken)
+    {
+        var outbox =
+            db.HelpdeskOutboundEmails;
 
         var candidates =
             await (
@@ -178,32 +351,37 @@ public sealed class HelpdeskOutboundEmailWorker
                     }
 
                 where
+                    comment.OrganizationId ==
+                        organizationId
+
+                    &&
                     !comment.IsInternal
 
-                    && comment.ExternalAuthorEmail
-                        == null
+                    &&
+                    comment.ExternalAuthorEmail ==
+                        null
 
-                    && comment.AuthorUserId
-                        != ticket.RequesterUserId
+                    &&
+                    comment.AuthorUserId !=
+                        ticket.RequesterUserId
 
-                    && !outbox.Any(
+                    &&
+                    !outbox.Any(
                         queued =>
-                            queued.OrganizationId
-                                == comment.OrganizationId
+                            queued.OrganizationId ==
+                                organizationId
                             &&
-                            queued.CommentId
-                                == comment.Id)
+                            queued.CommentId ==
+                                comment.Id)
 
-                orderby comment.CreatedAtUtc
+                orderby
+                    comment.CreatedAtUtc
 
                 select new
                 {
                     comment.Id,
-
                     comment.OrganizationId,
-
                     comment.TicketId,
-
                     comment.Body,
 
                     TicketNumber =
@@ -224,12 +402,15 @@ public sealed class HelpdeskOutboundEmailWorker
             .ToListAsync(
                 cancellationToken);
 
-        if (candidates.Count == 0)
+        if (candidates.Count ==
+            0)
         {
             return;
         }
 
-        foreach (var candidate in candidates)
+        foreach (
+            var candidate
+            in candidates)
         {
             var destination =
                 !string.IsNullOrWhiteSpace(
@@ -241,23 +422,12 @@ public sealed class HelpdeskOutboundEmailWorker
                     destination))
             {
                 _logger.LogWarning(
-                    "Ticket {TicketId} no tiene correo de solicitante. " +
-                    "El comentario {CommentId} no puede enviarse.",
+                    "Ticket {TicketId} no tiene correo de solicitante; comentario {CommentId} no puede enviarse.",
                     candidate.TicketId,
                     candidate.Id);
 
                 continue;
             }
-
-            var subject =
-                BuildSubject(
-                    candidate.TicketNumber,
-                    candidate.TicketSubject);
-
-            var body =
-                BuildBody(
-                    candidate.TicketNumber,
-                    candidate.Body);
 
             outbox.Add(
                 new HelpdeskOutboundEmail(
@@ -265,8 +435,12 @@ public sealed class HelpdeskOutboundEmailWorker
                     candidate.TicketId,
                     candidate.Id,
                     destination,
-                    subject,
-                    body));
+                    BuildSubject(
+                        candidate.TicketNumber,
+                        candidate.TicketSubject),
+                    BuildBody(
+                        candidate.TicketNumber,
+                        candidate.Body)));
         }
 
         try
@@ -277,63 +451,78 @@ public sealed class HelpdeskOutboundEmailWorker
         catch (DbUpdateException exception)
         {
             /*
-             * Otro nodo puede haber descubierto exactamente
-             * los mismos comentarios.
-             *
-             * El índice único OrganizationId + CommentId
-             * protege contra duplicados.
+             * Another application node may have discovered the same
+             * comments. OrganizationId + CommentId is unique.
              */
+            foreach (
+                var entry
+                in db.ChangeTracker
+                    .Entries<
+                        HelpdeskOutboundEmail>()
+                    .Where(
+                        x =>
+                            x.State ==
+                                EntityState.Added))
+            {
+                entry.State =
+                    EntityState.Detached;
+            }
+
             _logger.LogInformation(
                 exception,
-                "Una o más respuestas Helpdesk ya estaban registradas en Outbox.");
+                "Uno o más correos salientes ya estaban registrados en Outbox.");
         }
     }
 
-    /*
-     * ============================================================
-     * CRASH RECOVERY
-     * ============================================================
-     */
-    private async Task RecoverAbandonedMessagesAsync(
-        CancellationToken cancellationToken)
+    // ============================================================
+    // CRASH RECOVERY
+    // ============================================================
+
+    private static async Task
+        RecoverAbandonedMessagesAsync(
+            TitanMdmDbContext db,
+            Guid organizationId,
+            int batchSize,
+            CancellationToken cancellationToken)
     {
-        using var scope =
-            _scopeFactory.CreateScope();
-
-        var db =
-            scope.ServiceProvider
-                .GetRequiredService<
-                    TitanMdmDbContext>();
-
         var staleBefore =
-            DateTime.UtcNow.AddMinutes(
-                -10);
+            DateTime.UtcNow
+                .AddMinutes(
+                    -10);
 
         var abandoned =
-            await db.Set<
-                    HelpdeskOutboundEmail>()
+            await db.HelpdeskOutboundEmails
                 .Where(
                     x =>
+                        x.OrganizationId ==
+                            organizationId
+
+                        &&
                         x.Status ==
                             HelpdeskOutboundEmail
                                 .SendingStatus
+
                         &&
                         x.LastAttemptAtUtc
                             .HasValue
+
                         &&
                         x.LastAttemptAtUtc <
                             staleBefore)
                 .Take(
-                    BatchSize())
+                    batchSize)
                 .ToListAsync(
                     cancellationToken);
 
-        if (abandoned.Count == 0)
+        if (abandoned.Count ==
+            0)
         {
             return;
         }
 
-        foreach (var message in abandoned)
+        foreach (
+            var message
+            in abandoned)
         {
             message
                 .RecoverAbandonedSend();
@@ -343,30 +532,30 @@ public sealed class HelpdeskOutboundEmailWorker
             cancellationToken);
     }
 
-    /*
-     * ============================================================
-     * DELIVERY
-     * ============================================================
-     */
-    private async Task SendPendingMessagesAsync(
-        CancellationToken cancellationToken)
+    // ============================================================
+    // DELIVERY
+    // ============================================================
+
+    private async Task<int>
+        SendPendingMessagesAsync(
+            TitanMdmDbContext db,
+            Guid organizationId,
+            string mailbox,
+            int batchSize,
+            int maxAttempts,
+            CancellationToken cancellationToken)
     {
-        using var scope =
-            _scopeFactory.CreateScope();
-
-        var db =
-            scope.ServiceProvider
-                .GetRequiredService<
-                    TitanMdmDbContext>();
-
         var now =
             DateTime.UtcNow;
 
         var messages =
-            await db.Set<
-                    HelpdeskOutboundEmail>()
+            await db.HelpdeskOutboundEmails
                 .Where(
                     x =>
+                        x.OrganizationId ==
+                            organizationId
+
+                        &&
                         (
                             x.Status ==
                                 HelpdeskOutboundEmail
@@ -376,6 +565,7 @@ public sealed class HelpdeskOutboundEmailWorker
                                 HelpdeskOutboundEmail
                                     .RetryStatus
                         )
+
                         &&
                         (
                             !x.NextAttemptAtUtc
@@ -388,89 +578,73 @@ public sealed class HelpdeskOutboundEmailWorker
                     x =>
                         x.CreatedAtUtc)
                 .Take(
-                    BatchSize())
+                    batchSize)
                 .ToListAsync(
                     cancellationToken);
 
-        if (messages.Count == 0)
+        if (messages.Count ==
+            0)
         {
-            return;
+            return 0;
         }
 
-        var mailbox =
-            _configuration[
-                "HelpdeskMail:Mailbox"]?
-                .Trim()
-                .ToLowerInvariant();
+        var entra =
+            await db.EntraIdSettings
+                .AsNoTracking()
+                .FirstOrDefaultAsync(
+                    x =>
+                        x.OrganizationId ==
+                            organizationId,
+                    cancellationToken);
 
-        if (string.IsNullOrWhiteSpace(
-                mailbox))
+        if (entra is null ||
+            !entra.IsEnabled ||
+            string.IsNullOrWhiteSpace(
+                entra.TenantId) ||
+            string.IsNullOrWhiteSpace(
+                entra.ClientId) ||
+            string.IsNullOrWhiteSpace(
+                entra.ClientSecretProtected))
         {
-            _logger.LogWarning(
-                "HelpdeskOutbound está habilitado pero HelpdeskMail:Mailbox no está configurado.");
-
-            return;
+            throw new InvalidOperationException(
+                "Entra ID no está configurado para el envío de correo Helpdesk.");
         }
 
-        foreach (var message in messages)
+        var client =
+            _httpClientFactory
+                .CreateClient(
+                    "entra-id");
+
+        var secret =
+            _protector.Unprotect(
+                entra
+                    .ClientSecretProtected);
+
+        var accessToken =
+            await GetAccessTokenAsync(
+                client,
+                entra.TenantId,
+                entra.ClientId,
+                secret,
+                cancellationToken);
+
+        var failures =
+            0;
+
+        foreach (
+            var message
+            in messages)
         {
-            if (cancellationToken
-                .IsCancellationRequested)
-            {
-                break;
-            }
+            cancellationToken
+                .ThrowIfCancellationRequested();
 
             try
             {
-                message.MarkSending();
+                message
+                    .MarkSending();
 
                 await db.SaveChangesAsync(
                     cancellationToken);
-
-                var settings =
-                    await db.EntraIdSettings
-                        .AsNoTracking()
-                        .FirstOrDefaultAsync(
-                            x =>
-                                x.OrganizationId ==
-                                    message.OrganizationId,
-                            cancellationToken);
-
-                if (
-                    settings is null
-                    ||
-                    !settings.IsEnabled
-                    ||
-                    string.IsNullOrWhiteSpace(
-                        settings.TenantId)
-                    ||
-                    string.IsNullOrWhiteSpace(
-                        settings.ClientId)
-                    ||
-                    string.IsNullOrWhiteSpace(
-                        settings.ClientSecretProtected))
-                {
-                    throw new InvalidOperationException(
-                        "Entra ID no está configurado para el envío de correo Helpdesk.");
-                }
-
-                var client =
-                    _httpClientFactory
-                        .CreateClient(
-                            "entra-id");
-
-                var secret =
-                    _protector.Unprotect(
-                        settings
-                            .ClientSecretProtected);
-
-                var accessToken =
-                    await GetAccessTokenAsync(
-                        client,
-                        settings.TenantId,
-                        settings.ClientId,
-                        secret,
-                        cancellationToken);
 
                 await SendMailAsync(
                     client,
@@ -479,35 +653,40 @@ public sealed class HelpdeskOutboundEmailWorker
                     message,
                     cancellationToken);
 
-                message.MarkSent();
+                message
+                    .MarkSent();
 
-                db.HelpdeskTicketEvents.Add(
-                    new HelpdeskTicketEvent(
-                        message.OrganizationId,
-                        message.TicketId,
-                        null,
-                        "email_sent",
-                        $"Respuesta enviada por correo a {message.ToEmail}."));
+                db.HelpdeskTicketEvents
+                    .Add(
+                        new HelpdeskTicketEvent(
+                            message.OrganizationId,
+                            message.TicketId,
+                            null,
+                            "email_sent",
+                            $"Respuesta enviada por correo a {message.ToEmail}."));
 
                 await db.SaveChangesAsync(
                     cancellationToken);
 
                 _logger.LogInformation(
-                    "Respuesta Helpdesk {OutboundEmailId} enviada para ticket {TicketId}.",
+                    "Correo Helpdesk {OutboundEmailId} enviado para ticket {TicketId}.",
                     message.Id,
                     message.TicketId);
             }
             catch (OperationCanceledException)
-                when (cancellationToken
-                    .IsCancellationRequested)
+                when (
+                    cancellationToken
+                        .IsCancellationRequested)
             {
                 throw;
             }
             catch (Exception exception)
             {
+                failures++;
+
                 message.MarkFailure(
                     exception.Message,
-                    MaxAttempts());
+                    maxAttempts);
 
                 await db.SaveChangesAsync(
                     CancellationToken.None);
@@ -519,7 +698,13 @@ public sealed class HelpdeskOutboundEmailWorker
                     message.AttemptCount);
             }
         }
+
+        return failures;
     }
+
+    // ============================================================
+    // GRAPH AUTH
+    // ============================================================
 
     private static async Task<string>
         GetAccessTokenAsync(
@@ -570,30 +755,30 @@ public sealed class HelpdeskOutboundEmailWorker
             .IsSuccessStatusCode)
         {
             throw new InvalidOperationException(
-                $"Microsoft Entra rechazó la autenticación para correo saliente. " +
-                $"HTTP {(int)response.StatusCode}.");
+                $"Microsoft Entra rechazó autenticación de correo saliente. HTTP {(int)response.StatusCode}.");
         }
 
         using var json =
             JsonDocument.Parse(
                 content);
 
-        if (
-            !json.RootElement
+        if (!json.RootElement
                 .TryGetProperty(
                     "access_token",
-                    out var tokenElement)
-            ||
+                    out var token) ||
             string.IsNullOrWhiteSpace(
-                tokenElement.GetString()))
+                token.GetString()))
         {
             throw new InvalidOperationException(
                 "Microsoft Entra no devolvió access_token.");
         }
 
-        return tokenElement
-            .GetString()!;
+        return token.GetString()!;
     }
+
+    // ============================================================
+    // GRAPH SEND
+    // ============================================================
 
     private static async Task SendMailAsync(
         HttpClient client,
@@ -666,7 +851,8 @@ public sealed class HelpdeskOutboundEmailWorker
                 request,
                 cancellationToken);
 
-        if (!response.IsSuccessStatusCode)
+        if (!response
+            .IsSuccessStatusCode)
         {
             var responseBody =
                 await response.Content
@@ -681,10 +867,13 @@ public sealed class HelpdeskOutboundEmailWorker
 
             throw new InvalidOperationException(
                 $"Microsoft Graph rechazó sendMail. " +
-                $"HTTP {(int)response.StatusCode}. " +
-                safeBody);
+                $"HTTP {(int)response.StatusCode}. {safeBody}");
         }
     }
+
+    // ============================================================
+    // CONTENT
+    // ============================================================
 
     private static string BuildSubject(
         string ticketNumber,
@@ -723,43 +912,47 @@ public sealed class HelpdeskOutboundEmailWorker
                 10000)];
     }
 
-    private bool IsEnabled()
+    // ============================================================
+    // SETTINGS STATUS
+    // ============================================================
+
+    private static async Task
+        ReloadMailSettingsAsync(
+            TitanMdmDbContext db,
+            HelpdeskMailSettings settings,
+            CancellationToken cancellationToken)
     {
-        return _configuration
-            .GetValue<bool>(
-                "HelpdeskOutbound:Enabled");
+        try
+        {
+            await db.Entry(
+                    settings)
+                .ReloadAsync(
+                    cancellationToken);
+        }
+        catch
+        {
+            /*
+             * Diagnostic state must never hide the original failure.
+             */
+        }
     }
 
-    private int PollSeconds()
+    private static async Task
+        TrySaveRuntimeStatusAsync(
+            TitanMdmDbContext db,
+            CancellationToken cancellationToken)
     {
-        return Math.Clamp(
-            _configuration
-                .GetValue(
-                    "HelpdeskOutbound:PollSeconds",
-                    20),
-            10,
-            3600);
-    }
-
-    private int BatchSize()
-    {
-        return Math.Clamp(
-            _configuration
-                .GetValue(
-                    "HelpdeskOutbound:BatchSize",
-                    25),
-            1,
-            100);
-    }
-
-    private int MaxAttempts()
-    {
-        return Math.Clamp(
-            _configuration
-                .GetValue(
-                    "HelpdeskOutbound:MaxAttempts",
-                    8),
-            1,
-            20);
+        try
+        {
+            await db.SaveChangesAsync(
+                cancellationToken);
+        }
+        catch (DbUpdateConcurrencyException)
+        {
+            /*
+             * Configuration changes made by an administrator win
+             * over background diagnostic updates.
+             */
+        }
     }
 }

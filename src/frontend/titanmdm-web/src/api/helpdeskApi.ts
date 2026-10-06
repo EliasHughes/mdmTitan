@@ -1,4 +1,3 @@
-
 import apiClient from './apiClient'
 
 export interface HelpdeskTicketListItem {
@@ -40,11 +39,16 @@ export interface HelpdeskEvent {
   createdAtUtc: string
 }
 
-export interface HelpdeskTicketDetails extends HelpdeskTicketListItem {
+export interface HelpdeskTicketDetails
+  extends HelpdeskTicketListItem {
   description: string
+
   remoteSessionId?: string | null
+
   entraUserPrincipalName?: string | null
+
   comments: HelpdeskComment[]
+
   timeline: HelpdeskEvent[]
 }
 
@@ -79,103 +83,173 @@ export interface EntraDirectoryUser {
 }
 
 export const helpdeskApi = {
-  async getTickets(params: {
-    search?: string
-    status?: string
-    priority?: string
-    deviceId?: string
-    page?: number
-    pageSize?: number
-  } = {}) {
-    const response = await apiClient.get<HelpdeskTicketListResult>(
-      '/helpdesk/tickets',
-      { params },
-    )
+  async getTickets(
+    params: {
+      search?: string
+      status?: string
+      priority?: string
+      deviceId?: string
+      page?: number
+      pageSize?: number
+    } = {},
+  ) {
+    const response =
+      await apiClient.get<HelpdeskTicketListResult>(
+        '/helpdesk/tickets',
+        {
+          params,
+        },
+      )
+
     return response.data
   },
 
-  async getTicket(id: string) {
-    const response = await apiClient.get<HelpdeskTicketDetails>(
-      `/helpdesk/tickets/${id}`,
-    )
+  async getTicket(
+    id: string,
+  ) {
+    const response =
+      await apiClient.get<HelpdeskTicketDetails>(
+        `/helpdesk/tickets/${id}`,
+      )
+
     return response.data
   },
 
-  async createTicket(payload: {
-    subject: string
-    description: string
-    type?: string
-    priority?: string
-    category?: string
-    source?: string
-    deviceId?: string
-    entraObjectId?: string
-  }) {
-    const response = await apiClient.post<HelpdeskTicketDetails>(
-      '/helpdesk/tickets',
-      payload,
-    )
+  async createTicket(
+    payload: {
+      subject: string
+      description: string
+      type?: string
+      priority?: string
+      category?: string
+      source?: string
+      deviceId?: string
+      entraObjectId?: string
+    },
+  ) {
+    const response =
+      await apiClient.post<HelpdeskTicketDetails>(
+        '/helpdesk/tickets',
+        payload,
+      )
+
     return response.data
   },
 
-  async addComment(id: string, body: string, isInternal: boolean) {
-    const response = await apiClient.post<HelpdeskTicketDetails>(
-      `/helpdesk/tickets/${id}/comments`,
-      { body, isInternal },
-    )
+  async addComment(
+    id: string,
+    body: string,
+    isInternal: boolean,
+  ) {
+    const response =
+      await apiClient.post<HelpdeskTicketDetails>(
+        `/helpdesk/tickets/${id}/comments`,
+        {
+          body,
+          isInternal,
+        },
+      )
+
     return response.data
   },
 
-  async assign(id: string, assigneeUserId: string) {
-    const response = await apiClient.post<HelpdeskTicketDetails>(
-      `/helpdesk/tickets/${id}/assign`,
-      { assigneeUserId },
-    )
+  async assign(
+    id: string,
+    assigneeUserId: string,
+  ) {
+    const response =
+      await apiClient.post<HelpdeskTicketDetails>(
+        `/helpdesk/tickets/${id}/assign`,
+        {
+          assigneeUserId,
+        },
+      )
+
     return response.data
   },
 
-  async transition(id: string, status: string) {
-    const response = await apiClient.post<HelpdeskTicketDetails>(
-      `/helpdesk/tickets/${id}/transition`,
-      { status },
-    )
+  async transition(
+    id: string,
+    status: string,
+  ) {
+    const response =
+      await apiClient.post<HelpdeskTicketDetails>(
+        `/helpdesk/tickets/${id}/transition`,
+        {
+          status,
+        },
+      )
+
+    return response.data
+  },
+
+  async reopen(
+    id: string,
+    reason: string,
+  ) {
+    const response =
+      await apiClient.post<HelpdeskTicketDetails>(
+        `/helpdesk/tickets/${id}/reopen`,
+        {
+          reason,
+        },
+      )
+
     return response.data
   },
 
   async getEntraSettings() {
-    const response = await apiClient.get<EntraIdSettings>(
-      '/helpdesk/entra/settings',
-    )
+    const response =
+      await apiClient.get<EntraIdSettings>(
+        '/helpdesk/entra/settings',
+      )
+
     return response.data
   },
 
-  async saveEntraSettings(payload: {
-    isEnabled: boolean
-    tenantId: string
-    clientId: string
-    clientSecret?: string
-    allowedGroupIds?: string
-    syncRequestersOnly: boolean
-  }) {
-    const response = await apiClient.put<EntraIdSettings>(
-      '/helpdesk/entra/settings',
-      payload,
-    )
+  async saveEntraSettings(
+    payload: {
+      isEnabled: boolean
+      tenantId: string
+      clientId: string
+      clientSecret?: string
+      allowedGroupIds?: string
+      syncRequestersOnly: boolean
+    },
+  ) {
+    const response =
+      await apiClient.put<EntraIdSettings>(
+        '/helpdesk/entra/settings',
+        payload,
+      )
+
     return response.data
   },
 
   async syncEntra() {
-    const response = await apiClient.post(
-      '/helpdesk/entra/sync',
-    )
+    const response =
+      await apiClient.post(
+        '/helpdesk/entra/sync',
+      )
+
     return response.data
   },
 
-  async searchEntraUsers(search?: string) {
-    const response = await apiClient.get<EntraDirectoryUser[]>(
-      '/helpdesk/entra/users',
-      { params: { search } },
-    )
+  async searchEntraUsers(
+    search?: string,
+  ) {
+    const response =
+      await apiClient.get<
+        EntraDirectoryUser[]
+      >(
+        '/helpdesk/entra/users',
+        {
+          params: {
+            search,
+          },
+        },
+      )
+
     return response.data
   },
 }

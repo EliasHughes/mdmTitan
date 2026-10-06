@@ -5,6 +5,7 @@ using Microsoft.AspNetCore.Mvc;
 
 using TitanMDM.Application.Helpdesk;
 using TitanMDM.Application.Security;
+using TitanMDM.Domain.Helpdesk;
 
 namespace TitanMDM.Api.Controllers;
 
@@ -72,8 +73,7 @@ public sealed class HelpdeskTicketsController
             int pageSize = 25,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasAnyPermission(
+        if (!HasAnyPermission(
                 HelpdeskView,
                 TicketsView))
         {
@@ -86,9 +86,7 @@ public sealed class HelpdeskTicketsController
         var actorUserId =
             GetUserId();
 
-        if (
-            organizationId is null
-            ||
+        if (organizationId is null ||
             actorUserId is null)
         {
             return Unauthorized(
@@ -99,12 +97,6 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        /*
-         * El inbox global de Helpdesk representa toda la organización.
-         *
-         * Un operador limitado a Site no debe poder utilizar
-         * este endpoint para saltarse la segregación.
-         */
         var organizationWide =
             await _scopeAccessService
                 .HasOrganizationScopeAsync(
@@ -145,24 +137,17 @@ public sealed class HelpdeskTicketsController
             Guid ticketId,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasAnyPermission(
+        if (!HasAnyPermission(
                 HelpdeskView,
                 TicketsView))
         {
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var identity =
+            GetIdentity();
 
-        var actorUserId =
-            GetUserId();
-
-        if (
-            organizationId is null
-            ||
-            actorUserId is null)
+        if (identity is null)
         {
             return Unauthorized(
                 new
@@ -172,11 +157,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (
-            !await _scopeAccessService
+        if (!await _scopeAccessService
                 .CanAccessTicketAsync(
-                    organizationId.Value,
-                    actorUserId.Value,
+                    identity.Value.OrganizationId,
+                    identity.Value.UserId,
                     ticketId,
                     cancellationToken))
         {
@@ -186,7 +170,7 @@ public sealed class HelpdeskTicketsController
         var ticket =
             await _helpdeskService
                 .GetTicketAsync(
-                    organizationId.Value,
+                    identity.Value.OrganizationId,
                     ticketId,
                     cancellationToken);
 
@@ -211,23 +195,16 @@ public sealed class HelpdeskTicketsController
             CreateHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasPermission(
+        if (!HasPermission(
                 TicketsCreate))
         {
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var identity =
+            GetIdentity();
 
-        var actorUserId =
-            GetUserId();
-
-        if (
-            organizationId is null
-            ||
-            actorUserId is null)
+        if (identity is null)
         {
             return Unauthorized(
                 new
@@ -242,8 +219,8 @@ public sealed class HelpdeskTicketsController
             var created =
                 await _helpdeskService
                     .CreateTicketAsync(
-                        organizationId.Value,
-                        actorUserId.Value,
+                        identity.Value.OrganizationId,
+                        identity.Value.UserId,
                         request,
                         cancellationToken);
 
@@ -253,6 +230,15 @@ public sealed class HelpdeskTicketsController
         catch (ArgumentException ex)
         {
             return BadRequest(
+                new
+                {
+                    message =
+                        ex.Message
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(
                 new
                 {
                     message =
@@ -273,8 +259,7 @@ public sealed class HelpdeskTicketsController
             AddHelpdeskCommentRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasPermission(
+        if (!HasPermission(
                 TicketsComment)
             ||
             !HasAnyPermission(
@@ -284,16 +269,10 @@ public sealed class HelpdeskTicketsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var identity =
+            GetIdentity();
 
-        var actorUserId =
-            GetUserId();
-
-        if (
-            organizationId is null
-            ||
-            actorUserId is null)
+        if (identity is null)
         {
             return Unauthorized(
                 new
@@ -303,11 +282,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (
-            !await _scopeAccessService
+        if (!await _scopeAccessService
                 .CanAccessTicketAsync(
-                    organizationId.Value,
-                    actorUserId.Value,
+                    identity.Value.OrganizationId,
+                    identity.Value.UserId,
                     ticketId,
                     cancellationToken))
         {
@@ -319,9 +297,9 @@ public sealed class HelpdeskTicketsController
             var ticket =
                 await _helpdeskService
                     .AddCommentAsync(
-                        organizationId.Value,
+                        identity.Value.OrganizationId,
                         ticketId,
-                        actorUserId.Value,
+                        identity.Value.UserId,
                         request,
                         cancellationToken);
 
@@ -337,6 +315,15 @@ public sealed class HelpdeskTicketsController
         catch (ArgumentException ex)
         {
             return BadRequest(
+                new
+                {
+                    message =
+                        ex.Message
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(
                 new
                 {
                     message =
@@ -357,8 +344,7 @@ public sealed class HelpdeskTicketsController
             AssignHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasPermission(
+        if (!HasPermission(
                 TicketsAssign)
             ||
             !HasAnyPermission(
@@ -368,16 +354,10 @@ public sealed class HelpdeskTicketsController
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var identity =
+            GetIdentity();
 
-        var actorUserId =
-            GetUserId();
-
-        if (
-            organizationId is null
-            ||
-            actorUserId is null)
+        if (identity is null)
         {
             return Unauthorized(
                 new
@@ -387,11 +367,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (
-            !await _scopeAccessService
+        if (!await _scopeAccessService
                 .CanAccessTicketAsync(
-                    organizationId.Value,
-                    actorUserId.Value,
+                    identity.Value.OrganizationId,
+                    identity.Value.UserId,
                     ticketId,
                     cancellationToken))
         {
@@ -403,9 +382,9 @@ public sealed class HelpdeskTicketsController
             var ticket =
                 await _helpdeskService
                     .AssignAsync(
-                        organizationId.Value,
+                        identity.Value.OrganizationId,
                         ticketId,
-                        actorUserId.Value,
+                        identity.Value.UserId,
                         request,
                         cancellationToken);
 
@@ -429,7 +408,7 @@ public sealed class HelpdeskTicketsController
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(
+            return Conflict(
                 new
                 {
                     message =
@@ -439,7 +418,7 @@ public sealed class HelpdeskTicketsController
     }
 
     // ============================================================
-    // TRANSITION
+    // STATUS TRANSITION
     // ============================================================
 
     [HttpPost("{ticketId:guid}/transition")]
@@ -450,27 +429,17 @@ public sealed class HelpdeskTicketsController
             TransitionHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (
-            !HasPermission(
-                TicketsClose)
-            ||
-            !HasAnyPermission(
+        if (!HasAnyPermission(
                 HelpdeskView,
                 TicketsView))
         {
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var identity =
+            GetIdentity();
 
-        var actorUserId =
-            GetUserId();
-
-        if (
-            organizationId is null
-            ||
-            actorUserId is null)
+        if (identity is null)
         {
             return Unauthorized(
                 new
@@ -480,11 +449,196 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (
-            !await _scopeAccessService
+        string targetStatus;
+
+        try
+        {
+            targetStatus =
+                HelpdeskTicketStatus.Normalize(
+                    request.Status);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        ex.Message
+                });
+        }
+
+        /*
+         * Estados operativos:
+         * un técnico que puede trabajar/comentar tickets
+         * también puede mover el ticket durante su ciclo
+         * normal.
+         */
+        var operationalTransition =
+            targetStatus is
+                HelpdeskTicketStatus.Open
+                or HelpdeskTicketStatus.InProgress
+                or HelpdeskTicketStatus.PendingUser;
+
+        /*
+         * Estados terminales requieren permiso específico.
+         */
+        var terminalTransition =
+            targetStatus is
+                HelpdeskTicketStatus.Resolved
+                or HelpdeskTicketStatus.Closed;
+
+        if (operationalTransition)
+        {
+            if (!HasPermission(
+                    TicketsComment))
+            {
+                return Forbid();
+            }
+        }
+        else if (terminalTransition)
+        {
+            if (!HasPermission(
+                    TicketsClose))
+            {
+                return Forbid();
+            }
+        }
+        else
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        "El estado solicitado no está permitido."
+                });
+        }
+
+        if (!await _scopeAccessService
                 .CanAccessTicketAsync(
-                    organizationId.Value,
-                    actorUserId.Value,
+                    identity.Value.OrganizationId,
+                    identity.Value.UserId,
+                    ticketId,
+                    cancellationToken))
+        {
+            return Forbid();
+        }
+
+        /*
+         * La reapertura NO puede realizarse mediante
+         * /transition porque debe obligatoriamente registrar
+         * un motivo y un evento auditado.
+         */
+        var current =
+            await _helpdeskService
+                .GetTicketAsync(
+                    identity.Value.OrganizationId,
+                    ticketId,
+                    cancellationToken);
+
+        if (current is null)
+        {
+            return NotFound(
+                new
+                {
+                    message =
+                        "El ticket no existe."
+                });
+        }
+
+        if (HelpdeskTicketStatus.IsTerminal(
+                current.Status)
+            &&
+            targetStatus ==
+                HelpdeskTicketStatus.Open)
+        {
+            return Conflict(
+                new
+                {
+                    message =
+                        "Los tickets finalizados deben reabrirse mediante la acción de reapertura indicando un motivo."
+                });
+        }
+
+        try
+        {
+            var ticket =
+                await _helpdeskService
+                    .TransitionAsync(
+                        identity.Value.OrganizationId,
+                        ticketId,
+                        identity.Value.UserId,
+                        new TransitionHelpdeskTicketRequest(
+                            targetStatus),
+                        cancellationToken);
+
+            return ticket is null
+                ? NotFound(
+                    new
+                    {
+                        message =
+                            "El ticket no existe."
+                    })
+                : Ok(ticket);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(
+                new
+                {
+                    message =
+                        ex.Message
+                });
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(
+                new
+                {
+                    message =
+                        ex.Message
+                });
+        }
+    }
+
+    // ============================================================
+    // REOPEN
+    // ============================================================
+
+    [HttpPost("{ticketId:guid}/reopen")]
+    public async Task<IActionResult>
+        Reopen(
+            Guid ticketId,
+            [FromBody]
+            ReopenHelpdeskTicketRequest request,
+            CancellationToken cancellationToken = default)
+    {
+        if (!HasPermission(
+                TicketsClose)
+            ||
+            !HasAnyPermission(
+                HelpdeskView,
+                TicketsView))
+        {
+            return Forbid();
+        }
+
+        var identity =
+            GetIdentity();
+
+        if (identity is null)
+        {
+            return Unauthorized(
+                new
+                {
+                    message =
+                        "El token no contiene una organización o usuario válido."
+                });
+        }
+
+        if (!await _scopeAccessService
+                .CanAccessTicketAsync(
+                    identity.Value.OrganizationId,
+                    identity.Value.UserId,
                     ticketId,
                     cancellationToken))
         {
@@ -495,10 +649,10 @@ public sealed class HelpdeskTicketsController
         {
             var ticket =
                 await _helpdeskService
-                    .TransitionAsync(
-                        organizationId.Value,
+                    .ReopenAsync(
+                        identity.Value.OrganizationId,
                         ticketId,
-                        actorUserId.Value,
+                        identity.Value.UserId,
                         request,
                         cancellationToken);
 
@@ -522,7 +676,7 @@ public sealed class HelpdeskTicketsController
         }
         catch (InvalidOperationException ex)
         {
-            return BadRequest(
+            return Conflict(
                 new
                 {
                     message =
@@ -532,8 +686,30 @@ public sealed class HelpdeskTicketsController
     }
 
     // ============================================================
-    // CLAIMS
+    // IDENTITY
     // ============================================================
+
+    private (
+        Guid OrganizationId,
+        Guid UserId)?
+        GetIdentity()
+    {
+        var organizationId =
+            GetOrganizationId();
+
+        var userId =
+            GetUserId();
+
+        if (organizationId is null ||
+            userId is null)
+        {
+            return null;
+        }
+
+        return (
+            organizationId.Value,
+            userId.Value);
+    }
 
     private Guid? GetOrganizationId()
     {

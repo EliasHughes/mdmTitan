@@ -187,6 +187,10 @@ import {
   HelpdeskAdminHome,
 } from './pages/helpdesk/HelpdeskAdminHome'
 
+import {
+  HelpdeskMailSettingsPage,
+} from './pages/helpdesk/HelpdeskMailSettingsPage'
+
 interface ApplicationRoute {
   path: string
   page: ReactNode
@@ -478,6 +482,31 @@ const applicationRoutes:
 
   permissions: [
     helpdeskPermissions.adminAccess,
+  ],
+
+  helpdeskConsole:
+    true,
+},
+{
+  path:
+    'helpdesk/mail',
+
+  page:
+    <HelpdeskMailSettingsPage />,
+
+  permissions: [
+    helpdeskPermissions
+      .mailView,
+
+    helpdeskPermissions
+      .mailManage,
+
+    helpdeskPermissions
+      .adminAccess,
+
+    'helpdesk.manage',
+
+    'settings.manage',
   ],
 
   helpdeskConsole:

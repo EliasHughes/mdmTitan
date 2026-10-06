@@ -5,14 +5,14 @@ using TitanMDM.Domain.Entities;
 
 namespace TitanMDM.Infrastructure.Persistence.Configurations;
 
-public sealed class HelpdeskAutomationSettingsConfiguration
-    : IEntityTypeConfiguration<HelpdeskAutomationSettings>
+public sealed class HelpdeskMailSettingsConfiguration
+    : IEntityTypeConfiguration<HelpdeskMailSettings>
 {
     public void Configure(
-        EntityTypeBuilder<HelpdeskAutomationSettings> builder)
+        EntityTypeBuilder<HelpdeskMailSettings> builder)
     {
         builder.ToTable(
-            "HelpdeskAutomationSettings");
+            "HelpdeskMailSettings");
 
         builder.HasKey(
             x =>
@@ -20,63 +20,51 @@ public sealed class HelpdeskAutomationSettingsConfiguration
 
         builder.Property(
                 x =>
-                    x.ClassificationEnabled)
+                    x.Mailbox)
+            .HasMaxLength(
+                320);
+
+        builder.Property(
+                x =>
+                    x.InboundEnabled)
             .IsRequired();
 
         builder.Property(
                 x =>
-                    x.EscalationDelayMinutes)
+                    x.OutboundEnabled)
             .IsRequired();
 
         builder.Property(
                 x =>
-                    x.ReopenDays)
+                    x.InboundPollSeconds)
             .IsRequired();
 
         builder.Property(
                 x =>
-                    x.LowFirstResponseMinutes)
+                    x.OutboundPollSeconds)
             .IsRequired();
 
         builder.Property(
                 x =>
-                    x.LowResolutionMinutes)
+                    x.BatchSize)
             .IsRequired();
 
         builder.Property(
                 x =>
-                    x.MediumFirstResponseMinutes)
+                    x.MaxAttempts)
             .IsRequired();
 
         builder.Property(
                 x =>
-                    x.MediumResolutionMinutes)
-            .IsRequired();
+                    x.LastInboundError)
+            .HasMaxLength(
+                2000);
 
         builder.Property(
                 x =>
-                    x.HighFirstResponseMinutes)
-            .IsRequired();
-
-        builder.Property(
-                x =>
-                    x.HighResolutionMinutes)
-            .IsRequired();
-
-        builder.Property(
-                x =>
-                    x.CriticalFirstResponseMinutes)
-            .IsRequired();
-
-        builder.Property(
-                x =>
-                    x.CriticalResolutionMinutes)
-            .IsRequired();
-
-        builder.Property(
-                x =>
-                    x.PauseSlaWhenWaitingUser)
-            .IsRequired();
+                    x.LastOutboundError)
+            .HasMaxLength(
+                2000);
 
         builder.Property(
                 x =>
@@ -95,5 +83,18 @@ public sealed class HelpdeskAutomationSettingsConfiguration
                     x.OrganizationId)
             .OnDelete(
                 DeleteBehavior.Restrict);
+
+        /*
+         * No FK deliberadamente para ActorUserId.
+         *
+         * El actor puede cambiar/desactivarse y no queremos
+         * que eliminar o modificar el usuario destruya
+         * la configuración histórica del buzón.
+         *
+         * La API valida que el usuario sea válido y activo.
+         */
+        builder.HasIndex(
+            x =>
+                x.ActorUserId);
     }
 }

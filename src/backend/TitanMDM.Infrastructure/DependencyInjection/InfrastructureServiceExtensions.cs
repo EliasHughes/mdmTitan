@@ -480,6 +480,9 @@ public static class InfrastructureServiceExtensions
 
         services.AddScoped<
             HelpdeskEmailImportService>();
+        
+        services.AddScoped<
+            HelpdeskEmailImportService>();
 
         // ============================================================
         // AUTHORIZATION / SCOPES

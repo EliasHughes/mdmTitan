@@ -1,4 +1,3 @@
-
 namespace TitanMDM.Application.Helpdesk;
 
 public interface IHelpdeskService
@@ -38,5 +37,12 @@ public interface IHelpdeskService
         Guid ticketId,
         Guid actorUserId,
         TransitionHelpdeskTicketRequest request,
+        CancellationToken cancellationToken = default);
+
+    Task<HelpdeskTicketDetailsDto?> ReopenAsync(
+        Guid organizationId,
+        Guid ticketId,
+        Guid actorUserId,
+        ReopenHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default);
 }

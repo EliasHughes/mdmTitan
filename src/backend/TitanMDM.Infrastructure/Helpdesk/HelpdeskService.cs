@@ -622,34 +622,31 @@ public sealed partial class HelpdeskService
         // SLA
         // ========================================================
 
-        var now =
-            DateTime.UtcNow;
+      var slaSettings =
+    await _db
+        .Set<HelpdeskAutomationSettings>()
+        .AsNoTracking()
+        .FirstOrDefaultAsync(
+            x =>
+                x.OrganizationId ==
+                    organizationId,
+            cancellationToken)
+    ??
+    new HelpdeskAutomationSettings(
+        organizationId);
 
-        var resolutionHours =
-            ticket.Priority
-                switch
-                {
-                    "urgent" =>
-                        4,
+var sla =
+    slaSettings.GetSla(
+        ticket.Priority);
 
-                    "high" =>
-                        8,
+var now =
+    DateTime.UtcNow;
 
-                    "low" =>
-                        72,
-
-                    _ =>
-                        24
-                };
-
-        ticket.ApplySla(
-            now.AddHours(
-                Math.Max(
-                    1,
-                    resolutionHours /
-                    4)),
-            now.AddHours(
-                resolutionHours));
+ticket.ApplySla(
+    now.AddMinutes(
+        sla.FirstResponseMinutes),
+    now.AddMinutes(
+        sla.ResolutionMinutes));
 
         _db.HelpdeskTickets
             .Add(

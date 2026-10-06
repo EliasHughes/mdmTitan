@@ -643,24 +643,18 @@ public sealed partial class HelpdeskService
                                 member.UserId)
                     .ToList();
 
-            /*
-             * Backward-compatible mode:
-             * technician has not configured shifts yet.
-             */
-            if (technicianSchedules.Count == 0)
-            {
-                availableMembers.Add(
-                    member);
-
-                schedulePriorities[
-                    (
-                        member.TeamId,
-                        member.UserId
-                    )] =
-                    1000;
-
-                continue;
-            }
+           /*
+ * Enterprise mode:
+ *
+ * Un técnico sin horario configurado NO puede
+ * recibir asignaciones automáticas.
+ *
+ * Sigue pudiendo recibir asignaciones manuales.
+ */
+if (technicianSchedules.Count == 0)
+{
+    continue;
+}
 
             var activeSchedule =
                 technicianSchedules
@@ -693,14 +687,14 @@ public sealed partial class HelpdeskService
             availableMembers;
 
         if (members.Count == 0)
-        {
-            return new RoutingEvaluation(
-                null,
-                requesterLocation,
-                site.Id,
-                effectiveLocationId,
-                "Hay técnicos configurados, pero ninguno está actualmente de turno.");
-        }
+{
+    return new RoutingEvaluation(
+        null,
+        requesterLocation,
+        site.Id,
+        effectiveLocationId,
+        "Existe cobertura y técnicos habilitados, pero ninguno posee un turno activo para este momento.");
+}
 
         // ========================================================
         // TECHNICIAN USERS
@@ -886,6 +880,65 @@ public sealed partial class HelpdeskService
                         x =>
                             x.Name,
                         cancellationToken);
+        
+        // ========================================================
+// LAST AUTOMATIC ASSIGNMENT
+//
+// Used as a fairness tie breaker.
+// The technician who has gone the longest without
+// receiving an automatic ticket is preferred.
+// ========================================================
+
+var lastAssignments =
+    await (
+        from ticketEvent
+            in _db.HelpdeskTicketEvents
+                .AsNoTracking()
+
+        join ticket
+            in _db.HelpdeskTickets
+                .AsNoTracking()
+            on ticketEvent.TicketId
+            equals ticket.Id
+
+        where
+            ticketEvent.OrganizationId ==
+                organizationId
+            &&
+            ticket.OrganizationId ==
+                organizationId
+            &&
+            ticketEvent.EventType ==
+                "auto_assigned"
+            &&
+            ticket.AssigneeUserId.HasValue
+            &&
+            technicianIds.Contains(
+                ticket.AssigneeUserId.Value)
+
+        group ticketEvent
+            by ticket.AssigneeUserId!.Value
+            into technicianGroup
+
+        select new
+        {
+            UserId =
+                technicianGroup.Key,
+
+            LastAssignedAtUtc =
+                technicianGroup.Max(
+                    x =>
+                        x.CreatedAtUtc)
+        }
+    )
+    .ToDictionaryAsync(
+        x =>
+            x.UserId,
+
+        x =>
+            x.LastAssignedAtUtc,
+
+        cancellationToken);
 
         // ========================================================
         // CANDIDATE RANKING
@@ -1003,7 +1056,10 @@ public sealed partial class HelpdeskService
                     coverage.Rank,
                     coverage.Coverage.Priority,
                     schedulePriority,
-                    occupancy));
+                    occupancy,
+                    lastAssignments
+                        .GetValueOrDefault(
+                            member.UserId)));
         }
 
         // ========================================================
@@ -1011,26 +1067,51 @@ public sealed partial class HelpdeskService
         // ========================================================
 
         var chosen =
-            candidates
-                .OrderBy(
-                    x =>
-                        x.CoverageRank)
-                .ThenBy(
-                    x =>
-                        x.CoveragePriority)
-                .ThenBy(
-                    x =>
-                        x.SchedulePriority)
-                .ThenBy(
-                    x =>
-                        x.Occupancy)
-                .ThenBy(
-                    x =>
-                        x.Candidate.OpenTickets)
-                .ThenBy(
-                    x =>
-                        x.Candidate.UserId)
-                .FirstOrDefault();
+    candidates
+        .OrderBy(
+            x =>
+                x.CoverageRank)
+
+        .ThenBy(
+            x =>
+                x.CoveragePriority)
+
+        .ThenBy(
+            x =>
+                x.SchedulePriority)
+
+        .ThenBy(
+            x =>
+                x.Occupancy)
+
+        .ThenBy(
+            x =>
+                x.Candidate.OpenTickets)
+
+        /*
+         * Null means the technician has never received
+         * an automatic assignment, so prefer them first.
+         */
+        .ThenBy(
+            x =>
+                x.LastAutomaticAssignmentAtUtc
+                    .HasValue
+                    ? 1
+                    : 0)
+
+        .ThenBy(
+            x =>
+                x.LastAutomaticAssignmentAtUtc)
+
+        /*
+         * Final deterministic fallback only.
+         */
+        .ThenBy(
+            x =>
+                x.Candidate.UserId)
+
+        .FirstOrDefault();
+              
 
         if (chosen is null)
         {
@@ -1163,6 +1244,68 @@ public sealed partial class HelpdeskService
 
                 var now =
                     DateTime.UtcNow;
+
+                var selectedMembership =
+    await _db.HelpdeskTeamMembers
+        .AsNoTracking()
+        .FirstOrDefaultAsync(
+            x =>
+                x.OrganizationId ==
+                    organizationId
+                &&
+                x.TeamId ==
+                    candidate.TeamId
+                &&
+                x.UserId ==
+                    candidate.UserId
+                &&
+                x.IsAvailable
+                &&
+                x.AcceptsAutomaticAssignments
+                &&
+                x.MaxOpenTickets >
+                    0,
+            cancellationToken);
+
+if (selectedMembership is null)
+{
+    await transaction
+        .RollbackAsync(
+            cancellationToken);
+
+    return false;
+}
+
+var currentLoad =
+    await _db.HelpdeskTickets
+        .AsNoTracking()
+        .CountAsync(
+            x =>
+                x.OrganizationId ==
+                    organizationId
+                &&
+                x.AssigneeUserId ==
+                    candidate.UserId
+                &&
+                x.Id !=
+                    ticketId
+                &&
+                x.Status !=
+                    "resolved"
+                &&
+                x.Status !=
+                    "closed",
+            cancellationToken);
+
+if (currentLoad >=
+    selectedMembership.MaxOpenTickets)
+{
+    await transaction
+        .RollbackAsync(
+            cancellationToken);
+
+    return false;
+}
 
                 var changed =
                     await _db.HelpdeskTickets
@@ -1495,11 +1638,12 @@ public sealed partial class HelpdeskService
         int Rank);
 
     private sealed record RankedCandidate(
-        RoutingCandidate Candidate,
-        int CoverageRank,
-        int CoveragePriority,
-        int SchedulePriority,
-        double Occupancy);
+    RoutingCandidate Candidate,
+    int CoverageRank,
+    int CoveragePriority,
+    int SchedulePriority,
+    double Occupancy,
+    DateTime? LastAutomaticAssignmentAtUtc);
 
     public sealed record RoutingPreview(
         bool CanAssign,

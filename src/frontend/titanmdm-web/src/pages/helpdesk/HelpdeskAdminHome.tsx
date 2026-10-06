@@ -239,7 +239,7 @@ export function HelpdeskAdminHome() {
               'Creación de tickets por email y notificaciones salientes.',
 
             path:
-              '/helpdesk/centro/configuracion?tab=mail&workspace=helpdesk',
+              '/helpdesk/mail?workspace=helpdesk',
 
             icon:
               Mail,

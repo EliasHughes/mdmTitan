@@ -1,4 +1,3 @@
-
 namespace TitanMDM.Application.Helpdesk;
 
 public sealed record HelpdeskTicketListItemDto(
@@ -84,6 +83,9 @@ public sealed record AssignHelpdeskTicketRequest(
 
 public sealed record TransitionHelpdeskTicketRequest(
     string Status);
+
+public sealed record ReopenHelpdeskTicketRequest(
+    string Reason);
 
 public sealed record HelpdeskTicketQuery(
     string? Search,
