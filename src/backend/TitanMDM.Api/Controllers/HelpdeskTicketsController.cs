@@ -15,22 +15,84 @@ namespace TitanMDM.Api.Controllers;
 public sealed class HelpdeskTicketsController
     : ControllerBase
 {
-    private const string HelpdeskView =
+    // ============================================================
+    // MODERN HELPDESK RBAC
+    // ============================================================
+
+    private const string PortalAccess =
+        "helpdesk.portal.access";
+
+    private const string AgentAccess =
+        "helpdesk.agent.access";
+
+    private const string AdminAccess =
+        "helpdesk.admin.access";
+
+    private const string RequestCreate =
+        "helpdesk.request.create";
+
+    private const string InboxMyWork =
+        "helpdesk.inbox.my-work";
+
+    private const string InboxUnassigned =
+        "helpdesk.inbox.unassigned";
+
+    private const string InboxAll =
+        "helpdesk.inbox.all";
+
+    private const string KanbanView =
+        "helpdesk.kanban.view";
+
+    private const string TicketDetails =
+        "helpdesk.ticket.details.view";
+
+    private const string TicketComment =
+        "helpdesk.ticket.comment";
+
+    private const string TicketInternalNote =
+        "helpdesk.ticket.internal-note";
+
+    private const string TicketTake =
+        "helpdesk.ticket.take";
+
+    private const string TicketAssign =
+        "helpdesk.ticket.assign";
+
+    private const string TicketTransition =
+        "helpdesk.ticket.transition";
+
+    private const string TicketResolve =
+        "helpdesk.ticket.resolve";
+
+    private const string TicketClose =
+        "helpdesk.ticket.close";
+
+    private const string TicketReopen =
+        "helpdesk.ticket.reopen";
+
+    // ============================================================
+    // LEGACY COMPATIBILITY
+    // ============================================================
+
+    private const string LegacyHelpdeskView =
         "helpdesk.view";
 
-    private const string TicketsView =
+    private const string LegacyHelpdeskManage =
+        "helpdesk.manage";
+
+    private const string LegacyTicketsView =
         "tickets.view";
 
-    private const string TicketsCreate =
+    private const string LegacyTicketsCreate =
         "tickets.create";
 
-    private const string TicketsAssign =
+    private const string LegacyTicketsAssign =
         "tickets.assign";
 
-    private const string TicketsComment =
+    private const string LegacyTicketsComment =
         "tickets.comment";
 
-    private const string TicketsClose =
+    private const string LegacyTicketsClose =
         "tickets.close";
 
     private readonly IHelpdeskService
@@ -59,35 +121,36 @@ public sealed class HelpdeskTicketsController
         GetTickets(
             [FromQuery]
             string? search,
+
             [FromQuery]
             string? status,
+
             [FromQuery]
             string? priority,
+
             [FromQuery]
             Guid? deviceId,
+
             [FromQuery]
             Guid? assigneeUserId,
+
             [FromQuery]
             int page = 1,
+
             [FromQuery]
             int pageSize = 25,
+
             CancellationToken cancellationToken = default)
     {
-        if (!HasAnyPermission(
-                HelpdeskView,
-                TicketsView))
+        if (!CanViewWorkQueues())
         {
             return Forbid();
         }
 
-        var organizationId =
-            GetOrganizationId();
+        var identity =
+            GetIdentity();
 
-        var actorUserId =
-            GetUserId();
-
-        if (organizationId is null ||
-            actorUserId is null)
+        if (identity is null)
         {
             return Unauthorized(
                 new
@@ -100,8 +163,8 @@ public sealed class HelpdeskTicketsController
         var organizationWide =
             await _scopeAccessService
                 .HasOrganizationScopeAsync(
-                    organizationId.Value,
-                    actorUserId.Value,
+                    identity.Value.OrganizationId,
+                    identity.Value.UserId,
                     cancellationToken);
 
         if (!organizationWide)
@@ -112,7 +175,7 @@ public sealed class HelpdeskTicketsController
         var result =
             await _helpdeskService
                 .GetTicketsAsync(
-                    organizationId.Value,
+                    identity.Value.OrganizationId,
                     new HelpdeskTicketQuery(
                         search,
                         status,
@@ -137,9 +200,7 @@ public sealed class HelpdeskTicketsController
             Guid ticketId,
             CancellationToken cancellationToken = default)
     {
-        if (!HasAnyPermission(
-                HelpdeskView,
-                TicketsView))
+        if (!CanViewTicketDetails())
         {
             return Forbid();
         }
@@ -157,12 +218,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (!await _scopeAccessService
-                .CanAccessTicketAsync(
-                    identity.Value.OrganizationId,
-                    identity.Value.UserId,
-                    ticketId,
-                    cancellationToken))
+        if (!await CanAccessTicketAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken))
         {
             return Forbid();
         }
@@ -181,7 +240,8 @@ public sealed class HelpdeskTicketsController
                     message =
                         "El ticket no existe."
                 })
-            : Ok(ticket);
+            : Ok(
+                ticket);
     }
 
     // ============================================================
@@ -195,8 +255,11 @@ public sealed class HelpdeskTicketsController
             CreateHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(
-                TicketsCreate))
+        if (!HasAnyPermission(
+                RequestCreate,
+                AdminAccess,
+                LegacyTicketsCreate,
+                LegacyHelpdeskManage))
         {
             return Forbid();
         }
@@ -227,28 +290,28 @@ public sealed class HelpdeskTicketsController
             return Ok(
                 created);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
     }
 
     // ============================================================
-    // COMMENT
+    // COMMENT / INTERNAL NOTE
     // ============================================================
 
     [HttpPost("{ticketId:guid}/comments")]
@@ -259,12 +322,21 @@ public sealed class HelpdeskTicketsController
             AddHelpdeskCommentRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(
-                TicketsComment)
-            ||
-            !HasAnyPermission(
-                HelpdeskView,
-                TicketsView))
+        var requiredPermission =
+            request.IsInternal
+                ? TicketInternalNote
+                : TicketComment;
+
+        if (!HasAnyPermission(
+                requiredPermission,
+                AdminAccess,
+                LegacyTicketsComment,
+                LegacyHelpdeskManage))
+        {
+            return Forbid();
+        }
+
+        if (!CanViewTicketDetails())
         {
             return Forbid();
         }
@@ -282,12 +354,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (!await _scopeAccessService
-                .CanAccessTicketAsync(
-                    identity.Value.OrganizationId,
-                    identity.Value.UserId,
-                    ticketId,
-                    cancellationToken))
+        if (!await CanAccessTicketAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken))
         {
             return Forbid();
         }
@@ -310,24 +380,25 @@ public sealed class HelpdeskTicketsController
                         message =
                             "El ticket no existe."
                     })
-                : Ok(ticket);
+                : Ok(
+                    ticket);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
     }
@@ -344,12 +415,17 @@ public sealed class HelpdeskTicketsController
             AssignHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(
-                TicketsAssign)
-            ||
-            !HasAnyPermission(
-                HelpdeskView,
-                TicketsView))
+        if (!HasAnyPermission(
+                TicketAssign,
+                TicketTake,
+                AdminAccess,
+                LegacyTicketsAssign,
+                LegacyHelpdeskManage))
+        {
+            return Forbid();
+        }
+
+        if (!CanViewTicketDetails())
         {
             return Forbid();
         }
@@ -367,12 +443,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (!await _scopeAccessService
-                .CanAccessTicketAsync(
-                    identity.Value.OrganizationId,
-                    identity.Value.UserId,
-                    ticketId,
-                    cancellationToken))
+        if (!await CanAccessTicketAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken))
         {
             return Forbid();
         }
@@ -395,24 +469,25 @@ public sealed class HelpdeskTicketsController
                         message =
                             "El ticket no existe."
                     })
-                : Ok(ticket);
+                : Ok(
+                    ticket);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
     }
@@ -429,9 +504,7 @@ public sealed class HelpdeskTicketsController
             TransitionHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (!HasAnyPermission(
-                HelpdeskView,
-                TicketsView))
+        if (!CanViewTicketDetails())
         {
             return Forbid();
         }
@@ -457,48 +530,69 @@ public sealed class HelpdeskTicketsController
                 HelpdeskTicketStatus.Normalize(
                     request.Status);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
 
-        /*
-         * Estados operativos:
-         * un técnico que puede trabajar/comentar tickets
-         * también puede mover el ticket durante su ciclo
-         * normal.
-         */
-        var operationalTransition =
-            targetStatus is
+        // ========================================================
+        // OPERATIONAL TRANSITIONS
+        // ========================================================
+
+        if (targetStatus is
                 HelpdeskTicketStatus.Open
-                or HelpdeskTicketStatus.InProgress
-                or HelpdeskTicketStatus.PendingUser;
-
-        /*
-         * Estados terminales requieren permiso específico.
-         */
-        var terminalTransition =
-            targetStatus is
-                HelpdeskTicketStatus.Resolved
-                or HelpdeskTicketStatus.Closed;
-
-        if (operationalTransition)
+                or
+                HelpdeskTicketStatus.InProgress
+                or
+                HelpdeskTicketStatus.PendingUser)
         {
-            if (!HasPermission(
-                    TicketsComment))
+            if (!HasAnyPermission(
+                    TicketTransition,
+                    TicketComment,
+                    AdminAccess,
+                    LegacyTicketsComment,
+                    LegacyHelpdeskManage))
             {
                 return Forbid();
             }
         }
-        else if (terminalTransition)
+
+        // ========================================================
+        // RESOLVE
+        // ========================================================
+
+        else if (
+            targetStatus ==
+            HelpdeskTicketStatus.Resolved)
         {
-            if (!HasPermission(
-                    TicketsClose))
+            if (!HasAnyPermission(
+                    TicketResolve,
+                    AdminAccess,
+                    LegacyTicketsClose,
+                    LegacyHelpdeskManage))
+            {
+                return Forbid();
+            }
+        }
+
+        // ========================================================
+        // CLOSE
+        // ========================================================
+
+        else if (
+            targetStatus ==
+            HelpdeskTicketStatus.Closed)
+        {
+            if (!HasAnyPermission(
+                    TicketClose,
+                    AdminAccess,
+                    LegacyTicketsClose,
+                    LegacyHelpdeskManage))
             {
                 return Forbid();
             }
@@ -513,21 +607,14 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (!await _scopeAccessService
-                .CanAccessTicketAsync(
-                    identity.Value.OrganizationId,
-                    identity.Value.UserId,
-                    ticketId,
-                    cancellationToken))
+        if (!await CanAccessTicketAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken))
         {
             return Forbid();
         }
 
-        /*
-         * La reapertura NO puede realizarse mediante
-         * /transition porque debe obligatoriamente registrar
-         * un motivo y un evento auditado.
-         */
         var current =
             await _helpdeskService
                 .GetTicketAsync(
@@ -545,6 +632,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
+        /*
+         * La reapertura siempre debe utilizar /reopen
+         * porque necesita motivo obligatorio y auditoría.
+         */
         if (HelpdeskTicketStatus.IsTerminal(
                 current.Status)
             &&
@@ -555,7 +646,24 @@ public sealed class HelpdeskTicketsController
                 new
                 {
                     message =
-                        "Los tickets finalizados deben reabrirse mediante la acción de reapertura indicando un motivo."
+                        "Los tickets resueltos o cerrados deben reabrirse mediante la acción Reabrir."
+                });
+        }
+
+        /*
+         * Validamos antes de entrar al servicio para devolver
+         * un error más claro al Kanban/UI.
+         */
+        if (!HelpdeskTicketStatus.CanTransition(
+                current.Status,
+                targetStatus))
+        {
+            return Conflict(
+                new
+                {
+                    message =
+                        $"No se permite mover el ticket de " +
+                        $"'{current.Status}' a '{targetStatus}'."
                 });
         }
 
@@ -578,24 +686,25 @@ public sealed class HelpdeskTicketsController
                         message =
                             "El ticket no existe."
                     })
-                : Ok(ticket);
+                : Ok(
+                    ticket);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
     }
@@ -612,12 +721,16 @@ public sealed class HelpdeskTicketsController
             ReopenHelpdeskTicketRequest request,
             CancellationToken cancellationToken = default)
     {
-        if (!HasPermission(
-                TicketsClose)
-            ||
-            !HasAnyPermission(
-                HelpdeskView,
-                TicketsView))
+        if (!HasAnyPermission(
+                TicketReopen,
+                AdminAccess,
+                LegacyTicketsClose,
+                LegacyHelpdeskManage))
+        {
+            return Forbid();
+        }
+
+        if (!CanViewTicketDetails())
         {
             return Forbid();
         }
@@ -635,12 +748,10 @@ public sealed class HelpdeskTicketsController
                 });
         }
 
-        if (!await _scopeAccessService
-                .CanAccessTicketAsync(
-                    identity.Value.OrganizationId,
-                    identity.Value.UserId,
-                    ticketId,
-                    cancellationToken))
+        if (!await CanAccessTicketAsync(
+                identity.Value,
+                ticketId,
+                cancellationToken))
         {
             return Forbid();
         }
@@ -663,26 +774,73 @@ public sealed class HelpdeskTicketsController
                         message =
                             "El ticket no existe."
                     })
-                : Ok(ticket);
+                : Ok(
+                    ticket);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
+    }
+
+    // ============================================================
+    // ACCESS
+    // ============================================================
+
+    private bool CanViewWorkQueues()
+    {
+        return HasAnyPermission(
+            InboxMyWork,
+            InboxUnassigned,
+            InboxAll,
+            KanbanView,
+            AgentAccess,
+            AdminAccess,
+            LegacyHelpdeskView,
+            LegacyTicketsView,
+            LegacyHelpdeskManage);
+    }
+
+    private bool CanViewTicketDetails()
+    {
+        return HasAnyPermission(
+            TicketDetails,
+            AgentAccess,
+            AdminAccess,
+            LegacyHelpdeskView,
+            LegacyTicketsView,
+            LegacyHelpdeskManage);
+    }
+
+    private async Task<bool>
+        CanAccessTicketAsync(
+            (
+                Guid OrganizationId,
+                Guid UserId
+            ) identity,
+            Guid ticketId,
+            CancellationToken cancellationToken)
+    {
+        return await _scopeAccessService
+            .CanAccessTicketAsync(
+                identity.OrganizationId,
+                identity.UserId,
+                ticketId,
+                cancellationToken);
     }
 
     // ============================================================
@@ -700,7 +858,8 @@ public sealed class HelpdeskTicketsController
         var userId =
             GetUserId();
 
-        if (organizationId is null ||
+        if (organizationId is null
+            ||
             userId is null)
         {
             return null;
@@ -711,7 +870,8 @@ public sealed class HelpdeskTicketsController
             userId.Value);
     }
 
-    private Guid? GetOrganizationId()
+    private Guid?
+        GetOrganizationId()
     {
         var value =
             User.FindFirstValue(
@@ -727,7 +887,8 @@ public sealed class HelpdeskTicketsController
             : null;
     }
 
-    private Guid? GetUserId()
+    private Guid?
+        GetUserId()
     {
         var value =
             User.FindFirstValue(
@@ -748,6 +909,10 @@ public sealed class HelpdeskTicketsController
             ? userId
             : null;
     }
+
+    // ============================================================
+    // PERMISSIONS
+    // ============================================================
 
     private bool HasPermission(
         string permission)

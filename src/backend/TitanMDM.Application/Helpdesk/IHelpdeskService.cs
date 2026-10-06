@@ -45,4 +45,11 @@ public interface IHelpdeskService
         Guid actorUserId,
         ReopenHelpdeskTicketRequest request,
         CancellationToken cancellationToken = default);
+
+    Task<HelpdeskRoutingPreviewDto>
+        PreviewRoutingDiagnosticAsync(
+            Guid organizationId,
+            Guid requesterUserId,
+            HelpdeskRoutingPreviewRequest request,
+            CancellationToken cancellationToken = default);
 }

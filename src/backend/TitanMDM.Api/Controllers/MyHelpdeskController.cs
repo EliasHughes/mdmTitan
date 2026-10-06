@@ -17,6 +17,41 @@ namespace TitanMDM.Api.Controllers;
 public sealed class MyHelpdeskController
     : ControllerBase
 {
+    // ============================================================
+    // MODERN PORTAL PERMISSIONS
+    // ============================================================
+
+    private const string PortalAccess =
+        "helpdesk.portal.access";
+
+    private const string RequestCreate =
+        "helpdesk.request.create";
+
+    private const string RequestOwnView =
+        "helpdesk.request.own.view";
+
+    private const string RequestOwnComment =
+        "helpdesk.request.own.comment";
+
+    private const string RequestOwnReopen =
+        "helpdesk.request.own.reopen";
+
+    private const string RequestOwnConfirm =
+        "helpdesk.request.own.confirm";
+
+    private const string AdminAccess =
+        "helpdesk.admin.access";
+
+    // ============================================================
+    // LEGACY COMPATIBILITY
+    // ============================================================
+
+    private const string LegacyTicketsCreate =
+        "tickets.create";
+
+    private const string LegacyHelpdeskManage =
+        "helpdesk.manage";
+
     private readonly TitanMdmDbContext
         _db;
 
@@ -43,6 +78,11 @@ public sealed class MyHelpdeskController
         GetMyTickets(
             CancellationToken cancellationToken)
     {
+        if (!CanViewOwnTickets())
+        {
+            return Forbid();
+        }
+
         if (!TryGetIdentity(
                 out var organizationId,
                 out var userId))
@@ -83,7 +123,8 @@ public sealed class MyHelpdeskController
                             x.ResolveDueAtUtc,
                             x.ResolvedAtUtc
                         })
-                .Take(100)
+                .Take(
+                    100)
                 .ToListAsync(
                     cancellationToken);
 
@@ -101,6 +142,11 @@ public sealed class MyHelpdeskController
             Guid ticketId,
             CancellationToken cancellationToken)
     {
+        if (!CanViewOwnTickets())
+        {
+            return Forbid();
+        }
+
         if (!TryGetIdentity(
                 out var organizationId,
                 out var userId))
@@ -184,9 +230,11 @@ public sealed class MyHelpdeskController
         /*
          * Solo eventos seguros para el solicitante.
          *
-         * No exponemos routing interno,
-         * notas privadas ni eventos
-         * administrativos.
+         * Nunca exponemos:
+         * - routing interno
+         * - notas internas
+         * - reglas administrativas
+         * - cambios de infraestructura
          */
         var publicTypes =
             new[]
@@ -226,16 +274,6 @@ public sealed class MyHelpdeskController
                 .ToListAsync(
                     cancellationToken);
 
-        /*
-         * ========================================================
-         * CONFIGURACIÓN ENTERPRISE HELPDESK
-         * ========================================================
-         *
-         * La ventana de reapertura ya NO está hardcoded.
-         *
-         * Si todavía no existe registro en DB,
-         * utilizamos los defaults seguros de la entidad.
-         */
         var automationSettings =
             await _db
                 .Set<HelpdeskAutomationSettings>()
@@ -262,7 +300,36 @@ public sealed class MyHelpdeskController
                 .AddDays(
                     reopenWindowDays)
                 >=
-                DateTime.UtcNow;
+                DateTime.UtcNow
+            &&
+            CanReopenOwnTicket();
+
+        var slaPaused =
+            ticket.Status ==
+            HelpdeskTicketStatus.PendingUser;
+
+        var now =
+            DateTime.UtcNow;
+
+        var firstResponseBreached =
+            !slaPaused
+            &&
+            ticket.FirstRespondedAtUtc is null
+            &&
+            ticket.FirstResponseDueAtUtc.HasValue
+            &&
+            ticket.FirstResponseDueAtUtc.Value <
+                now;
+
+        var resolutionBreached =
+            !slaPaused
+            &&
+            ticket.ResolvedAtUtc is null
+            &&
+            ticket.ResolveDueAtUtc.HasValue
+            &&
+            ticket.ResolveDueAtUtc.Value <
+                now;
 
         return Ok(
             new
@@ -279,6 +346,20 @@ public sealed class MyHelpdeskController
                 ticket.FirstResponseDueAtUtc,
                 ticket.ResolveDueAtUtc,
                 ticket.ResolvedAtUtc,
+
+                slaPaused,
+
+                slaBreached =
+                    firstResponseBreached
+                    ||
+                    resolutionBreached,
+
+                canReply =
+                    !HelpdeskTicketStatus
+                        .IsTerminal(
+                            ticket.Status)
+                    &&
+                    CanCommentOwnTicket(),
 
                 canReopen,
 
@@ -301,6 +382,11 @@ public sealed class MyHelpdeskController
             CreateMyTicketRequest request,
             CancellationToken cancellationToken)
     {
+        if (!CanCreateOwnTicket())
+        {
+            return Forbid();
+        }
+
         if (!TryGetIdentity(
                 out var organizationId,
                 out var userId))
@@ -368,9 +454,12 @@ public sealed class MyHelpdeskController
 
             if (priority is not (
                     "low"
-                    or "medium"
-                    or "high"
-                    or "critical"))
+                    or
+                    "medium"
+                    or
+                    "high"
+                    or
+                    "critical"))
             {
                 priority =
                     "medium";
@@ -383,7 +472,8 @@ public sealed class MyHelpdeskController
 
             if (type is not (
                     "incident"
-                    or "request"))
+                    or
+                    "request"))
             {
                 type =
                     "incident";
@@ -413,12 +503,6 @@ public sealed class MyHelpdeskController
                             null),
                         cancellationToken);
 
-            /*
-             * El detalle completo se obtiene
-             * exclusivamente mediante el endpoint
-             * personal para evitar exponer información
-             * interna del Helpdesk.
-             */
             return CreatedAtAction(
                 nameof(GetMyTicket),
                 new
@@ -432,22 +516,22 @@ public sealed class MyHelpdeskController
                     created.Number
                 });
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
     }
@@ -464,6 +548,11 @@ public sealed class MyHelpdeskController
             MyTicketReplyRequest request,
             CancellationToken cancellationToken)
     {
+        if (!CanCommentOwnTicket())
+        {
+            return Forbid();
+        }
+
         if (!TryGetIdentity(
                 out var organizationId,
                 out var userId))
@@ -544,15 +633,16 @@ public sealed class MyHelpdeskController
          * WAITING USER -> ACTIVE
          * ========================================================
          *
-         * Si existe técnico asignado:
+         * Si existe técnico:
          *      pendinguser -> inprogress
          *
          * Si no existe técnico:
          *      pendinguser -> open
          *
-         * HelpdeskTicket.Transition()
-         * se encarga también de reanudar el SLA.
+         * Transition() reanuda automáticamente el SLA.
+         * ========================================================
          */
+
         if (ticket.Status ==
             HelpdeskTicketStatus.PendingUser)
         {
@@ -596,6 +686,11 @@ public sealed class MyHelpdeskController
             ReopenMyTicketRequest request,
             CancellationToken cancellationToken)
     {
+        if (!CanReopenOwnTicket())
+        {
+            return Forbid();
+        }
+
         if (!TryGetIdentity(
                 out var organizationId,
                 out var userId))
@@ -684,12 +779,6 @@ public sealed class MyHelpdeskController
                 });
         }
 
-        /*
-         * ========================================================
-         * VENTANA CONFIGURABLE DE REAPERTURA
-         * ========================================================
-         */
-
         var automationSettings =
             await _db
                 .Set<HelpdeskAutomationSettings>()
@@ -744,31 +833,26 @@ public sealed class MyHelpdeskController
                     });
             }
 
-            /*
-             * Devolvemos nuevamente el endpoint
-             * personal para garantizar que nunca
-             * se expongan notas internas.
-             */
             return await GetMyTicket(
                 ticketId,
                 cancellationToken);
         }
-        catch (ArgumentException ex)
+        catch (ArgumentException exception)
         {
             return BadRequest(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
-        catch (InvalidOperationException ex)
+        catch (InvalidOperationException exception)
         {
             return Conflict(
                 new
                 {
                     message =
-                        ex.Message
+                        exception.Message
                 });
         }
     }
@@ -814,6 +898,66 @@ public sealed class MyHelpdeskController
         return validOrganization
             &&
             validUser;
+    }
+
+    // ============================================================
+    // PERMISSIONS
+    // ============================================================
+
+    private bool CanViewOwnTickets()
+    {
+        return HasAnyPermission(
+            PortalAccess,
+            RequestOwnView,
+            RequestCreate,
+            AdminAccess,
+            LegacyTicketsCreate,
+            LegacyHelpdeskManage);
+    }
+
+    private bool CanCreateOwnTicket()
+    {
+        return HasAnyPermission(
+            PortalAccess,
+            RequestCreate,
+            AdminAccess,
+            LegacyTicketsCreate,
+            LegacyHelpdeskManage);
+    }
+
+    private bool CanCommentOwnTicket()
+    {
+        return HasAnyPermission(
+            PortalAccess,
+            RequestOwnComment,
+            AdminAccess,
+            LegacyHelpdeskManage);
+    }
+
+    private bool CanReopenOwnTicket()
+    {
+        return HasAnyPermission(
+            PortalAccess,
+            RequestOwnReopen,
+            RequestOwnConfirm,
+            AdminAccess,
+            LegacyHelpdeskManage);
+    }
+
+    private bool HasAnyPermission(
+        params string[] permissions)
+    {
+        return permissions.Any(
+            permission =>
+                User.Claims.Any(
+                    claim =>
+                        claim.Type ==
+                            "permission"
+                        &&
+                        string.Equals(
+                            claim.Value,
+                            permission,
+                            StringComparison.OrdinalIgnoreCase)));
     }
 
     // ============================================================

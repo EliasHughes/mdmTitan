@@ -1,5 +1,4 @@
 using System.Net.Http.Headers;
-using System.Security.Claims;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
@@ -21,8 +20,7 @@ namespace TitanMDM.Api.Controllers;
 [ApiController]
 [AllowAnonymous]
 [Route("api/auth/entra")]
-public sealed class EntraLoginController
-    : ControllerBase
+public sealed class EntraLoginController : ControllerBase
 {
     private const string FlowCookie =
         "__TitanEntraFlow";
@@ -96,9 +94,24 @@ public sealed class EntraLoginController
     public async Task<IActionResult> Start(
         CancellationToken cancellationToken)
     {
-        var settings =
-            await GetEnabledSettingsAsync(
-                cancellationToken);
+        EntraIdSettings? settings;
+
+        try
+        {
+            settings =
+                await GetEnabledSettingsAsync(
+                    cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            return StatusCode(
+                StatusCodes.Status409Conflict,
+                new
+                {
+                    message =
+                        exception.Message
+                });
+        }
 
         if (settings is null)
         {
@@ -132,23 +145,23 @@ public sealed class EntraLoginController
                 });
         }
 
-        var frontendBase =
-            ResolveFrontendBaseUrl();
+        var backendBase =
+            ResolveBackendBaseUrl();
 
-        if (frontendBase is null)
+        if (backendBase is null)
         {
             return StatusCode(
                 StatusCodes.Status503ServiceUnavailable,
                 new
                 {
                     message =
-                        "Application:FrontendUrl no contiene una URL válida."
+                        "Application:BackendUrl no contiene una URL válida."
                 });
         }
 
         var callbackUri =
             new Uri(
-                frontendBase,
+                backendBase,
                 "/api/auth/entra/callback");
 
         var state =
@@ -272,7 +285,7 @@ public sealed class EntraLoginController
             return Redirect(
                 AddError(
                     frontendReturn,
-                    "La sesión temporal de autenticación expiró."));
+                    "La sesión temporal de autenticación expiró o la cookie del flujo no regresó al backend."));
         }
 
         EntraLoginFlow flow;
@@ -305,16 +318,22 @@ public sealed class EntraLoginController
             FlowCookie);
 
         if (flow.ExpiresAtUtc <
-                DateTime.UtcNow
-            ||
-            !CryptographicEquals(
+            DateTime.UtcNow)
+        {
+            return Redirect(
+                AddError(
+                    frontendReturn,
+                    "La sesión temporal de autenticación expiró."));
+        }
+
+        if (!CryptographicEquals(
                 flow.State,
                 state))
         {
             return Redirect(
                 AddError(
                     frontendReturn,
-                    "El estado de autenticación expiró o no coincide."));
+                    "El estado devuelto por Microsoft no coincide con la solicitud original."));
         }
 
         var settings =
@@ -328,9 +347,15 @@ public sealed class EntraLoginController
                         x.IsEnabled,
                     cancellationToken);
 
-        if (settings is null
-            ||
-            !string.Equals(
+        if (settings is null)
+        {
+            return Redirect(
+                AddError(
+                    frontendReturn,
+                    "La configuración de Entra ID ya no está habilitada."));
+        }
+
+        if (!string.Equals(
                 settings.TenantId,
                 flow.TenantId,
                 StringComparison.OrdinalIgnoreCase)
@@ -338,15 +363,21 @@ public sealed class EntraLoginController
             !string.Equals(
                 settings.ClientId,
                 flow.ClientId,
-                StringComparison.OrdinalIgnoreCase)
-            ||
-            string.IsNullOrWhiteSpace(
-                settings.ClientSecretProtected))
+                StringComparison.OrdinalIgnoreCase))
         {
             return Redirect(
                 AddError(
                     frontendReturn,
                     "La configuración de Entra ID cambió durante el inicio de sesión."));
+        }
+
+        if (string.IsNullOrWhiteSpace(
+                settings.ClientSecretProtected))
+        {
+            return Redirect(
+                AddError(
+                    frontendReturn,
+                    "El Client Secret ya no está configurado."));
         }
 
         string clientSecret;
@@ -366,9 +397,20 @@ public sealed class EntraLoginController
                     "Guárdalo nuevamente desde Configuración."));
         }
 
+        var backendBase =
+            ResolveBackendBaseUrl();
+
+        if (backendBase is null)
+        {
+            return Redirect(
+                AddError(
+                    frontendReturn,
+                    "Application:BackendUrl no contiene una URL válida."));
+        }
+
         var callbackUri =
             new Uri(
-                frontendBase,
+                backendBase,
                 "/api/auth/entra/callback");
 
         var token =
@@ -405,7 +447,7 @@ public sealed class EntraLoginController
             return Redirect(
                 AddError(
                     frontendReturn,
-                    "Microsoft autenticó la cuenta, pero no fue posible leer su identidad."));
+                    "Microsoft autenticó la cuenta, pero TitanMDM no pudo leer la identidad del usuario mediante Microsoft Graph."));
         }
 
         var directoryUser =
@@ -422,16 +464,25 @@ public sealed class EntraLoginController
                         x.IsActive,
                     cancellationToken);
 
-        if (directoryUser is null
-            ||
-            !directoryUser.LinkedTitanUserId
+        if (directoryUser is null)
+        {
+            return Redirect(
+                AddError(
+                    frontendReturn,
+                    "La cuenta Microsoft fue autenticada correctamente, " +
+                    "pero todavía no existe en el directorio sincronizado de TitanMDM. " +
+                    "Ejecuta una sincronización de Entra ID."));
+        }
+
+        if (!directoryUser.LinkedTitanUserId
                 .HasValue)
         {
             return Redirect(
                 AddError(
                     frontendReturn,
                     "Tu cuenta Microsoft está autenticada, " +
-                    "pero todavía no tiene acceso individual asignado en TitanMDM."));
+                    "pero todavía no tiene acceso individual asignado en TitanMDM. " +
+                    "Vincula la cuenta y asígnale un rol."));
         }
 
         var temporarySession =
@@ -461,7 +512,7 @@ public sealed class EntraLoginController
     }
 
     // ============================================================
-    // EXCHANGE TEMP SESSION FOR TITAN JWT
+    // EXCHANGE TEMPORARY ENTRA SESSION FOR TITAN JWT
     // ============================================================
 
     [HttpPost("exchange")]
@@ -696,19 +747,38 @@ public sealed class EntraLoginController
     }
 
     // ============================================================
-    // LOGIN STATUS
+    // LOGIN STATUS / DIAGNOSTIC
     // ============================================================
 
     [HttpGet("status")]
     public async Task<IActionResult> Status(
         CancellationToken cancellationToken)
     {
-        var settings =
-            await GetEnabledSettingsAsync(
-                cancellationToken);
+        EntraIdSettings? settings;
+
+        string? configurationError =
+            null;
+
+        try
+        {
+            settings =
+                await GetEnabledSettingsAsync(
+                    cancellationToken);
+        }
+        catch (InvalidOperationException exception)
+        {
+            settings =
+                null;
+
+            configurationError =
+                exception.Message;
+        }
 
         var frontendBase =
             ResolveFrontendBaseUrl();
+
+        var backendBase =
+            ResolveBackendBaseUrl();
 
         return Ok(
             new
@@ -736,14 +806,25 @@ public sealed class EntraLoginController
                     !string.IsNullOrWhiteSpace(
                         settings.ClientSecretProtected),
 
+                frontendConfigured =
+                    frontendBase is not null,
+
+                backendConfigured =
+                    backendBase is not null,
+
+                configurationError,
+
                 frontendUrl =
                     frontendBase?.ToString(),
 
+                backendUrl =
+                    backendBase?.ToString(),
+
                 callbackUrl =
-                    frontendBase is null
+                    backendBase is null
                         ? null
                         : new Uri(
-                            frontendBase,
+                            backendBase,
                             "/api/auth/entra/callback")
                             .ToString(),
 
@@ -783,25 +864,26 @@ public sealed class EntraLoginController
         }
 
         /*
-         * TitanMDM actual es un despliegue empresarial
-         * single-organization.
+         * TitanMDM actualmente opera como una instalación
+         * empresarial single-organization.
          *
-         * Si posteriormente se convierte en SaaS multi-tenant,
-         * el tenant deberá resolverse por dominio/slug.
+         * Si luego evoluciona a SaaS/multi-tenant, el tenant
+         * deberá resolverse antes del challenge mediante dominio,
+         * organización, slug o equivalente.
          */
         if (enabled.Count >
             1)
         {
             throw new InvalidOperationException(
                 "Existe más de una configuración Entra habilitada. " +
-                "El login corporativo requiere una sola organización activa.");
+                "El login corporativo requiere exactamente una organización activa.");
         }
 
         return enabled[0];
     }
 
     // ============================================================
-    // TOKEN EXCHANGE
+    // AUTHORIZATION CODE -> ACCESS TOKEN
     // ============================================================
 
     private async Task<TokenExchangeResult>
@@ -871,7 +953,8 @@ public sealed class EntraLoginController
                 ParseMicrosoftError(
                     content)
                 ??
-                $"Microsoft Entra rechazó el código. HTTP {(int)response.StatusCode}.");
+                $"Microsoft Entra rechazó el código de autorización. " +
+                $"HTTP {(int)response.StatusCode}.");
         }
 
         try
@@ -904,12 +987,12 @@ public sealed class EntraLoginController
             return new TokenExchangeResult(
                 false,
                 null,
-                "La respuesta de Microsoft Entra no pudo interpretarse.");
+                "La respuesta del endpoint de token de Microsoft Entra no pudo interpretarse.");
         }
     }
 
     // ============================================================
-    // MICROSOFT USER
+    // MICROSOFT GRAPH /ME
     // ============================================================
 
     private async Task<MicrosoftUser?>
@@ -932,6 +1015,12 @@ public sealed class EntraLoginController
             new AuthenticationHeaderValue(
                 "Bearer",
                 accessToken);
+
+        request.Headers
+            .TryAddWithoutValidation(
+                "client-request-id",
+                Guid.NewGuid()
+                    .ToString());
 
         using var response =
             await client.SendAsync(
@@ -957,12 +1046,24 @@ public sealed class EntraLoginController
             var root =
                 json.RootElement;
 
+            if (!root.TryGetProperty(
+                    "id",
+                    out var idValue))
+            {
+                return null;
+            }
+
+            var id =
+                idValue.GetString();
+
+            if (string.IsNullOrWhiteSpace(
+                    id))
+            {
+                return null;
+            }
+
             return new MicrosoftUser(
-                root.GetProperty(
-                    "id")
-                    .GetString()
-                ??
-                string.Empty,
+                id,
 
                 root.TryGetProperty(
                     "displayName",
@@ -989,25 +1090,45 @@ public sealed class EntraLoginController
     }
 
     // ============================================================
-    // URLS
+    // APPLICATION URLS
     // ============================================================
 
     private Uri? ResolveFrontendBaseUrl()
     {
+        return ResolveApplicationUrl(
+            "Application:FrontendUrl");
+    }
+
+    private Uri? ResolveBackendBaseUrl()
+    {
+        return ResolveApplicationUrl(
+            "Application:BackendUrl");
+    }
+
+    private Uri? ResolveApplicationUrl(
+        string configurationKey)
+    {
         var value =
             _configuration[
-                "Application:FrontendUrl"];
+                configurationKey];
 
         if (!Uri.TryCreate(
                 value,
                 UriKind.Absolute,
-                out var uri)
-            ||
-            uri.Scheme
-                is not (
-                    "http"
-                    or
-                    "https"))
+                out var uri))
+        {
+            return null;
+        }
+
+        if (!string.Equals(
+                uri.Scheme,
+                Uri.UriSchemeHttp,
+                StringComparison.OrdinalIgnoreCase)
+            &&
+            !string.Equals(
+                uri.Scheme,
+                Uri.UriSchemeHttps,
+                StringComparison.OrdinalIgnoreCase))
         {
             return null;
         }
@@ -1016,6 +1137,10 @@ public sealed class EntraLoginController
             uri.GetLeftPart(
                 UriPartial.Authority));
     }
+
+    // ============================================================
+    // MICROSOFT AUTHORIZATION URL
+    // ============================================================
 
     private static string
         BuildAuthorizationUrl(
@@ -1070,24 +1195,36 @@ public sealed class EntraLoginController
             $"/oauth2/v2.0/authorize?{query}";
     }
 
+    // ============================================================
+    // FRONTEND ERROR REDIRECT
+    // ============================================================
+
     private static string AddError(
         Uri frontendReturn,
         string message)
     {
+        var separator =
+            string.IsNullOrWhiteSpace(
+                frontendReturn.Query)
+                ? "?"
+                : "&";
+
         return
             frontendReturn +
-            "?error=" +
+            separator +
+            "error=" +
             Uri.EscapeDataString(
                 message);
     }
 
     // ============================================================
-    // SECURITY HELPERS
+    // TEMPORARY COOKIE SECURITY
     // ============================================================
 
-    private CookieOptions CreateCookieOptions(
-        string scheme,
-        TimeSpan lifetime)
+    private static CookieOptions
+        CreateCookieOptions(
+            string scheme,
+            TimeSpan lifetime)
     {
         return new CookieOptions
         {
@@ -1097,7 +1234,7 @@ public sealed class EntraLoginController
             Secure =
                 string.Equals(
                     scheme,
-                    "https",
+                    Uri.UriSchemeHttps,
                     StringComparison.OrdinalIgnoreCase),
 
             SameSite =
@@ -1125,6 +1262,10 @@ public sealed class EntraLoginController
                     "/api/auth/entra"
             });
     }
+
+    // ============================================================
+    // PKCE / STATE HELPERS
+    // ============================================================
 
     private static string RandomToken(
         int bytes)
@@ -1184,6 +1325,10 @@ public sealed class EntraLoginController
                        leftBytes,
                        rightBytes);
     }
+
+    // ============================================================
+    // MICROSOFT ERROR PARSER
+    // ============================================================
 
     private static string?
         ParseMicrosoftError(

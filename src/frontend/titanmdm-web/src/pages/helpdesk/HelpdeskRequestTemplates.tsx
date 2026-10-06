@@ -4,22 +4,42 @@ import {
   useState,
 } from 'react'
 
-import axios from 'axios'
+import axios
+  from 'axios'
 
-import apiClient from '../../api/apiClient'
+import {
+  CheckCircle2,
+  ClipboardList,
+  X,
+} from 'lucide-react'
+
+import apiClient
+  from '../../api/apiClient'
 
 import './HelpdeskRequestTemplates.css'
 
 export interface HelpdeskTemplateDraft {
+  templateId: string
+  revision: number
+
   subject: string
   description: string
+
   category: string
-  ticketType: 'incident' | 'request'
+
+  ticketType:
+    | 'incident'
+    | 'request'
 }
 
 interface Props {
   disabled?: boolean
-  onApply: (draft: HelpdeskTemplateDraft) => void
+
+  onApply:
+    (
+      draft:
+        HelpdeskTemplateDraft,
+    ) => void
 }
 
 interface Template {
@@ -27,107 +47,179 @@ interface Template {
   title: string
   description: string
   category: string
-  ticketType: 'incident' | 'request'
+
+  ticketType:
+    | 'incident'
+    | 'request'
+
   questions: string[]
+
   isActive: boolean
   revision: number
 }
 
-function getMessage(error: unknown) {
-  return axios.isAxiosError(error) &&
-    typeof error.response?.data?.message === 'string'
-    ? error.response.data.message
-    : 'No se pudieron cargar las plantillas.'
+function getMessage(
+  error: unknown,
+) {
+  return (
+    axios.isAxiosError<{
+      message?: string
+    }>(
+      error,
+    )
+      ? error.response
+          ?.data
+          ?.message
+      : null
+  )
+  ??
+  'No se pudieron cargar las plantillas.'
 }
 
 export function HelpdeskRequestTemplates({
   disabled = false,
   onApply,
 }: Props) {
-  const [items, setItems] =
-    useState<Template[]>([])
+  const [
+    items,
+    setItems,
+  ] =
+    useState<Template[]>(
+      [],
+    )
 
-  const [loading, setLoading] =
-    useState(true)
+  const [
+    loading,
+    setLoading,
+  ] =
+    useState(
+      true,
+    )
 
-  const [error, setError] =
-    useState('')
+  const [
+    error,
+    setError,
+  ] =
+    useState(
+      '',
+    )
 
-  const [selectedId, setSelectedId] =
-    useState('')
+  const [
+    selectedId,
+    setSelectedId,
+  ] =
+    useState(
+      '',
+    )
 
-  const [subject, setSubject] =
-    useState('')
+  const [
+    subject,
+    setSubject,
+  ] =
+    useState(
+      '',
+    )
 
-  const [answers, setAnswers] =
-    useState<Record<number, string>>({})
+  const [
+    answers,
+    setAnswers,
+  ] =
+    useState<
+      Record<number, string>
+    >(
+      {},
+    )
 
-  useEffect(() => {
-    const controller =
-      new AbortController()
+  useEffect(
+    () => {
+      const controller =
+        new AbortController()
 
-    setLoading(true)
-    setError('')
-
-    void apiClient
-      .get<{ items: Template[] }>(
-        '/my/helpdesk/templates',
-        {
-          signal: controller.signal,
-        },
+      setLoading(
+        true,
       )
-      .then(result => {
-        if (
-          controller
-            .signal
-            .aborted
-        ) return
 
-        const active =
-          result.data.items
-            .filter(
-              item =>
-                item.isActive,
-            )
-            .sort(
-              (
-                left,
-                right,
-              ) =>
-                left.title.localeCompare(
-                  right.title,
-                  'es',
-                ),
-            )
+      setError(
+        '',
+      )
 
-        setItems(active)
-      })
-      .catch(exception => {
-        if (
-          controller
-            .signal
-            .aborted
-        ) return
-
-        setError(
-          getMessage(
-            exception,
-          ),
+      void apiClient
+        .get<{
+          items: Template[]
+        }>(
+          '/my/helpdesk/templates',
+          {
+            signal:
+              controller.signal,
+          },
         )
-      })
-      .finally(() => {
-        if (
-          !controller
-            .signal
-            .aborted
-        ) {
-          setLoading(false)
-        }
-      })
+        .then(
+          response => {
+            if (
+              controller.signal
+                .aborted
+            ) {
+              return
+            }
 
-    return () =>
-      controller.abort()
-  }, [])
+            const active =
+              response.data
+                .items
+                .filter(
+                  item =>
+                    item.isActive,
+                )
+                .sort(
+                  (
+                    left,
+                    right,
+                  ) =>
+                    left.title
+                      .localeCompare(
+                        right.title,
+                        'es',
+                      ),
+                )
+
+            setItems(
+              active,
+            )
+          },
+        )
+        .catch(
+          exception => {
+            if (
+              controller.signal
+                .aborted
+            ) {
+              return
+            }
+
+            setError(
+              getMessage(
+                exception,
+              ),
+            )
+          },
+        )
+        .finally(
+          () => {
+            if (
+              !controller.signal
+                .aborted
+            ) {
+              setLoading(
+                false,
+              )
+            }
+          },
+        )
+
+      return () =>
+        controller.abort()
+    },
+    [],
+  )
 
   const selected =
     useMemo(
@@ -144,54 +236,89 @@ export function HelpdeskRequestTemplates({
     )
 
   const preparedDescription =
-    useMemo(() => {
-      if (!selected) {
-        return ''
-      }
+    useMemo(
+      () => {
+        if (!selected) {
+          return ''
+        }
 
-      return selected.questions
-        .map(
+        return selected.questions
+          .map(
+            (
+              question,
+              index,
+            ) => {
+              const answer =
+                (
+                  answers[index]
+                  ??
+                  ''
+                )
+                .trim()
+
+              return (
+                `${question}\n` +
+                `${answer}`
+              )
+            },
+          )
+          .join(
+            '\n\n',
+          )
+          .trim()
+      },
+      [
+        answers,
+        selected,
+      ],
+    )
+
+  const answersComplete =
+    Boolean(
+      selected
+      &&
+      selected.questions
+        .every(
           (
-            question,
+            _,
             index,
-          ) => {
-            const answer =
-              (
-                answers[
-                  index
-                ] ?? ''
-              ).trim()
-
-            return (
-              `${question}\n` +
-              `${answer}`
-            )
-          },
-        )
-        .join(
-          '\n\n',
-        )
-        .trim()
-    }, [
-      answers,
-      selected,
-    ])
+          ) =>
+            Boolean(
+              answers[index]
+                ?.trim(),
+            ),
+        ),
+    )
 
   const complete =
-    !!selected &&
-    subject.trim().length >
-      0 &&
-    selected.questions.every(
-      (
-        _,
-        index,
-      ) =>
-        !!answers[
-          index
-        ]?.trim(),
-    ) &&
-    preparedDescription.length <=
-      4000
+    Boolean(
+      selected
+      &&
+      subject
+        .trim()
+        .length >
+        0
+      &&
+      answersComplete
+      &&
+      preparedDescription
+        .length <=
+        4000,
+    )
+
+  function reset() {
+    setSelectedId(
+      '',
+    )
+
+    setSubject(
+      '',
+    )
+
+    setAnswers(
+      {},
+    )
+  }
 
   function selectTemplate(
     id: string,
@@ -200,17 +327,40 @@ export function HelpdeskRequestTemplates({
       id,
     )
 
-    setSubject('')
-    setAnswers({})
+    setAnswers(
+      {},
+    )
+
+    const next =
+      items.find(
+        item =>
+          item.id ===
+          id,
+      )
+
+    setSubject(
+      next?.title
+      ??
+      '',
+    )
   }
 
   function apply() {
     if (
-      !selected ||
+      !selected
+      ||
       !complete
-    ) return
+    ) {
+      return
+    }
 
     onApply({
+      templateId:
+        selected.id,
+
+      revision:
+        selected.revision,
+
       subject:
         subject.trim(),
 
@@ -224,80 +374,85 @@ export function HelpdeskRequestTemplates({
         selected.ticketType,
     })
 
-    setSelectedId('')
-    setSubject('')
-    setAnswers({})
+    reset()
   }
 
-  /*
-   * IMPORTANTE:
-   *
-   * Si no hay plantillas activas
-   * no renderizamos absolutamente nada.
-   *
-   * El usuario no debe ver:
-   * - mensajes vacíos
-   * - paneles innecesarios
-   * - botones administrativos
-   */
   if (
-    !loading &&
-    !error &&
-    items.length === 0
-  ) {
-    return null
-  }
-
-  /*
-   * Un fallo del catálogo
-   * tampoco debe impedir
-   * crear un ticket manualmente.
-   */
-  if (
-    !loading &&
+    loading
+    ||
     error
+    ||
+    items.length ===
+      0
   ) {
-    return null
-  }
-
-  if (loading) {
     return null
   }
 
   return (
     <section
-      className="hrt hrt--compact"
-      aria-label="Plantilla opcional"
+      className="hrt"
+      aria-label="Plantillas de solicitud"
     >
+      <div
+        className="hrt__title"
+      >
+        <ClipboardList
+          size={17}
+        />
+
+        <div>
+          <strong>
+            Plantilla opcional
+          </strong>
+
+          <span>
+            Utiliza una solicitud guiada
+            para enviar toda la información
+            necesaria al equipo TIC.
+          </span>
+        </div>
+      </div>
+
       <label
         className="hrt-template-selector"
         htmlFor="helpdesk-template"
       >
         <span>
-          Plantilla opcional
+          Tipo de solicitud
         </span>
 
         <select
           id="helpdesk-template"
-          disabled={disabled}
-          value={selectedId}
-          onChange={event =>
-            selectTemplate(
-              event.target.value,
-            )
+          disabled={
+            disabled
+          }
+          value={
+            selectedId
+          }
+          onChange={
+            event =>
+              selectTemplate(
+                event.target.value,
+              )
           }
         >
           <option value="">
-            Sin plantilla
+            Crear manualmente
           </option>
 
           {items.map(
             item => (
               <option
-                key={item.id}
-                value={item.id}
+                key={
+                  item.id
+                }
+                value={
+                  item.id
+                }
               >
-                {item.title}
+                {
+                  item.title
+                }
               </option>
             ),
           )}
@@ -308,90 +463,183 @@ export function HelpdeskRequestTemplates({
         <div
           className="hrt-template-panel"
         >
+          <header
+            className="hrt-template-panel__header"
+          >
+            <div>
+              <strong>
+                {
+                  selected.title
+                }
+              </strong>
+
+              <small>
+                {
+                  selected.category
+                }
+                {' · '}
+                {
+                  selected.ticketType ===
+                    'incident'
+                    ? 'Incidente'
+                    : 'Solicitud'
+                }
+              </small>
+            </div>
+
+            <button
+              type="button"
+              aria-label="Quitar plantilla"
+              disabled={
+                disabled
+              }
+              onClick={
+                reset
+              }
+            >
+              <X
+                size={16}
+              />
+            </button>
+          </header>
+
           {selected.description && (
             <p
               className="hrt-template-description"
             >
-              {selected.description}
+              {
+                selected.description
+              }
             </p>
           )}
 
           <label>
             Asunto
+
             <input
-              maxLength={250}
-              disabled={disabled}
-              value={subject}
-              placeholder={
-                selected.title
+              required
+              maxLength={
+                250
               }
-              onChange={event =>
-                setSubject(
-                  event.target.value,
-                )
+              disabled={
+                disabled
+              }
+              value={
+                subject
+              }
+              onChange={
+                event =>
+                  setSubject(
+                    event.target.value,
+                  )
               }
             />
           </label>
 
-          {selected.questions.map(
-            (
-              question,
-              index,
-            ) => (
-              <label
-                key={
-                  `${selected.id}-${index}`
-                }
-              >
-                {question}
-
-                <textarea
-                  rows={2}
-                  maxLength={800}
-                  disabled={
-                    disabled
-                  }
-                  value={
-                    answers[
-                      index
-                    ] ?? ''
-                  }
-                  onChange={event =>
-                    setAnswers(
-                      current => ({
-                        ...current,
-
-                        [index]:
-                          event
-                            .target
-                            .value,
-                      }),
-                    )
-                  }
-                />
-              </label>
-            ),
-          )}
-
           <div
+            className="hrt__questions"
+          >
+            {selected.questions.map(
+              (
+                question,
+                index,
+              ) => (
+                <label
+                  key={
+                    `${selected.id}-${index}`
+                  }
+                >
+                  <span>
+                    {
+                      index +
+                      1
+                    }
+                    .
+                    {' '}
+                    {
+                      question
+                    }
+                  </span>
+
+                  <textarea
+                    required
+                    rows={
+                      3
+                    }
+                    maxLength={
+                      800
+                    }
+                    disabled={
+                      disabled
+                    }
+                    value={
+                      answers[index]
+                      ??
+                      ''
+                    }
+                    onChange={
+                      event =>
+                        setAnswers(
+                          current => ({
+                            ...current,
+
+                            [index]:
+                              event.target.value,
+                          }),
+                        )
+                    }
+                  />
+
+                  <small>
+                    {
+                      (
+                        answers[index]
+                        ??
+                        ''
+                      ).length
+                    }
+                    /800
+                  </small>
+                </label>
+              ),
+            )}
+          </div>
+
+          <footer
             className="hrt-template-footer"
           >
-            <small>
-              {
-                preparedDescription
-                  .length
-              }
-              /4000 caracteres
-            </small>
+            <div>
+              {complete ? (
+                <span
+                  className="hrt__complete"
+                >
+                  <CheckCircle2
+                    size={14}
+                  />
+
+                  Información completa
+                </span>
+              ) : (
+                <small>
+                  Completa todas las preguntas.
+                </small>
+              )}
+
+              <small>
+                {
+                  preparedDescription
+                    .length
+                }
+                /4000 caracteres
+              </small>
+            </div>
 
             <button
               type="button"
-              className={
-                'helpdesk-ui-button ' +
-                'helpdesk-ui-button--primary'
-              }
+              className="helpdesk-ui-button helpdesk-ui-button--primary"
               disabled={
-                disabled ||
+                disabled
+                ||
                 !complete
               }
               onClick={
@@ -400,7 +648,7 @@ export function HelpdeskRequestTemplates({
             >
               Aplicar plantilla
             </button>
-          </div>
+          </footer>
         </div>
       )}
     </section>

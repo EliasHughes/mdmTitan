@@ -10,6 +10,9 @@ import {
   useSearchParams,
 } from 'react-router-dom'
 
+import axios
+  from 'axios'
+
 import {
   ArrowRight,
   ClipboardList,
@@ -29,14 +32,21 @@ import {
 
 import {
   helpdeskPermissions,
+  legacyHelpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
 import {
   HelpdeskCreateRequest,
 } from './HelpdeskCreateRequest'
 
+import {
+  HelpdeskKanbanBoard,
+  type KanbanTicket,
+} from './HelpdeskKanbanBoard'
+
 import './HelpdeskPages.css'
 import './HelpdeskWorkPage.css'
+import './HelpdeskInboxWorkflow.css'
 
 type View =
   | 'mine'
@@ -44,17 +54,8 @@ type View =
   | 'all'
   | 'kanban'
 
-interface Ticket {
-  id: string
-  number: string
-  subject: string
-  status: string
-  priority: string
-  category: string
-  requesterName: string
-  assigneeName: string | null
-  updatedAtUtc: string
-  slaBreached: boolean
+interface Ticket
+  extends KanbanTicket {
 }
 
 interface Result {
@@ -117,45 +118,9 @@ const PRIORITY:
       'Urgente',
   }
 
-const KANBAN_COLUMNS =
-  [
-    {
-      key:
-        'new',
-
-      label:
-        'Nuevos',
-    },
-
-    {
-      key:
-        'open',
-
-      label:
-        'Abiertos',
-    },
-
-    {
-      key:
-        'inprogress',
-
-      label:
-        'En proceso',
-    },
-
-    {
-      key:
-        'pendinguser',
-
-      label:
-        'Esperando usuario',
-    },
-  ] as const
-
 function resolveView(
   value:
-    string |
-    null,
+    string | null,
 ): View {
   return value ===
       'unassigned'
@@ -170,7 +135,8 @@ function resolveView(
 }
 
 function formatDate(
-  value: string,
+  value:
+    string,
 ) {
   const parsed =
     new Date(
@@ -207,6 +173,35 @@ function formatDate(
     )
 }
 
+function errorMessage(
+  error: unknown,
+) {
+  if (
+    axios.isAxiosError<{
+      message?: string
+      title?: string
+    }>(
+      error,
+    )
+  ) {
+    return (
+      error.response
+        ?.data
+        ?.message
+      ??
+      error.response
+        ?.data
+        ?.title
+      ??
+      `No se pudo completar la operación (${error.response?.status ?? 'sin conexión'}).`
+    )
+  }
+
+  return error instanceof Error
+    ? error.message
+    : 'No se pudo completar la operación.'
+}
+
 export function HelpdeskInboxPage() {
   const navigate =
     useNavigate()
@@ -221,15 +216,6 @@ export function HelpdeskInboxPage() {
     hasPermission,
   } =
     useAuth()
-
-  /*
-   * ============================================================
-   * URL IS THE SOURCE OF TRUTH
-   *
-   * Previously this value was copied only once into local state.
-   * Clicking the top navigation changed the URL but not the view.
-   * ============================================================
-   */
 
   const requestedView =
     resolveView(
@@ -327,6 +313,14 @@ export function HelpdeskInboxPage() {
     )
 
   const [
+    notice,
+    setNotice,
+  ] =
+    useState(
+      '',
+    )
+
+  const [
     workloadError,
     setWorkloadError,
   ] =
@@ -342,30 +336,17 @@ export function HelpdeskInboxPage() {
       false,
     )
 
-  /*
-   * React Router keeps the component mounted when only query
-   * parameters change. Keep local state synchronized explicitly.
-   */
-  useEffect(
-    () => {
-      if (
-        requestedView !==
-        view
-      ) {
-        setView(
-          requestedView,
-        )
+  const [
+    movingTicketId,
+    setMovingTicketId,
+  ] =
+    useState<string | null>(
+      null,
+    )
 
-        setPage(
-          1,
-        )
-      }
-    },
-    [
-      requestedView,
-      view,
-    ],
-  )
+  // ============================================================
+  // PERMISSIONS
+  // ============================================================
 
   const canCreate =
     hasPermission(
@@ -374,7 +355,8 @@ export function HelpdeskInboxPage() {
     )
     ||
     hasPermission(
-      'tickets.create',
+      legacyHelpdeskPermissions
+        .ticketCreate,
     )
     ||
     hasPermission(
@@ -436,6 +418,52 @@ export function HelpdeskInboxPage() {
         .adminAccess,
     )
 
+  const canTransition =
+    hasPermission(
+      helpdeskPermissions
+        .ticketTransition,
+    )
+    ||
+    hasPermission(
+      helpdeskPermissions
+        .adminAccess,
+    )
+    ||
+    hasPermission(
+      legacyHelpdeskPermissions
+        .ticketComment,
+    )
+    ||
+    hasPermission(
+      legacyHelpdeskPermissions
+        .manage,
+    )
+
+  // ============================================================
+  // URL STATE
+  // ============================================================
+
+  useEffect(
+    () => {
+      if (
+        requestedView !==
+        view
+      ) {
+        setView(
+          requestedView,
+        )
+
+        setPage(
+          1,
+        )
+      }
+    },
+    [
+      requestedView,
+      view,
+    ],
+  )
+
   const pageSize =
     view ===
       'kanban'
@@ -451,57 +479,68 @@ export function HelpdeskInboxPage() {
       ),
     )
 
-  const openTicket =
-    (
-      id:
-        string,
-    ) =>
-      navigate(
-        `/helpdesk/tickets/${id}?workspace=helpdesk`,
+  function openTicket(
+    id:
+      string,
+  ) {
+    navigate(
+      `/helpdesk/tickets/${id}?workspace=helpdesk`,
+    )
+  }
+
+  function changeView(
+    next:
+      View,
+  ) {
+    setView(
+      next,
+    )
+
+    setPage(
+      1,
+    )
+
+    setError(
+      '',
+    )
+
+    setNotice(
+      '',
+    )
+
+    const params =
+      new URLSearchParams(
+        searchParams,
       )
 
-  const changeView =
-    (
-      next:
-        View,
-    ) => {
-      setView(
-        next,
-      )
-
-      setPage(
-        1,
-      )
-
-      const params =
-        new URLSearchParams(
-          searchParams,
-        )
-
-      if (
-        next ===
-        'mine'
-      ) {
-        params.delete(
-          'view',
-        )
-      }
-      else {
-        params.set(
-          'view',
-          next,
-        )
-      }
-
-      params.set(
-        'workspace',
-        'helpdesk',
-      )
-
-      setSearchParams(
-        params,
+    if (
+      next ===
+      'mine'
+    ) {
+      params.delete(
+        'view',
       )
     }
+    else {
+      params.set(
+        'view',
+        next,
+      )
+    }
+
+    params.set(
+      'workspace',
+      'helpdesk',
+    )
+
+    setSearchParams(
+      params,
+    )
+  }
+
+  // ============================================================
+  // LOAD TICKETS
+  // ============================================================
 
   const load =
     useCallback(
@@ -526,15 +565,21 @@ export function HelpdeskInboxPage() {
                     view,
 
                     search:
-                      search ||
+                      search
+                      ||
                       undefined,
 
                     status:
-                      status ||
-                      undefined,
+                      view ===
+                        'kanban'
+                        ? undefined
+                        : status
+                          ||
+                          undefined,
 
                     priority:
-                      priority ||
+                      priority
+                      ||
                       undefined,
 
                     page,
@@ -552,7 +597,9 @@ export function HelpdeskInboxPage() {
             data.total,
           )
         }
-        catch {
+        catch (
+          exception
+        ) {
           setTickets(
             [],
           )
@@ -562,7 +609,9 @@ export function HelpdeskInboxPage() {
           )
 
           setError(
-            'No se pudieron cargar las solicitudes.',
+            errorMessage(
+              exception,
+            ),
           )
         }
         finally {
@@ -580,6 +629,10 @@ export function HelpdeskInboxPage() {
         pageSize,
       ],
     )
+
+  // ============================================================
+  // LOAD WORKLOAD
+  // ============================================================
 
   const loadWorkload =
     useCallback(
@@ -632,114 +685,205 @@ export function HelpdeskInboxPage() {
     ],
   )
 
-  const refresh =
-    () => {
-      void load()
-      void loadWorkload()
+  function refresh() {
+    setNotice(
+      '',
+    )
+
+    void load()
+    void loadWorkload()
+  }
+
+  function applySearch() {
+    setSearch(
+      input.trim(),
+    )
+
+    setPage(
+      1,
+    )
+  }
+
+  // ============================================================
+  // KANBAN TRANSITION
+  // ============================================================
+
+  async function transitionFromKanban(
+    ticket:
+      KanbanTicket,
+
+    targetStatus:
+      | 'new'
+      | 'open'
+      | 'inprogress'
+      | 'pendinguser',
+  ) {
+    if (
+      !canTransition
+      ||
+      ticket.status ===
+        targetStatus
+    ) {
+      return
     }
 
-  const apply =
-    () => {
-      setSearch(
-        input.trim(),
+    setMovingTicketId(
+      ticket.id,
+    )
+
+    setError(
+      '',
+    )
+
+    setNotice(
+      '',
+    )
+
+    try {
+      await apiClient.post(
+        `/helpdesk/tickets/${ticket.id}/transition`,
+        {
+          status:
+            targetStatus,
+        },
       )
 
-      setPage(
-        1,
+      setTickets(
+        current =>
+          current.map(
+            item =>
+              item.id ===
+                ticket.id
+                ? {
+                    ...item,
+
+                    status:
+                      targetStatus,
+
+                    updatedAtUtc:
+                      new Date()
+                        .toISOString(),
+                  }
+                : item,
+          ),
+      )
+
+      const label =
+        STATUS[
+          targetStatus
+        ]
+        ??
+        targetStatus
+
+      setNotice(
+        `${ticket.number} movido a «${label}».`,
+      )
+
+      await loadWorkload()
+    }
+    catch (
+      exception
+    ) {
+      setError(
+        errorMessage(
+          exception,
+        ),
+      )
+
+      await load()
+    }
+    finally {
+      setMovingTicketId(
+        null,
       )
     }
+  }
+
+  // ============================================================
+  // TABS
+  // ============================================================
 
   const tabs =
-    [
-      canViewMine
-        ? {
-            key:
-              'mine' as const,
-
-            label:
-              'Mi trabajo',
-
-            count:
-              workload
-                ?.assignedToMe,
-          }
-        : null,
-
-      canViewUnassigned
-        ? {
-            key:
-              'unassigned' as const,
-
-            label:
-              'Sin asignar',
-
-            count:
-              workload
-                ?.unassigned,
-          }
-        : null,
-
-      canViewAll
-        ? {
-            key:
-              'all' as const,
-
-            label:
-              'Todos',
-
-            count:
-              workload
-                ?.active,
-          }
-        : null,
-
-      canViewKanban
-        ? {
-            key:
-              'kanban' as const,
-
-            label:
-              'Kanban',
-
-            count:
-              workload
-                ?.active,
-          }
-        : null,
-    ]
-      .filter(
-        Boolean,
-      ) as {
-        key:
-          View
-
-        label:
-          string
-
-        count:
-          number |
-          undefined
-      }[]
-
-  const kanban =
     useMemo(
       () =>
-        KANBAN_COLUMNS.map(
-          column => ({
-            ...column,
+        [
+          canViewMine
+            ? {
+                key:
+                  'mine' as const,
 
-            tickets:
-              tickets.filter(
-                ticket =>
-                  ticket.status ===
-                  column.key,
-              ),
-          }),
-        ),
+                label:
+                  'Mi trabajo',
+
+                count:
+                  workload
+                    ?.assignedToMe,
+              }
+            : null,
+
+          canViewUnassigned
+            ? {
+                key:
+                  'unassigned' as const,
+
+                label:
+                  'Sin asignar',
+
+                count:
+                  workload
+                    ?.unassigned,
+              }
+            : null,
+
+          canViewAll
+            ? {
+                key:
+                  'all' as const,
+
+                label:
+                  'Todos',
+
+                count:
+                  workload
+                    ?.active,
+              }
+            : null,
+
+          canViewKanban
+            ? {
+                key:
+                  'kanban' as const,
+
+                label:
+                  'Kanban',
+
+                count:
+                  workload
+                    ?.active,
+              }
+            : null,
+        ]
+          .filter(
+            Boolean,
+          ) as {
+            key: View
+            label: string
+            count:
+              number |
+              undefined
+          }[],
       [
-        tickets,
+        canViewMine,
+        canViewUnassigned,
+        canViewAll,
+        canViewKanban,
+        workload,
       ],
     )
+
+  // ============================================================
+  // RENDER
+  // ============================================================
 
   return (
     <main
@@ -788,7 +932,7 @@ export function HelpdeskInboxPage() {
             {
               view ===
                 'kanban'
-                ? 'Visualiza el trabajo activo según su estado operativo.'
+                ? 'Administra el trabajo activo moviendo los tickets según su estado operativo.'
                 : 'Atiende solicitudes, prioriza casos, controla el backlog y trabaja con tu equipo.'
             }
           </p>
@@ -841,6 +985,15 @@ export function HelpdeskInboxPage() {
         </div>
       </header>
 
+      {notice && (
+        <div
+          className="hd-workflow-notice"
+          role="status"
+        >
+          {notice}
+        </div>
+      )}
+
       {error && (
         <div
           className="helpdesk-inbox__error"
@@ -874,35 +1027,39 @@ export function HelpdeskInboxPage() {
         aria-label="Bandejas de tickets"
       >
         {tabs.map(
-          tab => (
+          item => (
             <button
               key={
-                tab.key
+                item.key
               }
               type="button"
               className={
                 view ===
-                  tab.key
+                  item.key
                   ? 'is-active'
                   : ''
               }
               aria-pressed={
                 view ===
-                tab.key
+                item.key
               }
               onClick={
                 () =>
                   changeView(
-                    tab.key,
+                    item.key,
                   )
               }
             >
-              {tab.label}
+              {
+                item.label
+              }
 
-              {tab.count !==
+              {item.count !==
                 undefined && (
                 <strong>
-                  {tab.count}
+                  {
+                    item.count
+                  }
                 </strong>
               )}
             </button>
@@ -945,8 +1102,7 @@ export function HelpdeskInboxPage() {
                 onChange={
                   event =>
                     setInput(
-                      event.target
-                        .value,
+                      event.target.value,
                     )
                 }
                 onKeyDown={
@@ -955,7 +1111,7 @@ export function HelpdeskInboxPage() {
                       event.key ===
                       'Enter'
                     ) {
-                      apply()
+                      applySearch()
                     }
                   }
                 }
@@ -979,8 +1135,7 @@ export function HelpdeskInboxPage() {
                   onChange={
                     event => {
                       setStatus(
-                        event.target
-                          .value,
+                        event.target.value,
                       )
 
                       setPage(
@@ -1010,7 +1165,9 @@ export function HelpdeskInboxPage() {
                           key
                         }
                       >
-                        {label}
+                        {
+                          label
+                        }
                       </option>
                     ),
                   )}
@@ -1032,8 +1189,7 @@ export function HelpdeskInboxPage() {
                 onChange={
                   event => {
                     setPriority(
-                      event.target
-                        .value,
+                      event.target.value,
                     )
 
                     setPage(
@@ -1063,7 +1219,9 @@ export function HelpdeskInboxPage() {
                         key
                       }
                     >
-                      {label}
+                      {
+                        label
+                      }
                     </option>
                   ),
                 )}
@@ -1077,7 +1235,7 @@ export function HelpdeskInboxPage() {
                 'helpdesk-ui-button--secondary'
               }
               onClick={
-                apply
+                applySearch
               }
             >
               Buscar
@@ -1124,188 +1282,34 @@ export function HelpdeskInboxPage() {
                   Cargando tablero…
                 </div>
               ) : (
-                <div
-                  className="helpdesk-kanban"
-                >
-                  {kanban.map(
-                    column => (
-                      <section
-                        key={
-                          column.key
-                        }
-                        className={
-                          `helpdesk-kanban__column ` +
-                          `helpdesk-kanban__column--${column.key}`
-                        }
-                      >
-                        <header>
-                          <strong>
-                            {
-                              column.label
-                            }
-                          </strong>
-
-                          <span>
-                            {
-                              column
-                                .tickets
-                                .length
-                            }
-                          </span>
-                        </header>
-
-                        <div
-                          className="helpdesk-kanban__cards"
-                        >
-                          {
-                            column.tickets
-                              .length ===
-                              0 ? (
-                              <p
-                                className="helpdesk-kanban__empty"
-                              >
-                                Sin tickets.
-                              </p>
-                            ) : (
-                              column.tickets.map(
-                                item => (
-                                  <button
-                                    key={
-                                      item.id
-                                    }
-                                    type="button"
-                                    className="helpdesk-kanban__card"
-                                    onClick={
-                                      () =>
-                                        openTicket(
-                                          item.id,
-                                        )
-                                    }
-                                  >
-                                    <div
-                                      className="helpdesk-kanban__card-top"
-                                    >
-                                      <span>
-                                        {
-                                          item.number
-                                        }
-                                      </span>
-
-                                      <span
-                                        className={
-                                          `helpdesk-kanban__priority ` +
-                                          `helpdesk-kanban__priority--${item.priority}`
-                                        }
-                                      >
-                                        {
-                                          PRIORITY[
-                                            item.priority
-                                          ]
-                                          ??
-                                          item.priority
-                                        }
-                                      </span>
-                                    </div>
-
-                                    <strong>
-                                      {
-                                        item.subject
-                                      }
-                                    </strong>
-
-                                    <small>
-                                      {
-                                        item.category
-                                      }
-                                    </small>
-
-                                    <div
-                                      className="helpdesk-kanban__meta"
-                                    >
-                                      <span>
-                                        {
-                                          item.assigneeName
-                                          ??
-                                          'Sin asignar'
-                                        }
-                                      </span>
-
-                                      <span>
-                                        {
-                                          formatDate(
-                                            item.updatedAtUtc,
-                                          )
-                                        }
-                                      </span>
-                                    </div>
-
-                                    {item.slaBreached && (
-                                      <span
-                                        className="helpdesk-kanban__sla"
-                                      >
-                                        SLA vencido
-                                      </span>
-                                    )}
-                                  </button>
-                                ),
-                              )
-                            )
-                          }
-                        </div>
-                      </section>
-                    ),
-                  )}
-                </div>
+                <HelpdeskKanbanBoard
+                  tickets={
+                    tickets
+                  }
+                  canTransition={
+                    canTransition
+                  }
+                  movingTicketId={
+                    movingTicketId
+                  }
+                  onOpen={
+                    openTicket
+                  }
+                  onTransition={
+                    transitionFromKanban
+                  }
+                  formatDate={
+                    formatDate
+                  }
+                />
               )}
 
               <footer
                 className="helpdesk-inbox__footer"
               >
                 <span>
-                  Página {page} de {pages}
-                  {' · '}
                   {total} tickets activos
                 </span>
-
-                <button
-                  type="button"
-                  disabled={
-                    loading
-                    ||
-                    page <=
-                      1
-                  }
-                  onClick={
-                    () =>
-                      setPage(
-                        value =>
-                          value -
-                          1,
-                      )
-                  }
-                >
-                  Anterior
-                </button>
-
-                <button
-                  type="button"
-                  disabled={
-                    loading
-                    ||
-                    page >=
-                      pages
-                  }
-                  onClick={
-                    () =>
-                      setPage(
-                        value =>
-                          value +
-                          1,
-                      )
-                  }
-                >
-                  Siguiente
-                </button>
               </footer>
             </>
           ) : (
@@ -1336,7 +1340,11 @@ export function HelpdeskInboxPage() {
                 <span
                   className="helpdesk-inbox__total"
                 >
-                  {total} resultados
+                  {
+                    total
+                  }
+                  {' '}
+                  resultados
                 </span>
               </div>
 
@@ -1386,7 +1394,9 @@ export function HelpdeskInboxPage() {
                     {loading ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={
+                            7
+                          }
                           className="helpdesk-inbox__empty"
                         >
                           Cargando…
@@ -1395,7 +1405,9 @@ export function HelpdeskInboxPage() {
                     ) : !tickets.length ? (
                       <tr>
                         <td
-                          colSpan={7}
+                          colSpan={
+                            7
+                          }
                           className="helpdesk-inbox__empty"
                         >
                           <ClipboardList
@@ -1408,8 +1420,7 @@ export function HelpdeskInboxPage() {
                           </strong>
 
                           <span>
-                            Prueba otros
-                            filtros.
+                            Prueba otros filtros.
                           </span>
                         </td>
                       </tr>
@@ -1596,8 +1607,7 @@ export function HelpdeskInboxPage() {
                 </h2>
 
                 <p>
-                  Carga activa y
-                  disponibilidad
+                  Carga activa y disponibilidad
                 </p>
               </div>
             </div>
@@ -1614,8 +1624,7 @@ export function HelpdeskInboxPage() {
                 .agents
                 .length ? (
               <p>
-                Todavía no hay
-                agentes configurados.
+                Todavía no hay agentes configurados.
               </p>
             ) : (
               workload.agents.map(

@@ -20,6 +20,7 @@ import {
   MessageSquare,
   Monitor,
   PauseCircle,
+  PlayCircle,
   RefreshCw,
   RotateCcw,
   Send,
@@ -27,7 +28,8 @@ import {
   X,
 } from 'lucide-react'
 
-import axios from 'axios'
+import axios
+  from 'axios'
 
 import {
   helpdeskApi,
@@ -40,12 +42,13 @@ import {
 
 import {
   helpdeskPermissions,
+  legacyHelpdeskPermissions,
 } from '../../auth/helpdeskAccess'
 
 import './HelpdeskPages.css'
 import './HelpdeskWorkflowActions.css'
 
-const statusLabels:
+const STATUS:
   Record<string, string> = {
     new:
       'Nuevo',
@@ -66,7 +69,7 @@ const statusLabels:
       'Cerrado',
   }
 
-const priorityLabels:
+const PRIORITY:
   Record<string, string> = {
     low:
       'Baja',
@@ -79,9 +82,6 @@ const priorityLabels:
 
     critical:
       'Crítica',
-
-    urgent:
-      'Urgente',
   }
 
 const dateFormatter =
@@ -117,25 +117,24 @@ function formatDate(
       )
 }
 
-function getErrorMessage(
+function errorMessage(
   error: unknown,
   fallback: string,
 ) {
   if (
-    axios.isAxiosError(
+    axios.isAxiosError<{
+      message?: string
+    }>(
       error,
     )
-    &&
-    typeof error
-      .response
-      ?.data
-      ?.message ===
-      'string'
   ) {
-    return error
-      .response
-      .data
-      .message
+    return (
+      error.response
+        ?.data
+        ?.message
+      ??
+      fallback
+    )
   }
 
   return fallback
@@ -160,10 +159,7 @@ export function HelpdeskTicketPage() {
     ticket,
     setTicket,
   ] =
-    useState<
-      HelpdeskTicketDetails |
-      null
-    >(
+    useState<HelpdeskTicketDetails | null>(
       null,
     )
 
@@ -203,11 +199,16 @@ export function HelpdeskTicketPage() {
     error,
     setError,
   ] =
-    useState<
-      string |
-      null
-    >(
+    useState<string | null>(
       null,
+    )
+
+  const [
+    notice,
+    setNotice,
+  ] =
+    useState(
+      '',
     )
 
   const [
@@ -226,13 +227,34 @@ export function HelpdeskTicketPage() {
       '',
     )
 
+  // ============================================================
+  // PERMISSIONS
+  // ============================================================
+
   const canComment =
     hasPermission(
-      'tickets.comment',
+      helpdeskPermissions
+        .ticketComment,
+    )
+    ||
+    hasPermission(
+      legacyHelpdeskPermissions
+        .ticketComment,
     )
     ||
     hasPermission(
       helpdeskPermissions
+        .adminAccess,
+    )
+
+  const canInternalNote =
+    hasPermission(
+      helpdeskPermissions
+        .ticketInternalNote,
+    )
+    ||
+    hasPermission(
+      legacyHelpdeskPermissions
         .ticketComment,
     )
     ||
@@ -242,10 +264,6 @@ export function HelpdeskTicketPage() {
     )
 
   const canAssign =
-    hasPermission(
-      'tickets.assign',
-    )
-    ||
     hasPermission(
       helpdeskPermissions
         .ticketAssign,
@@ -257,34 +275,40 @@ export function HelpdeskTicketPage() {
     )
     ||
     hasPermission(
+      legacyHelpdeskPermissions
+        .ticketAssign,
+    )
+    ||
+    hasPermission(
       helpdeskPermissions
         .adminAccess,
     )
 
-  /*
-   * Actualmente el backend usa tickets.comment
-   * para las transiciones operativas.
-   *
-   * También aceptamos los permisos modernos
-   * para mantener la UI preparada para RBAC
-   * granular.
-   */
-  const canOperationalTransition =
-    canComment
-    ||
+  const canTransition =
     hasPermission(
       helpdeskPermissions
         .ticketTransition,
     )
-
-  const canResolve =
+    ||
     hasPermission(
-      'tickets.close',
+      legacyHelpdeskPermissions
+        .ticketComment,
     )
     ||
     hasPermission(
       helpdeskPermissions
+        .adminAccess,
+    )
+
+  const canResolve =
+    hasPermission(
+      helpdeskPermissions
         .ticketResolve,
+    )
+    ||
+    hasPermission(
+      legacyHelpdeskPermissions
+        .ticketClose,
     )
     ||
     hasPermission(
@@ -294,11 +318,12 @@ export function HelpdeskTicketPage() {
 
   const canClose =
     hasPermission(
-      'tickets.close',
+      helpdeskPermissions
+        .ticketClose,
     )
     ||
     hasPermission(
-      helpdeskPermissions
+      legacyHelpdeskPermissions
         .ticketClose,
     )
     ||
@@ -307,14 +332,15 @@ export function HelpdeskTicketPage() {
         .adminAccess,
     )
 
-  const canReopenPermission =
-    hasPermission(
-      'tickets.close',
-    )
-    ||
+  const canReopen =
     hasPermission(
       helpdeskPermissions
         .ticketReopen,
+    )
+    ||
+    hasPermission(
+      legacyHelpdeskPermissions
+        .ticketClose,
     )
     ||
     hasPermission(
@@ -322,12 +348,14 @@ export function HelpdeskTicketPage() {
         .adminAccess,
     )
 
+  // ============================================================
+  // LOAD
+  // ============================================================
+
   const load =
     useCallback(
       async () => {
-        if (
-          !ticketId
-        ) {
+        if (!ticketId) {
           setError(
             'No se indicó un ticket válido.',
           )
@@ -362,9 +390,9 @@ export function HelpdeskTicketPage() {
           exception
         ) {
           setError(
-            getErrorMessage(
+            errorMessage(
               exception,
-              'No se pudo cargar el ticket. Comprueba la conexión e inténtalo de nuevo.',
+              'No se pudo cargar el ticket.',
             ),
           )
         }
@@ -388,6 +416,10 @@ export function HelpdeskTicketPage() {
     ],
   )
 
+  // ============================================================
+  // COMMENTS
+  // ============================================================
+
   async function sendComment(
     event:
       FormEvent<HTMLFormElement>,
@@ -399,10 +431,32 @@ export function HelpdeskTicketPage() {
       ||
       !comment.trim()
       ||
-      !canComment
-      ||
       saving
     ) {
+      return
+    }
+
+    if (
+      internal
+      &&
+      !canInternalNote
+    ) {
+      setError(
+        'Tu rol no permite registrar notas internas.',
+      )
+
+      return
+    }
+
+    if (
+      !internal
+      &&
+      !canComment
+    ) {
+      setError(
+        'Tu rol no permite responder al solicitante.',
+      )
+
       return
     }
 
@@ -412,6 +466,10 @@ export function HelpdeskTicketPage() {
 
     setError(
       null,
+    )
+
+    setNotice(
+      '',
     )
 
     try {
@@ -434,12 +492,18 @@ export function HelpdeskTicketPage() {
       setInternal(
         false,
       )
+
+      setNotice(
+        internal
+          ? 'Nota interna registrada.'
+          : 'Respuesta publicada correctamente.',
+      )
     }
     catch (
       exception
     ) {
       setError(
-        getErrorMessage(
+        errorMessage(
           exception,
           'No se pudo publicar el comentario.',
         ),
@@ -451,6 +515,10 @@ export function HelpdeskTicketPage() {
       )
     }
   }
+
+  // ============================================================
+  // STATUS
+  // ============================================================
 
   async function changeStatus(
     status: string,
@@ -471,6 +539,10 @@ export function HelpdeskTicketPage() {
       null,
     )
 
+    setNotice(
+      '',
+    )
+
     try {
       const updated =
         await helpdeskApi
@@ -482,12 +554,16 @@ export function HelpdeskTicketPage() {
       setTicket(
         updated,
       )
+
+      setNotice(
+        `Estado actualizado a «${STATUS[status] ?? status}».`,
+      )
     }
     catch (
       exception
     ) {
       setError(
-        getErrorMessage(
+        errorMessage(
           exception,
           'No se pudo actualizar el estado del ticket.',
         ),
@@ -500,6 +576,10 @@ export function HelpdeskTicketPage() {
     }
   }
 
+  // ============================================================
+  // REOPEN
+  // ============================================================
+
   async function reopenTicket(
     event:
       FormEvent<HTMLFormElement>,
@@ -509,7 +589,10 @@ export function HelpdeskTicketPage() {
     if (
       !ticketId
       ||
-      !reopenReason.trim()
+      reopenReason
+        .trim()
+        .length <
+        5
       ||
       saving
     ) {
@@ -522,6 +605,10 @@ export function HelpdeskTicketPage() {
 
     setError(
       null,
+    )
+
+    setNotice(
+      '',
     )
 
     try {
@@ -543,12 +630,16 @@ export function HelpdeskTicketPage() {
       setShowReopen(
         false,
       )
+
+      setNotice(
+        'Ticket reabierto correctamente.',
+      )
     }
     catch (
       exception
     ) {
       setError(
-        getErrorMessage(
+        errorMessage(
           exception,
           'No se pudo reabrir el ticket.',
         ),
@@ -560,6 +651,10 @@ export function HelpdeskTicketPage() {
       )
     }
   }
+
+  // ============================================================
+  // TAKE
+  // ============================================================
 
   async function takeTicket() {
     if (
@@ -582,6 +677,10 @@ export function HelpdeskTicketPage() {
       null,
     )
 
+    setNotice(
+      '',
+    )
+
     try {
       const updated =
         await helpdeskApi
@@ -593,14 +692,18 @@ export function HelpdeskTicketPage() {
       setTicket(
         updated,
       )
+
+      setNotice(
+        'Ticket asignado a tu usuario.',
+      )
     }
     catch (
       exception
     ) {
       setError(
-        getErrorMessage(
+        errorMessage(
           exception,
-          'No se pudo asignar el ticket a tu usuario.',
+          'No se pudo tomar el ticket.',
         ),
       )
     }
@@ -611,6 +714,10 @@ export function HelpdeskTicketPage() {
     }
   }
 
+  // ============================================================
+  // EMPTY / LOADING
+  // ============================================================
+
   if (
     loading
     &&
@@ -618,11 +725,7 @@ export function HelpdeskTicketPage() {
   ) {
     return (
       <main
-        className={
-          'titan-page ' +
-          'helpdesk-page ' +
-          'helpdesk-detail'
-        }
+        className="titan-page helpdesk-page helpdesk-detail"
       >
         <div
           className="helpdesk-detail__loading"
@@ -633,16 +736,10 @@ export function HelpdeskTicketPage() {
     )
   }
 
-  if (
-    !ticket
-  ) {
+  if (!ticket) {
     return (
       <main
-        className={
-          'titan-page ' +
-          'helpdesk-page ' +
-          'helpdesk-detail'
-        }
+        className="titan-page helpdesk-page helpdesk-detail"
       >
         <div
           className="helpdesk-detail__loading"
@@ -657,10 +754,7 @@ export function HelpdeskTicketPage() {
 
           <button
             type="button"
-            className={
-              'helpdesk-ui-button ' +
-              'helpdesk-ui-button--secondary'
-            }
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
             onClick={
               () =>
                 navigate(
@@ -672,7 +766,7 @@ export function HelpdeskTicketPage() {
               size={16}
             />
 
-            Volver a la bandeja
+            Volver
           </button>
         </div>
       </main>
@@ -691,6 +785,10 @@ export function HelpdeskTicketPage() {
     normalizedStatus ===
       'closed'
 
+  const slaPaused =
+    normalizedStatus ===
+      'pendinguser'
+
   const canTake =
     canAssign
     &&
@@ -699,16 +797,24 @@ export function HelpdeskTicketPage() {
     ticket.assigneeUserId !==
       user?.id
 
+  const showOpen =
+    canTransition
+    &&
+    !terminal
+    &&
+    normalizedStatus !==
+      'open'
+
   const showInProgress =
-    canOperationalTransition
+    canTransition
     &&
     !terminal
     &&
     normalizedStatus !==
       'inprogress'
 
-  const showPendingUser =
-    canOperationalTransition
+  const showPending =
+    canTransition
     &&
     !terminal
     &&
@@ -720,13 +826,6 @@ export function HelpdeskTicketPage() {
     &&
     !terminal
 
-  /*
-   * Según la máquina de estados:
-   * resolved -> closed.
-   *
-   * No ofrecemos "Cerrar" desde open,
-   * new, inprogress o pendinguser.
-   */
   const showClose =
     canClose
     &&
@@ -734,21 +833,13 @@ export function HelpdeskTicketPage() {
       'resolved'
 
   const showReopenAction =
-    canReopenPermission
-    &&
-    terminal
-
-  const slaPaused =
-    normalizedStatus ===
-      'pendinguser'
+  canReopen
+  &&
+  terminal
 
   return (
     <main
-      className={
-        'titan-page ' +
-        'helpdesk-page ' +
-        'helpdesk-detail'
-      }
+      className="titan-page helpdesk-page helpdesk-detail"
     >
       <div
         className="helpdesk-detail__back"
@@ -787,7 +878,9 @@ export function HelpdeskTicketPage() {
           </span>
 
           <h1>
-            {ticket.subject}
+            {
+              ticket.subject
+            }
           </h1>
 
           <div
@@ -800,7 +893,7 @@ export function HelpdeskTicketPage() {
               }
             >
               {
-                statusLabels[
+                STATUS[
                   normalizedStatus
                 ]
                 ??
@@ -811,7 +904,7 @@ export function HelpdeskTicketPage() {
             <span>
               Prioridad{' '}
               {
-                priorityLabels[
+                PRIORITY[
                   ticket.priority
                 ]
                 ??
@@ -854,10 +947,7 @@ export function HelpdeskTicketPage() {
 
         <button
           type="button"
-          className={
-            'helpdesk-ui-button ' +
-            'helpdesk-ui-button--secondary'
-          }
+          className="helpdesk-ui-button helpdesk-ui-button--secondary"
           disabled={
             loading
           }
@@ -874,6 +964,19 @@ export function HelpdeskTicketPage() {
         </button>
       </header>
 
+      {notice && (
+        <div
+          className="helpdesk-workflow__success"
+          role="status"
+        >
+          <CheckCircle2
+            size={17}
+          />
+
+          {notice}
+        </div>
+      )}
+
       {error && (
         <div
           className="helpdesk-inbox__error"
@@ -884,6 +987,27 @@ export function HelpdeskTicketPage() {
           />
 
           {error}
+        </div>
+      )}
+
+      {slaPaused && (
+        <div
+          className="helpdesk-workflow__notice"
+        >
+          <PauseCircle
+            size={18}
+          />
+
+          <div>
+            <strong>
+              Esperando respuesta del solicitante
+            </strong>
+
+            <span>
+              El SLA está pausado mientras el ticket permanezca en este estado.
+              Cuando el usuario responda, TitanMDM reanudará el SLA automáticamente.
+            </span>
+          </div>
         </div>
       )}
 
@@ -905,8 +1029,7 @@ export function HelpdeskTicketPage() {
                 </h2>
 
                 <p>
-                  Información registrada
-                  al crear el ticket
+                  Información registrada al crear el ticket.
                 </p>
               </div>
             </div>
@@ -927,21 +1050,27 @@ export function HelpdeskTicketPage() {
               <span>
                 Tipo:{' '}
                 <strong>
-                  {ticket.type}
+                  {
+                    ticket.type
+                  }
                 </strong>
               </span>
 
               <span>
                 Categoría:{' '}
                 <strong>
-                  {ticket.category}
+                  {
+                    ticket.category
+                  }
                 </strong>
               </span>
 
               <span>
                 Origen:{' '}
                 <strong>
-                  {ticket.source}
+                  {
+                    ticket.source
+                  }
                 </strong>
               </span>
             </div>
@@ -959,8 +1088,7 @@ export function HelpdeskTicketPage() {
                 </h2>
 
                 <p>
-                  Respuestas y notas
-                  registradas en el ticket
+                  Respuestas públicas y notas internas.
                 </p>
               </div>
 
@@ -976,92 +1104,94 @@ export function HelpdeskTicketPage() {
             <div
               className="helpdesk-detail__conversation"
             >
-              {
-                ticket.comments.length ===
-                  0
-                  ? (
-                    <div
-                      className="helpdesk-detail__empty"
+              {ticket.comments.length ===
+                0 ? (
+                <div
+                  className="helpdesk-detail__empty"
+                >
+                  <MessageSquare
+                    size={25}
+                  />
+
+                  <strong>
+                    Aún no hay respuestas
+                  </strong>
+
+                  <span>
+                    La conversación aparecerá aquí.
+                  </span>
+                </div>
+              ) : (
+                ticket.comments.map(
+                  item => (
+                    <article
+                      key={
+                        item.id
+                      }
+                      className={
+                        `helpdesk-detail__message` +
+                        (
+                          item.isInternal
+                            ? ' helpdesk-detail__message--internal'
+                            : ''
+                        )
+                      }
                     >
-                      <MessageSquare
-                        size={25}
-                      />
-
-                      <strong>
-                        Aún no hay respuestas
-                      </strong>
-
-                      <span>
-                        La conversación
-                        aparecerá aquí.
-                      </span>
-                    </div>
-                  )
-                  : ticket.comments.map(
-                      item => (
-                        <article
-                          key={
-                            item.id
-                          }
-                          className={
-                            `helpdesk-detail__message` +
-                            (
-                              item.isInternal
-                                ? ' helpdesk-detail__message--internal'
-                                : ''
-                            )
-                          }
+                      <div
+                        className="helpdesk-detail__message-top"
+                      >
+                        <span
+                          className="helpdesk-detail__avatar"
                         >
-                          <div
-                            className="helpdesk-detail__message-top"
-                          >
-                            <span
-                              className="helpdesk-detail__avatar"
-                            >
-                              {
-                                item.authorName
-                                  .charAt(
-                                    0,
-                                  )
-                                  .toUpperCase()
-                              }
-                            </span>
+                          {
+                            item.authorName
+                              .charAt(
+                                0,
+                              )
+                              .toUpperCase()
+                          }
+                        </span>
 
-                            <div>
-                              <strong>
-                                {
-                                  item.authorName
-                                }
-                              </strong>
+                        <div>
+                          <strong>
+                            {
+                              item.authorName
+                            }
+                          </strong>
 
-                              <span>
-                                {formatDate(
-                                  item.createdAtUtc,
-                                )}
-                              </span>
-                            </div>
-
-                            {item.isInternal && (
-                              <small>
-                                <LockKeyhole
-                                  size={13}
-                                />
-
-                                Nota interna
-                              </small>
+                          <span>
+                            {formatDate(
+                              item.createdAtUtc,
                             )}
-                          </div>
+                          </span>
+                        </div>
 
-                          <p>
-                            {item.body}
-                          </p>
-                        </article>
-                      ),
-                    )
-              }
+                        {item.isInternal && (
+                          <small>
+                            <LockKeyhole
+                              size={13}
+                            />
+
+                            Nota interna
+                          </small>
+                        )}
+                      </div>
+
+                      <p>
+                        {
+                          item.body
+                        }
+                      </p>
+                    </article>
+                  ),
+                )
+              )}
             </div>
 
-            {canComment && !terminal && (
+            {(canComment ||
+              canInternalNote)
+              &&
+              !terminal && (
               <form
                 className="helpdesk-detail__composer"
                 onSubmit={
@@ -1096,52 +1226,47 @@ export function HelpdeskTicketPage() {
                   onChange={
                     event =>
                       setComment(
-                        event
-                          .target
-                          .value,
+                        event.target.value,
                       )
                   }
                   placeholder={
                     internal
-                      ? 'Escribe una nota visible solo para el personal autorizado…'
-                      : 'Escribe tu respuesta…'
+                      ? 'Escribe una nota visible solo para TIC…'
+                      : 'Escribe una respuesta para el solicitante…'
                   }
                 />
 
                 <div
                   className="helpdesk-detail__composer-footer"
                 >
-                  <label
-                    className="helpdesk-detail__internal"
-                  >
-                    <input
-                      type="checkbox"
-                      checked={
-                        internal
-                      }
-                      onChange={
-                        event =>
-                          setInternal(
-                            event
-                              .target
-                              .checked,
-                          )
-                      }
-                    />
+                  {canInternalNote && (
+                    <label
+                      className="helpdesk-detail__internal"
+                    >
+                      <input
+                        type="checkbox"
+                        checked={
+                          internal
+                        }
+                        onChange={
+                          event =>
+                            setInternal(
+                              event.target.checked,
+                            )
+                        }
+                      />
 
-                    <LockKeyhole
-                      size={15}
-                    />
+                      <LockKeyhole
+                        size={15}
+                      />
 
-                    Nota interna
-                  </label>
+                      Nota interna
+                    </label>
+                  )}
 
                   <button
                     type="submit"
-                    className={
-                      'helpdesk-ui-button ' +
-                      'helpdesk-ui-button--primary'
-                    }
+                    className="helpdesk-ui-button helpdesk-ui-button--primary"
                     disabled={
                       saving
                       ||
@@ -1175,8 +1300,7 @@ export function HelpdeskTicketPage() {
                 </h2>
 
                 <p>
-                  Historial de acciones
-                  del ticket
+                  Historial auditado del ticket.
                 </p>
               </div>
 
@@ -1185,58 +1309,184 @@ export function HelpdeskTicketPage() {
               />
             </div>
 
-            {
-              ticket.timeline.length ===
-                0
-                ? (
-                  <p
-                    className="helpdesk-detail__muted"
-                  >
-                    Todavía no hay eventos.
-                  </p>
-                )
-                : (
-                  <ol
-                    className="helpdesk-detail__timeline"
-                  >
-                    {
-                      ticket.timeline.map(
-                        item => (
-                          <li
-                            key={
-                              item.id
-                            }
-                          >
-                            <span
-                              className="helpdesk-detail__timeline-dot"
-                            />
+            {ticket.timeline.length ===
+              0 ? (
+              <p
+                className="helpdesk-detail__muted"
+              >
+                Todavía no hay eventos.
+              </p>
+            ) : (
+              <ol
+                className="helpdesk-detail__timeline"
+              >
+                {ticket.timeline.map(
+                  item => (
+                    <li
+                      key={
+                        item.id
+                      }
+                    >
+                      <span
+                        className="helpdesk-detail__timeline-dot"
+                      />
 
-                            <div>
-                              <strong>
-                                {
-                                  item.summary
-                                }
-                              </strong>
+                      <div>
+                        <strong>
+                          {
+                            item.summary
+                          }
+                        </strong>
 
-                              <time>
-                                {formatDate(
-                                  item.createdAtUtc,
-                                )}
-                              </time>
-                            </div>
-                          </li>
-                        ),
-                      )
-                    }
-                  </ol>
-                )
-            }
+                        <time>
+                          {formatDate(
+                            item.createdAtUtc,
+                          )}
+                        </time>
+                      </div>
+                    </li>
+                  ),
+                )}
+              </ol>
+            )}
           </section>
         </div>
 
         <aside
           className="helpdesk-detail__sidebar"
         >
+          <section
+            className="helpdesk-detail__card"
+          >
+            <h2>
+              Workflow
+            </h2>
+
+            {showOpen && (
+              <button
+                type="button"
+                className="helpdesk-ui-button helpdesk-ui-button--secondary helpdesk-detail__full"
+                disabled={
+                  saving
+                }
+                onClick={
+                  () =>
+                    void changeStatus(
+                      'open',
+                    )
+                }
+              >
+                Abrir
+              </button>
+            )}
+
+            {showInProgress && (
+              <button
+                type="button"
+                className="helpdesk-ui-button helpdesk-ui-button--secondary helpdesk-detail__full"
+                disabled={
+                  saving
+                }
+                onClick={
+                  () =>
+                    void changeStatus(
+                      'inprogress',
+                    )
+                }
+              >
+                <PlayCircle
+                  size={15}
+                />
+
+                En proceso
+              </button>
+            )}
+
+            {showPending && (
+              <button
+                type="button"
+                className="helpdesk-ui-button helpdesk-ui-button--secondary helpdesk-detail__full"
+                disabled={
+                  saving
+                }
+                onClick={
+                  () =>
+                    void changeStatus(
+                      'pendinguser',
+                    )
+                }
+              >
+                <PauseCircle
+                  size={15}
+                />
+
+                Esperando usuario
+              </button>
+            )}
+
+            {showResolve && (
+              <button
+                type="button"
+                className="helpdesk-ui-button helpdesk-ui-button--primary helpdesk-detail__full"
+                disabled={
+                  saving
+                }
+                onClick={
+                  () =>
+                    void changeStatus(
+                      'resolved',
+                    )
+                }
+              >
+                <CheckCircle2
+                  size={15}
+                />
+
+                Resolver
+              </button>
+            )}
+
+            {showClose && (
+              <button
+                type="button"
+                className="helpdesk-ui-button helpdesk-ui-button--primary helpdesk-detail__full"
+                disabled={
+                  saving
+                }
+                onClick={
+                  () =>
+                    void changeStatus(
+                      'closed',
+                    )
+                }
+              >
+                Cerrar
+              </button>
+            )}
+
+           {showReopenAction && (
+  <button
+    type="button"
+    className="helpdesk-workflow__reopen-button helpdesk-ui-button helpdesk-detail__full"
+    disabled={
+      saving
+    }
+    onClick={
+      () =>
+        setShowReopen(
+          true,
+        )
+    }
+  >
+    <RotateCcw
+      size={15}
+    />
+
+    Reabrir
+  </button>
+)}
+          </section>
+
           <section
             className="helpdesk-detail__card"
           >
@@ -1262,16 +1512,13 @@ export function HelpdeskTicketPage() {
                   }
                 </strong>
 
-                {
-                  ticket.entraUserPrincipalName &&
-                  (
-                    <small>
-                      {
-                        ticket.entraUserPrincipalName
-                      }
-                    </small>
-                  )
-                }
+                {ticket.entraUserPrincipalName && (
+                  <small>
+                    {
+                      ticket.entraUserPrincipalName
+                    }
+                  </small>
+                )}
               </div>
             </div>
 
@@ -1300,11 +1547,7 @@ export function HelpdeskTicketPage() {
             {canTake && (
               <button
                 type="button"
-                className={
-                  'helpdesk-ui-button ' +
-                  'helpdesk-ui-button--secondary ' +
-                  'helpdesk-detail__full'
-                }
+                className="helpdesk-ui-button helpdesk-ui-button--secondary helpdesk-detail__full"
                 disabled={
                   saving
                 }
@@ -1316,6 +1559,58 @@ export function HelpdeskTicketPage() {
                 Tomar ticket
               </button>
             )}
+          </section>
+
+          <section
+            className="helpdesk-detail__card"
+          >
+            <h2>
+              SLA
+            </h2>
+
+            <div
+              className="helpdesk-detail__info-row"
+            >
+              <Clock3
+                size={17}
+              />
+
+              <div>
+                <span>
+                  Primera respuesta
+                </span>
+
+                <strong>
+                  {slaPaused
+                    ? 'Pausado'
+                    : formatDate(
+                        ticket.firstResponseDueAtUtc,
+                      )}
+                </strong>
+              </div>
+            </div>
+
+            <div
+              className="helpdesk-detail__info-row"
+            >
+              <Clock3
+                size={17}
+              />
+
+              <div>
+                <span>
+                  Resolución
+                </span>
+
+                <strong>
+                  {slaPaused
+                    ? 'Pausado'
+                    : formatDate(
+                        ticket.resolveDueAtUtc,
+                      )}
+                </strong>
+              </div>
+            </div>
           </section>
 
           <section
@@ -1345,27 +1640,20 @@ export function HelpdeskTicketPage() {
                   }
                 </strong>
 
-                {
-                  ticket.devicePlatform &&
-                  (
-                    <small>
-                      {
-                        ticket.devicePlatform
-                      }
-                    </small>
-                  )
-                }
+                {ticket.devicePlatform && (
+                  <small>
+                    {
+                      ticket.devicePlatform
+                    }
+                  </small>
+                )}
               </div>
             </div>
 
             {ticket.deviceId && (
               <button
                 type="button"
-                className={
-                  'helpdesk-ui-button ' +
-                  'helpdesk-ui-button--secondary ' +
-                  'helpdesk-detail__full'
-                }
+                className="helpdesk-ui-button helpdesk-ui-button--secondary helpdesk-detail__full"
                 onClick={
                   () =>
                     navigate(
@@ -1376,235 +1664,7 @@ export function HelpdeskTicketPage() {
                 Ver dispositivo
               </button>
             )}
-
-            {ticket.remoteSessionId && (
-              <p
-                className="helpdesk-detail__muted"
-              >
-                Sesión remota vinculada:{' '}
-                {
-                  ticket.remoteSessionId
-                }
-              </p>
-            )}
           </section>
-
-          <section
-            className="helpdesk-detail__card"
-          >
-            <h2>
-              Acuerdos de servicio
-            </h2>
-
-            {slaPaused && (
-              <div
-                className="helpdesk-workflow__notice"
-              >
-                <PauseCircle
-                  size={17}
-                />
-
-                <div>
-                  <strong>
-                    SLA pausado
-                  </strong>
-
-                  <span>
-                    Esperando una respuesta
-                    del solicitante.
-                  </span>
-                </div>
-              </div>
-            )}
-
-            <div
-              className="helpdesk-detail__sla-row"
-            >
-              <span>
-                Primera respuesta
-              </span>
-
-              <strong>
-                {formatDate(
-                  ticket.firstResponseDueAtUtc,
-                )}
-              </strong>
-            </div>
-
-            <div
-              className="helpdesk-detail__sla-row"
-            >
-              <span>
-                Resolución
-              </span>
-
-              <strong>
-                {formatDate(
-                  ticket.resolveDueAtUtc,
-                )}
-              </strong>
-            </div>
-
-            <p
-              className="helpdesk-detail__muted"
-            >
-              {
-                slaPaused
-                  ? 'Los vencimientos se reanudarán cuando el solicitante responda.'
-                  : ticket.slaBreached
-                    ? 'Hay un plazo vencido.'
-                    : 'Sin vencimientos detectados.'
-              }
-            </p>
-          </section>
-
-          {
-            (
-              canOperationalTransition
-              ||
-              canResolve
-              ||
-              canClose
-              ||
-              canReopenPermission
-            )
-            &&
-            (
-              <section
-                className="helpdesk-detail__card"
-              >
-                <h2>
-                  Acciones
-                </h2>
-
-                <div
-                  className="helpdesk-detail__actions"
-                >
-                  {showInProgress && (
-                    <button
-                      type="button"
-                      className={
-                        'helpdesk-ui-button ' +
-                        'helpdesk-ui-button--secondary'
-                      }
-                      disabled={
-                        saving
-                      }
-                      onClick={
-                        () =>
-                          void changeStatus(
-                            'inprogress',
-                          )
-                      }
-                    >
-                      En proceso
-                    </button>
-                  )}
-
-                  {showPendingUser && (
-                    <button
-                      type="button"
-                      className={
-                        'helpdesk-ui-button ' +
-                        'helpdesk-ui-button--secondary'
-                      }
-                      disabled={
-                        saving
-                      }
-                      onClick={
-                        () =>
-                          void changeStatus(
-                            'pendinguser',
-                          )
-                      }
-                    >
-                      <PauseCircle
-                        size={16}
-                      />
-
-                      Esperando usuario
-                    </button>
-                  )}
-
-                  {showResolve && (
-                    <button
-                      type="button"
-                      className={
-                        'helpdesk-ui-button ' +
-                        'helpdesk-ui-button--secondary'
-                      }
-                      disabled={
-                        saving
-                      }
-                      onClick={
-                        () =>
-                          void changeStatus(
-                            'resolved',
-                          )
-                      }
-                    >
-                      <CheckCircle2
-                        size={16}
-                      />
-
-                      Resolver
-                    </button>
-                  )}
-
-                  {showClose && (
-                    <button
-                      type="button"
-                      className={
-                        'helpdesk-ui-button ' +
-                        'helpdesk-ui-button--secondary'
-                      }
-                      disabled={
-                        saving
-                      }
-                      onClick={
-                        () =>
-                          void changeStatus(
-                            'closed',
-                          )
-                      }
-                    >
-                      Cerrar ticket
-                    </button>
-                  )}
-
-                  {showReopenAction && (
-                    <button
-                      type="button"
-                      className={
-                        'helpdesk-ui-button ' +
-                        'helpdesk-workflow__reopen-button'
-                      }
-                      disabled={
-                        saving
-                      }
-                      onClick={
-                        () => {
-                          setReopenReason(
-                            '',
-                          )
-
-                          setShowReopen(
-                            true,
-                          )
-                        }
-                      }
-                    >
-                      <RotateCcw
-                        size={16}
-                      />
-
-                      Reabrir ticket
-                    </button>
-                  )}
-                </div>
-              </section>
-            )
-          }
         </aside>
       </div>
 
@@ -1612,18 +1672,6 @@ export function HelpdeskTicketPage() {
         <div
           className="helpdesk-workflow-modal"
           role="presentation"
-          onMouseDown={
-            event => {
-              if (
-                event.target ===
-                event.currentTarget
-              ) {
-                setShowReopen(
-                  false,
-                )
-              }
-            }
-          }
         >
           <form
             className="helpdesk-workflow-modal__dialog"
@@ -1641,7 +1689,7 @@ export function HelpdeskTicketPage() {
                 className="helpdesk-workflow-modal__icon"
               >
                 <RotateCcw
-                  size={21}
+                  size={20}
                 />
               </div>
 
@@ -1651,8 +1699,7 @@ export function HelpdeskTicketPage() {
                 </h2>
 
                 <p>
-                  Esta acción devolverá
-                  el caso a estado abierto.
+                  El motivo quedará registrado en auditoría.
                 </p>
               </div>
 
@@ -1668,7 +1715,7 @@ export function HelpdeskTicketPage() {
                 }
               >
                 <X
-                  size={19}
+                  size={18}
                 />
               </button>
             </header>
@@ -1677,37 +1724,35 @@ export function HelpdeskTicketPage() {
               className="helpdesk-workflow-modal__body"
             >
               <label
-                htmlFor="helpdesk-reopen-reason"
+                htmlFor="helpdesk-reopen"
               >
                 Motivo de reapertura
               </label>
 
               <textarea
-                id="helpdesk-reopen-reason"
+                id="helpdesk-reopen"
                 autoFocus
-                rows={5}
-                minLength={5}
-                maxLength={1000}
                 required
+                minLength={
+                  5
+                }
+                maxLength={
+                  1000
+                }
                 value={
                   reopenReason
                 }
                 onChange={
                   event =>
                     setReopenReason(
-                      event
-                        .target
-                        .value,
+                      event.target.value,
                     )
                 }
-                placeholder={
-                  'Describe por qué es necesario continuar trabajando este caso…'
-                }
+                placeholder="Describe por qué el caso debe volver a trabajarse…"
               />
 
               <small>
-                El motivo quedará registrado
-                en el historial de auditoría.
+                Mínimo 5 caracteres.
               </small>
             </div>
 
@@ -1716,10 +1761,7 @@ export function HelpdeskTicketPage() {
             >
               <button
                 type="button"
-                className={
-                  'helpdesk-ui-button ' +
-                  'helpdesk-ui-button--secondary'
-                }
+                className="helpdesk-ui-button helpdesk-ui-button--secondary"
                 disabled={
                   saving
                 }
@@ -1735,26 +1777,24 @@ export function HelpdeskTicketPage() {
 
               <button
                 type="submit"
-                className={
-                  'helpdesk-ui-button ' +
-                  'helpdesk-ui-button--primary'
-                }
+                className="helpdesk-ui-button helpdesk-ui-button--primary"
                 disabled={
                   saving
                   ||
                   reopenReason
                     .trim()
-                    .length < 5
+                    .length <
+                    5
                 }
               >
                 <RotateCcw
-                  size={16}
+                  size={15}
                 />
 
                 {
                   saving
                     ? 'Reabriendo…'
-                    : 'Confirmar reapertura'
+                    : 'Confirmar'
                 }
               </button>
             </footer>

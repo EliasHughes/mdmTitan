@@ -7,6 +7,11 @@ import {
 } from 'react'
 
 import {
+  HelpdeskRoutingSimulator,
+} from './HelpdeskRoutingSimulator'
+
+import {
+  Link,
   useSearchParams,
 } from 'react-router-dom'
 
@@ -14,12 +19,19 @@ import axios
   from 'axios'
 
 import {
+  AlertTriangle,
   Building2,
+  CheckCircle2,
+  Clock3,
+  Gauge,
   Headphones,
   MapPin,
   RefreshCw,
+  ShieldCheck,
   Trash2,
   UserRound,
+  UsersRound,
+  XCircle,
 } from 'lucide-react'
 
 import apiClient
@@ -68,10 +80,44 @@ type Coverage = {
   isActive: boolean
 }
 
+type WeeklySlot = {
+  day: number
+  start: string
+  end: string
+}
+
+type TechnicianGroup = {
+  teamId: string
+  teamName: string
+  teamActive: boolean
+
+  isAvailable: boolean
+  acceptsAutomaticAssignments: boolean
+
+  maxOpenTickets: number
+  openTickets: number
+  remainingCapacity: number
+  isAtCapacity: boolean
+
+  scheduleConfigured: boolean
+  scheduleEnabled: boolean
+  onDuty: boolean
+
+  priority: number
+  timeZoneId: string
+
+  slots: WeeklySlot[]
+
+  routingReady: boolean
+  routingIssues: string[]
+}
+
 type Staff = {
   id: string
   name: string
   email: string
+
+  roles: string[]
 
   siteId: string | null
   siteName: string | null
@@ -80,7 +126,26 @@ type Staff = {
   siteLocationName: string | null
 
   canWorkTickets: boolean
+  isEligible: boolean
+
   assistantEnabled: boolean
+
+  groups: TechnicianGroup[]
+  groupNames: string[]
+
+  openTickets: number
+  maxCapacity: number
+  remainingCapacity: number
+  isAtCapacity: boolean
+
+  isAvailable: boolean
+  acceptsAutomaticAssignments: boolean
+
+  scheduleConfigured: boolean
+  onDuty: boolean
+
+  routingReady: boolean
+  routingIssues: string[]
 }
 
 type Catalog = {
@@ -97,6 +162,16 @@ const emptyCatalog:
     teams: [],
     coverages: [],
   }
+
+const DAY_LABELS = [
+  'Dom',
+  'Lun',
+  'Mar',
+  'Mié',
+  'Jue',
+  'Vie',
+  'Sáb',
+]
 
 function resolveTab(
   value:
@@ -147,6 +222,101 @@ function errorMessage(
   return error instanceof Error
     ? error.message
     : 'No se pudo completar la operación.'
+}
+
+function routingLabel(
+  technician: Staff,
+) {
+  if (
+    technician.routingReady
+  ) {
+    return 'LISTO PARA ROUTING'
+  }
+
+  if (
+    technician.isAtCapacity
+  ) {
+    return 'CAPACIDAD COMPLETA'
+  }
+
+  if (
+    technician.scheduleConfigured
+    &&
+    !technician.onDuty
+  ) {
+    return 'FUERA DE TURNO'
+  }
+
+  if (
+    !technician.scheduleConfigured
+  ) {
+    return 'SIN TURNO'
+  }
+
+  if (
+    !technician.isAvailable
+  ) {
+    return 'NO DISPONIBLE'
+  }
+
+  if (
+    !technician.groupNames.length
+  ) {
+    return 'SIN GRUPO'
+  }
+
+  if (
+    !technician.canWorkTickets
+  ) {
+    return 'SIN PERMISO'
+  }
+
+  return 'REVISAR CONFIGURACIÓN'
+}
+
+function routingTone(
+  technician: Staff,
+) {
+  if (
+    technician.routingReady
+  ) {
+    return 'ready'
+  }
+
+  if (
+    technician.isAtCapacity
+  ) {
+    return 'danger'
+  }
+
+  if (
+    technician.scheduleConfigured
+    &&
+    !technician.onDuty
+  ) {
+    return 'warning'
+  }
+
+  return 'muted'
+}
+
+function formatSchedule(
+  group: TechnicianGroup,
+) {
+  if (
+    !group.slots.length
+  ) {
+    return 'Sin horario'
+  }
+
+  return group.slots
+    .map(
+      slot =>
+        `${DAY_LABELS[slot.day] ?? slot.day} ${slot.start}-${slot.end}`,
+    )
+    .join(
+      ' · ',
+    )
 }
 
 export function HelpdeskOperationsPage() {
@@ -390,14 +560,57 @@ export function HelpdeskOperationsPage() {
       ],
     )
 
-  const enabledTechniciansCount =
+  const routingReadyCount =
     useMemo(
       () =>
         staff.filter(
-          item =>
-            item.canWorkTickets,
+          technician =>
+            technician.routingReady,
         )
           .length,
+      [
+        staff,
+      ],
+    )
+
+  const onDutyCount =
+    useMemo(
+      () =>
+        staff.filter(
+          technician =>
+            technician.onDuty,
+        )
+          .length,
+      [
+        staff,
+      ],
+    )
+
+  const capacityAlertCount =
+    useMemo(
+      () =>
+        staff.filter(
+          technician =>
+            technician.isAtCapacity,
+        )
+          .length,
+      [
+        staff,
+      ],
+    )
+
+  const openAssignedTickets =
+    useMemo(
+      () =>
+        staff.reduce(
+          (
+            total,
+            technician,
+          ) =>
+            total +
+            technician.openTickets,
+          0,
+        ),
       [
         staff,
       ],
@@ -648,7 +861,7 @@ export function HelpdeskOperationsPage() {
   }
 
   // ============================================================
-  // NAME HELPERS
+  // LABEL HELPERS
   // ============================================================
 
   function siteName(
@@ -704,26 +917,26 @@ export function HelpdeskOperationsPage() {
   }
 
   // ============================================================
-  // PAGE TITLE BY TAB
+  // PAGE COPY
   // ============================================================
 
   const pageTitle =
     tab ===
       'technicians'
-      ? 'Técnicos de Mesa de Ayuda'
+      ? 'Preparación de técnicos'
       : tab ===
           'coverage'
         ? 'Cobertura operativa'
-        : 'Localidades y cobertura'
+        : 'Localidades de Helpdesk'
 
   const pageDescription =
     tab ===
       'technicians'
-      ? 'Consulta el personal TIC habilitado, su ubicación y disponibilidad para atender tickets.'
+      ? 'Verifica permisos, grupos, capacidad, disponibilidad, turnos y preparación para autoasignación.'
       : tab ===
           'coverage'
-        ? 'Define qué grupos atienden cada localidad, sublocalidad y categoría.'
-        : 'La Mesa de Ayuda utiliza las mismas localidades corporativas de TitanMDM.'
+        ? 'Define qué grupo atiende cada localidad, sublocalidad y categoría.'
+        : 'La Mesa de Ayuda consume las localidades corporativas configuradas en TitanMDM.'
 
   // ============================================================
   // RENDER
@@ -731,11 +944,7 @@ export function HelpdeskOperationsPage() {
 
   return (
     <main
-      className={
-        'titan-page ' +
-        'helpdesk-page ' +
-        'hd-operation'
-      }
+      className="titan-page helpdesk-page hd-operation"
     >
       <header
         className="helpdesk-inbox__header"
@@ -748,7 +957,7 @@ export function HelpdeskOperationsPage() {
               size={15}
             />
 
-            ORGANIZACIÓN OPERATIVA
+            PREPARACIÓN OPERATIVA
           </span>
 
           <h1>
@@ -760,26 +969,38 @@ export function HelpdeskOperationsPage() {
           </p>
         </div>
 
-        <button
-          type="button"
-          className={
-            'helpdesk-ui-button ' +
-            'helpdesk-ui-button--secondary'
-          }
-          disabled={
-            disabled
-          }
-          onClick={
-            () =>
-              void refresh()
-          }
+        <div
+          className="hd-operation__header-actions"
         >
-          <RefreshCw
-            size={16}
-          />
+          <Link
+            to="/helpdesk/especialidades?tab=schedules&workspace=helpdesk"
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
+          >
+            <UsersRound
+              size={16}
+            />
 
-          Actualizar
-        </button>
+            Grupos y turnos
+          </Link>
+
+          <button
+            type="button"
+            className="helpdesk-ui-button helpdesk-ui-button--secondary"
+            disabled={
+              disabled
+            }
+            onClick={
+              () =>
+                void refresh()
+            }
+          >
+            <RefreshCw
+              size={16}
+            />
+
+            Actualizar
+          </button>
+        </div>
       </header>
 
       {error && (
@@ -800,12 +1021,20 @@ export function HelpdeskOperationsPage() {
         </div>
       )}
 
-      <div
-        className="hd-operation__metrics"
+      {/* ======================================================
+          OPERATIONAL METRICS
+         ====================================================== */}
+
+      <section
+        className="hd-operation__metrics hd-operation__metrics--six"
       >
-        <div>
+        <article>
+          <Building2
+            size={19}
+          />
+
           <span>
-            Localidades activas
+            Localidades
           </span>
 
           <strong>
@@ -813,44 +1042,128 @@ export function HelpdeskOperationsPage() {
               activeSites.length
             }
           </strong>
-        </div>
 
-        <div>
-          <span>
-            Sublocalidades
-          </span>
-
-          <strong>
+          <small>
             {
               activeLocationsCount
             }
-          </strong>
-        </div>
+            {' '}
+            sublocalidades
+          </small>
+        </article>
 
-        <div>
+        <article>
+          <UsersRound
+            size={19}
+          />
+
           <span>
-            Grupos activos
+            Técnicos
           </span>
 
           <strong>
             {
-              activeTeams.length
+              staff.length
             }
           </strong>
-        </div>
 
-        <div>
+          <small>
+            Personal relacionado con Helpdesk
+          </small>
+        </article>
+
+        <article
+          className="is-success"
+        >
+          <ShieldCheck
+            size={19}
+          />
+
           <span>
-            Técnicos habilitados
+            Routing listo
           </span>
 
           <strong>
             {
-              enabledTechniciansCount
+              routingReadyCount
             }
           </strong>
-        </div>
-      </div>
+
+          <small>
+            Elegibles en este momento
+          </small>
+        </article>
+
+        <article>
+          <Clock3
+            size={19}
+          />
+
+          <span>
+            En turno
+          </span>
+
+          <strong>
+            {
+              onDutyCount
+            }
+          </strong>
+
+          <small>
+            Según horario configurado
+          </small>
+        </article>
+
+        <article
+          className={
+            capacityAlertCount
+              ? 'is-danger'
+              : ''
+          }
+        >
+          <AlertTriangle
+            size={19}
+          />
+
+          <span>
+            Capacidad llena
+          </span>
+
+          <strong>
+            {
+              capacityAlertCount
+            }
+          </strong>
+
+          <small>
+            Requieren redistribución
+          </small>
+        </article>
+
+        <article>
+          <Gauge
+            size={19}
+          />
+
+          <span>
+            Tickets activos
+          </span>
+
+          <strong>
+            {
+              openAssignedTickets
+            }
+          </strong>
+
+          <small>
+            Asignados actualmente
+          </small>
+        </article>
+      </section>
+
+      {/* ======================================================
+          TABS
+         ====================================================== */}
 
       <nav
         className="hd-operation__tabs"
@@ -920,14 +1233,15 @@ export function HelpdeskOperationsPage() {
       {loading && (
         <p
           role="status"
+          className="hd-operation__loading"
         >
-          Cargando configuración…
+          Cargando configuración operativa…
         </p>
       )}
 
-      {/* ========================================================
+      {/* ======================================================
           SITES
-         ======================================================== */}
+         ====================================================== */}
 
       {!loading &&
         tab ===
@@ -935,15 +1249,21 @@ export function HelpdeskOperationsPage() {
         <section
           className="hd-operation__card"
         >
-          <h2>
-            Localidades corporativas
-          </h2>
+          <div
+            className="hd-operation__section-heading"
+          >
+            <div>
+              <h2>
+                Localidades corporativas
+              </h2>
 
-          <p>
-            Fuente única:
-            Configuración →
-            Localidades.
-          </p>
+              <p>
+                Fuente única:
+                Configuración → Localidades.
+                Helpdesk no mantiene un catálogo paralelo.
+              </p>
+            </div>
+          </div>
 
           <div
             className="hd-operation__table"
@@ -980,8 +1300,7 @@ export function HelpdeskOperationsPage() {
                     <td
                       colSpan={5}
                     >
-                      No hay localidades
-                      configuradas.
+                      No hay localidades configuradas.
                     </td>
                   </tr>
                 ) : (
@@ -993,9 +1312,11 @@ export function HelpdeskOperationsPage() {
                         }
                       >
                         <td>
-                          {
-                            site.code
-                          }
+                          <code>
+                            {
+                              site.code
+                            }
+                          </code>
                         </td>
 
                         <td>
@@ -1023,11 +1344,19 @@ export function HelpdeskOperationsPage() {
                         </td>
 
                         <td>
-                          {
-                            site.isActive
-                              ? 'Activa'
-                              : 'Inactiva'
-                          }
+                          <span
+                            className={
+                              site.isActive
+                                ? 'hd-operation__status hd-operation__status--ready'
+                                : 'hd-operation__status hd-operation__status--muted'
+                            }
+                          >
+                            {
+                              site.isActive
+                                ? 'Activa'
+                                : 'Inactiva'
+                            }
+                          </span>
                         </td>
                       </tr>
                     ),
@@ -1037,9 +1366,20 @@ export function HelpdeskOperationsPage() {
             </table>
           </div>
 
-          <h3>
-            Sublocalidades
-          </h3>
+          <div
+            className="hd-operation__section-heading hd-operation__section-heading--secondary"
+          >
+            <div>
+              <h3>
+                Sublocalidades
+              </h3>
+
+              <p>
+                Edificios, áreas, plantas u otras divisiones
+                utilizadas para routing más específico.
+              </p>
+            </div>
+          </div>
 
           <div
             className="hd-operation__table"
@@ -1073,8 +1413,7 @@ export function HelpdeskOperationsPage() {
                     <td
                       colSpan={4}
                     >
-                      No hay sublocalidades
-                      configuradas.
+                      No hay sublocalidades configuradas.
                     </td>
                   </tr>
                 ) : (
@@ -1089,15 +1428,16 @@ export function HelpdeskOperationsPage() {
                         >
                           <td>
                             {siteName(
-                              location
-                                .siteId,
+                              location.siteId,
                             )}
                           </td>
 
                           <td>
-                            {
-                              location.name
-                            }
+                            <strong>
+                              {
+                                location.name
+                              }
+                            </strong>
                           </td>
 
                           <td>
@@ -1109,11 +1449,19 @@ export function HelpdeskOperationsPage() {
                           </td>
 
                           <td>
-                            {
-                              location.isActive
-                                ? 'Activa'
-                                : 'Inactiva'
-                            }
+                            <span
+                              className={
+                                location.isActive
+                                  ? 'hd-operation__status hd-operation__status--ready'
+                                  : 'hd-operation__status hd-operation__status--muted'
+                              }
+                            >
+                              {
+                                location.isActive
+                                  ? 'Activa'
+                                  : 'Inactiva'
+                              }
+                            </span>
                           </td>
                         </tr>
                       ),
@@ -1125,31 +1473,38 @@ export function HelpdeskOperationsPage() {
         </section>
       )}
 
-      {/* ========================================================
+      {/* ======================================================
           COVERAGE
-         ======================================================== */}
+         ====================================================== */}
+{!loading &&
+  tab ===
+    'coverage' && (
+  <>
+    <HelpdeskRoutingSimulator />
 
-      {!loading &&
-        tab ===
-          'coverage' && (
-        <section
-          className="hd-operation__card"
-        >
+    <section
+      className="hd-operation__card"
+    >
+      <div
+        className="hd-operation__section-heading"
+      >
+        <div>
           <h2>
             Cobertura de grupos
           </h2>
 
           <p>
-            Define qué grupo atiende
-            cada localidad,
-            sublocalidad y categoría.
+            Indica qué grupo atiende una localidad,
+            sublocalidad y categoría concreta.
           </p>
+        </div>
+      </div>
 
-          <form
-            onSubmit={
-              handleSubmit
-            }
-          >
+      <form
+        onSubmit={
+          handleSubmit
+        }
+      >
             <label>
               Grupo
 
@@ -1164,9 +1519,7 @@ export function HelpdeskOperationsPage() {
                 onChange={
                   event =>
                     setCoverageTeamId(
-                      event
-                        .target
-                        .value,
+                      event.target.value,
                     )
                 }
               >
@@ -1207,9 +1560,7 @@ export function HelpdeskOperationsPage() {
                 onChange={
                   event => {
                     setCoverageSiteId(
-                      event
-                        .target
-                        .value,
+                      event.target.value,
                     )
 
                     setCoverageLocationId(
@@ -1256,9 +1607,7 @@ export function HelpdeskOperationsPage() {
                 onChange={
                   event =>
                     setCoverageLocationId(
-                      event
-                        .target
-                        .value,
+                      event.target.value,
                     )
                 }
               >
@@ -1298,9 +1647,7 @@ export function HelpdeskOperationsPage() {
                 onChange={
                   event =>
                     setCoverageCategory(
-                      event
-                        .target
-                        .value,
+                      event.target.value,
                     )
                 }
                 placeholder="Ej.: redes"
@@ -1324,9 +1671,7 @@ export function HelpdeskOperationsPage() {
                   event =>
                     setCoveragePriority(
                       Number(
-                        event
-                          .target
-                          .value,
+                        event.target.value,
                       ),
                     )
                 }
@@ -1335,10 +1680,7 @@ export function HelpdeskOperationsPage() {
 
             <button
               type="submit"
-              className={
-                'helpdesk-ui-button ' +
-                'helpdesk-ui-button--primary'
-              }
+              className="helpdesk-ui-button helpdesk-ui-button--primary"
               disabled={
                 disabled
               }
@@ -1390,8 +1732,7 @@ export function HelpdeskOperationsPage() {
                     <td
                       colSpan={7}
                     >
-                      No hay coberturas
-                      configuradas.
+                      No hay coberturas configuradas.
                     </td>
                   </tr>
                 ) : (
@@ -1403,9 +1744,11 @@ export function HelpdeskOperationsPage() {
                         }
                       >
                         <td>
-                          {teamName(
-                            coverage.teamId,
-                          )}
+                          <strong>
+                            {teamName(
+                              coverage.teamId,
+                            )}
+                          </strong>
                         </td>
 
                         <td>
@@ -1416,8 +1759,7 @@ export function HelpdeskOperationsPage() {
 
                         <td>
                           {locationName(
-                            coverage
-                              .siteLocationId,
+                            coverage.siteLocationId,
                           )}
                         </td>
 
@@ -1436,20 +1778,25 @@ export function HelpdeskOperationsPage() {
                         </td>
 
                         <td>
-                          {
-                            coverage.isActive
-                              ? 'Activa'
-                              : 'Inactiva'
-                          }
+                          <span
+                            className={
+                              coverage.isActive
+                                ? 'hd-operation__status hd-operation__status--ready'
+                                : 'hd-operation__status hd-operation__status--muted'
+                            }
+                          >
+                            {
+                              coverage.isActive
+                                ? 'Activa'
+                                : 'Inactiva'
+                            }
+                          </span>
                         </td>
 
                         <td>
                           <button
                             type="button"
-                            className={
-                              'helpdesk-ui-button ' +
-                              'helpdesk-ui-button--secondary'
-                            }
+                            className="helpdesk-ui-button helpdesk-ui-button--secondary"
                             disabled={
                               disabled
                             }
@@ -1475,11 +1822,12 @@ export function HelpdeskOperationsPage() {
             </table>
           </div>
         </section>
+        </>
       )}
 
-      {/* ========================================================
+      {/* ======================================================
           TECHNICIANS
-         ======================================================== */}
+         ====================================================== */}
 
       {!loading &&
         tab ===
@@ -1487,125 +1835,414 @@ export function HelpdeskOperationsPage() {
         <section
           className="hd-operation__card"
         >
-          <h2>
-            Técnicos y ubicación
-          </h2>
-
-          <p>
-            La ubicación del técnico
-            se toma directamente del
-            usuario corporativo. La
-            capacidad, turnos y
-            autoasignación se administran
-            desde Grupos y especialidades.
-          </p>
-
           <div
-            className="hd-operation__table"
+            className="hd-operation__section-heading"
           >
-            <table>
-              <thead>
-                <tr>
-                  <th>
-                    Técnico
-                  </th>
+            <div>
+              <h2>
+                Diagnóstico de técnicos
+              </h2>
 
-                  <th>
-                    Correo
-                  </th>
+              <p>
+                Esta vista indica exactamente por qué un técnico
+                puede o no recibir tickets automáticamente.
+              </p>
+            </div>
 
-                  <th>
-                    Localidad
-                  </th>
+            <Link
+              to="/helpdesk/especialidades?tab=schedules&workspace=helpdesk"
+              className="helpdesk-ui-button helpdesk-ui-button--primary"
+            >
+              Configurar grupos y turnos
+            </Link>
+          </div>
 
-                  <th>
-                    Sublocalidad
-                  </th>
+          {!staff.length ? (
+            <div
+              className="hd-operation__empty"
+            >
+              <UserRound
+                size={32}
+              />
 
-                  <th>
-                    Puede atender
-                  </th>
+              <strong>
+                No hay técnicos operativos
+              </strong>
 
-                  <th>
-                    Asistente
-                  </th>
-                </tr>
-              </thead>
-
-              <tbody>
-                {!staff.length ? (
-                  <tr>
-                    <td
-                      colSpan={6}
+              <p>
+                Asigna permisos de Helpdesk y agrégalos
+                a un grupo de trabajo.
+              </p>
+            </div>
+          ) : (
+            <div
+              className="hd-operation__technicians"
+            >
+              {staff.map(
+                technician => (
+                  <article
+                    key={
+                      technician.id
+                    }
+                    className={
+                      `hd-operation__technician-card ` +
+                      `hd-operation__technician-card--${routingTone(technician)}`
+                    }
+                  >
+                    <header
+                      className="hd-operation__technician-header"
                     >
-                      No hay usuarios
-                      disponibles para
-                      Mesa de Ayuda.
-                    </td>
-                  </tr>
-                ) : (
-                  staff.map(
-                    technician => (
-                      <tr
-                        key={
-                          technician.id
-                        }
+                      <div
+                        className="hd-operation__avatar"
                       >
-                        <td>
-                          <strong>
-                            {
-                              technician.name
-                            }
-                          </strong>
-                        </td>
+                        {
+                          technician.name
+                            .slice(
+                              0,
+                              1,
+                            )
+                            .toUpperCase()
+                        }
+                      </div>
 
-                        <td>
+                      <div
+                        className="hd-operation__technician-name"
+                      >
+                        <strong>
+                          {
+                            technician.name
+                          }
+                        </strong>
+
+                        <span>
                           {
                             technician.email
                           }
-                        </td>
+                        </span>
 
-                        <td>
+                        <small>
+                          {
+                            technician.roles.length
+                              ? technician.roles.join(
+                                  ' · ',
+                                )
+                              : 'Sin rol visible'
+                          }
+                        </small>
+                      </div>
+
+                      <span
+                        className={
+                          `hd-operation__routing-badge ` +
+                          `hd-operation__routing-badge--${routingTone(technician)}`
+                        }
+                      >
+                        {
+                          technician.routingReady
+                            ? (
+                              <CheckCircle2
+                                size={14}
+                              />
+                            )
+                            : (
+                              <XCircle
+                                size={14}
+                              />
+                            )
+                        }
+
+                        {
+                          routingLabel(
+                            technician,
+                          )
+                        }
+                      </span>
+                    </header>
+
+                    <div
+                      className="hd-operation__technician-grid"
+                    >
+                      <div>
+                        <span>
+                          Localidad
+                        </span>
+
+                        <strong>
                           {
                             technician.siteName
                             ??
                             'Sin localidad'
                           }
-                        </td>
+                        </strong>
 
-                        <td>
+                        <small>
                           {
-                            technician
-                              .siteLocationName
+                            technician.siteLocationName
                             ??
+                            'Sin sublocalidad'
+                          }
+                        </small>
+                      </div>
+
+                      <div>
+                        <span>
+                          Grupos
+                        </span>
+
+                        <strong>
+                          {
+                            technician.groupNames.length
+                              ? technician.groupNames.join(
+                                  ', ',
+                                )
+                              : 'Sin grupo'
+                          }
+                        </strong>
+
+                        <small>
+                          {
+                            technician.groups.length
+                          }
+                          {' '}
+                          membresías
+                        </small>
+                      </div>
+
+                      <div>
+                        <span>
+                          Carga
+                        </span>
+
+                        <strong>
+                          {
+                            technician.openTickets
+                          }
+                          {' / '}
+                          {
+                            technician.maxCapacity
+                            ||
                             '—'
                           }
-                        </td>
+                        </strong>
 
-                        <td>
+                        <small>
                           {
-                            technician
-                              .canWorkTickets
-                              ? 'Sí'
-                              : 'No'
+                            technician.remainingCapacity
                           }
-                        </td>
+                          {' '}
+                          plazas disponibles
+                        </small>
+                      </div>
 
-                        <td>
+                      <div>
+                        <span>
+                          Turno
+                        </span>
+
+                        <strong>
                           {
-                            technician
-                              .assistantEnabled
+                            technician.onDuty
+                              ? 'En turno'
+                              : technician.scheduleConfigured
+                                ? 'Fuera de turno'
+                                : 'Sin horario'
+                          }
+                        </strong>
+
+                        <small>
+                          {
+                            technician.scheduleConfigured
+                              ? 'Horario configurado'
+                              : 'Requiere configuración'
+                          }
+                        </small>
+                      </div>
+
+                      <div>
+                        <span>
+                          Disponibilidad
+                        </span>
+
+                        <strong>
+                          {
+                            technician.isAvailable
+                              ? 'Disponible'
+                              : 'No disponible'
+                          }
+                        </strong>
+
+                        <small>
+                          {
+                            technician.acceptsAutomaticAssignments
+                              ? 'Acepta autoasignación'
+                              : 'Autoasignación apagada'
+                          }
+                        </small>
+                      </div>
+
+                      <div>
+                        <span>
+                          Titan Assistant
+                        </span>
+
+                        <strong>
+                          {
+                            technician.assistantEnabled
                               ? 'Habilitado'
                               : 'Deshabilitado'
                           }
-                        </td>
-                      </tr>
-                    ),
-                  )
-                )}
-              </tbody>
-            </table>
-          </div>
+                        </strong>
+                      </div>
+                    </div>
+
+                    {technician.routingIssues.length >
+                      0 && (
+                      <div
+                        className="hd-operation__issues"
+                      >
+                        <AlertTriangle
+                          size={16}
+                        />
+
+                        <div>
+                          <strong>
+                            Bloqueos de routing
+                          </strong>
+
+                          <div
+                            className="hd-operation__issue-tags"
+                          >
+                            {technician.routingIssues.map(
+                              issue => (
+                                <span
+                                  key={
+                                    issue
+                                  }
+                                >
+                                  {
+                                    issue
+                                  }
+                                </span>
+                              ),
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {technician.groups.length >
+                      0 && (
+                      <details
+                        className="hd-operation__groups-detail"
+                      >
+                        <summary>
+                          Ver diagnóstico por grupo
+                        </summary>
+
+                        <div
+                          className="hd-operation__group-list"
+                        >
+                          {technician.groups.map(
+                            group => (
+                              <div
+                                key={
+                                  group.teamId
+                                }
+                                className={
+                                  group.routingReady
+                                    ? 'is-ready'
+                                    : ''
+                                }
+                              >
+                                <header>
+                                  <strong>
+                                    {
+                                      group.teamName
+                                    }
+                                  </strong>
+
+                                  <span>
+                                    Prioridad
+                                    {' '}
+                                    {
+                                      group.priority
+                                    }
+                                  </span>
+                                </header>
+
+                                <p>
+                                  <strong>
+                                    Capacidad:
+                                  </strong>
+                                  {' '}
+                                  {
+                                    group.openTickets
+                                  }
+                                  /
+                                  {
+                                    group.maxOpenTickets
+                                  }
+                                  {' · '}
+
+                                  <strong>
+                                    Disponible:
+                                  </strong>
+                                  {' '}
+                                  {
+                                    group.isAvailable
+                                      ? 'Sí'
+                                      : 'No'
+                                  }
+                                  {' · '}
+
+                                  <strong>
+                                    En turno:
+                                  </strong>
+                                  {' '}
+                                  {
+                                    group.onDuty
+                                      ? 'Sí'
+                                      : 'No'
+                                  }
+                                </p>
+
+                                <small>
+                                  {formatSchedule(
+                                    group,
+                                  )}
+                                </small>
+
+                                {group.routingIssues.length >
+                                  0 && (
+                                  <div
+                                    className="hd-operation__issue-tags"
+                                  >
+                                    {group.routingIssues.map(
+                                      issue => (
+                                        <span
+                                          key={
+                                            issue
+                                          }
+                                        >
+                                          {
+                                            issue
+                                          }
+                                        </span>
+                                      ),
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            ),
+                          )}
+                        </div>
+                      </details>
+                    )}
+                  </article>
+                ),
+              )}
+            </div>
+          )}
         </section>
       )}
     </main>

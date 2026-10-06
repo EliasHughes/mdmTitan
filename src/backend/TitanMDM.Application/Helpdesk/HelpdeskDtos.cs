@@ -102,6 +102,40 @@ public sealed record HelpdeskTicketListResult(
     int Page,
     int PageSize);
 
+// ============================================================
+// ROUTING DIAGNOSTICS
+// ============================================================
+
+public sealed record HelpdeskRoutingPreviewRequest(
+    Guid? RequesterUserId,
+    Guid? SiteId,
+    Guid? SiteLocationId,
+    Guid? RequestedTeamId,
+    string Category,
+    string? Priority);
+
+public sealed record HelpdeskRoutingPreviewDto(
+    bool CanAssign,
+    string Reason,
+    string? RequesterLocation,
+    Guid? SiteId,
+    Guid? SiteLocationId,
+    Guid? TeamId,
+    Guid? TechnicianId,
+    string? TechnicianName,
+    string? TeamName,
+    string? CoverageLocation,
+    string? TechnicianLocation,
+    int? OpenTickets,
+    int? Capacity,
+    int? RemainingCapacity,
+    string Category,
+    string Priority);
+
+// ============================================================
+// ENTRA
+// ============================================================
+
 public sealed record EntraIdSettingsDto(
     bool IsEnabled,
     string? TenantId,
