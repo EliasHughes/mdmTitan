@@ -463,27 +463,53 @@ public static class InfrastructureServiceExtensions
             IReportsService,
             ReportsService>();
 
-        // ============================================================
-        // HELPDESK / ENTRA
-        // ============================================================
+// ============================================================
+// HELPDESK / ENTRA / MICROSOFT GRAPH MAIL
+// ============================================================
 
-        services.AddHttpClient(
-            "entra-id");
+services.AddHttpClient(
+    "entra-id",
+    client =>
+    {
+        client.Timeout =
+            TimeSpan.FromSeconds(
+                60);
 
-        services.AddScoped<
-            IHelpdeskService,
-            HelpdeskService>();
+        client.DefaultRequestHeaders
+            .UserAgent
+            .ParseAdd(
+                "TitanMDM-Helpdesk/1.0");
+    });
 
-        services.AddScoped<
-            IEntraIdDirectoryService,
-            EntraIdDirectoryService>();
+// ------------------------------------------------------------
+// HELPDESK CORE
+// ------------------------------------------------------------
 
-        services.AddScoped<
-            HelpdeskEmailImportService>();
-        
-        services.AddScoped<
-            HelpdeskEmailImportService>();
+services.AddScoped<
+    IHelpdeskService,
+    HelpdeskService>();
 
+// ------------------------------------------------------------
+// MICROSOFT ENTRA DIRECTORY
+// ------------------------------------------------------------
+
+services.AddScoped<
+    IEntraIdDirectoryService,
+    EntraIdDirectoryService>();
+
+// ------------------------------------------------------------
+// HELPDESK MAIL IMPORT
+//
+// HelpdeskMailWorker resuelve AMBOS servicios desde su scope.
+// Si alguno no está registrado, el worker falla antes de poder
+// actualizar LastInboundAttemptAtUtc y la UI queda en "Nunca".
+// ------------------------------------------------------------
+
+services.AddScoped<
+    HelpdeskEmailImportService>();
+
+services.AddScoped<
+    HelpdeskEmailAttachmentImportService>();
         // ============================================================
         // AUTHORIZATION / SCOPES
         // ============================================================
