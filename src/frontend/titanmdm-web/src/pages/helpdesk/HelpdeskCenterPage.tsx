@@ -958,13 +958,7 @@ export function HelpdeskCenterPage() {
         >
           KPI
         </Link>
-
-        <Link
-          to="/helpdesk/centro/graficos?workspace=helpdesk"
-        >
-          Gráficos
-        </Link>
-
+        
         {manager && (
           <>
             <Link

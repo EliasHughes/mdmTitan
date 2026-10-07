@@ -416,3 +416,146 @@
     font-size: 24px;
   }
 }
+/* ============================================================
+   METRICS / SUMMARY
+   ============================================================ */
+
+.hdgp-metrics {
+  display: grid;
+  grid-template-columns:
+    repeat(
+      4,
+      minmax(0, 1fr)
+    );
+  gap: 12px;
+  margin-bottom: 18px;
+}
+
+.hdgp-metrics article {
+  display: grid;
+  grid-template-columns:
+    auto
+    minmax(0, 1fr)
+    auto;
+  align-items: center;
+  gap: 10px;
+  min-height: 70px;
+  padding: 14px 16px;
+  border: 1px solid #dde5f2;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow:
+    0 5px 18px
+    rgb(31 54 101 / 4%);
+}
+
+.hdgp-metrics article > svg {
+  color: #5369db;
+}
+
+.hdgp-metrics article > span {
+  min-width: 0;
+  color: #71809a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.hdgp-metrics article > strong {
+  color: #253752;
+  font-size: 22px;
+  line-height: 1;
+}
+
+.hdgp-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+
+.hdgp-tabs button {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid #dce4f1;
+  border-radius: 10px;
+  background: #fff;
+  color: #53637b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.hdgp-tabs button[aria-pressed='true'] {
+  border-color: #6073df;
+  background: #eef2ff;
+  color: #4359cf;
+}
+
+.hdgp-actions > a {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 40px;
+  padding: 9px 13px;
+  border: 1px solid #dce4f1;
+  border-radius: 10px;
+  background: #fff;
+  color: #4057ca;
+  text-decoration: none;
+}
+
+.hdgp-savebar {
+  position: sticky;
+  bottom: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  margin-top: 18px;
+  padding: 13px 15px;
+  border: 1px solid #d8e0ef;
+  border-radius: 13px;
+  background:
+    rgb(255 255 255 / 96%);
+  box-shadow:
+    0 10px 28px
+    rgb(31 54 101 / 12%);
+  backdrop-filter: blur(10px);
+}
+
+.hdgp-savebar > div {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #62728b;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+@media (max-width: 920px) {
+  .hdgp-metrics {
+    grid-template-columns:
+      repeat(
+        2,
+        minmax(0, 1fr)
+      );
+  }
+}
+
+@media (max-width: 560px) {
+  .hdgp-metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .hdgp-savebar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .hdgp-savebar button {
+    width: 100%;
+  }
+}

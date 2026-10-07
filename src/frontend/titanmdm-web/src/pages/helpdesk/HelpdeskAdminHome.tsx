@@ -3,6 +3,7 @@ import {
   Building2,
   Clock3,
   CloudCog,
+  FileText,
   Mail,
   Settings,
   Tags,
@@ -61,7 +62,7 @@ export function HelpdeskAdminHome() {
               'Localidades y cobertura',
 
             description:
-              'Sites, sublocalidades y cobertura territorial de Mesa de Ayuda.',
+              'Administra Sites, sublocalidades y la cobertura territorial de la Mesa de Ayuda.',
 
             path:
               '/helpdesk/operations?workspace=helpdesk',
@@ -83,7 +84,7 @@ export function HelpdeskAdminHome() {
               'Técnicos',
 
             description:
-              'Disponibilidad, capacidad y ubicación del personal TIC.',
+              'Configura disponibilidad, capacidad, ubicación y elegibilidad del personal TIC.',
 
             path:
               '/helpdesk/operations?tab=technicians&workspace=helpdesk',
@@ -105,7 +106,7 @@ export function HelpdeskAdminHome() {
               'Grupos de trabajo',
 
             description:
-              'Áreas TIC, cobertura, integrantes y distribución de solicitudes.',
+              'Organiza áreas TIC, categorías, cobertura, técnicos y reglas de asignación.',
 
             path:
               '/helpdesk/especialidades?workspace=helpdesk',
@@ -127,10 +128,10 @@ export function HelpdeskAdminHome() {
               'Categorías',
 
             description:
-              'Tareas y especialidades atendidas por cada grupo TIC.',
+              'Define las especialidades y tipos de solicitudes que atiende cada grupo.',
 
             path:
-              '/helpdesk/especialidades?workspace=helpdesk',
+              '/helpdesk/especialidades?tab=categories&workspace=helpdesk',
 
             icon:
               Tags,
@@ -149,10 +150,10 @@ export function HelpdeskAdminHome() {
               'Turnos y capacidad',
 
             description:
-              'Horarios, disponibilidad, prioridad y capacidad de técnicos.',
+              'Configura horarios, disponibilidad, prioridad y capacidad máxima de los técnicos.',
 
             path:
-              '/helpdesk/especialidades?workspace=helpdesk',
+              '/helpdesk/especialidades?tab=schedules&workspace=helpdesk',
 
             icon:
               Clock3,
@@ -170,10 +171,49 @@ export function HelpdeskAdminHome() {
 
       {
         title:
+          'Experiencia del solicitante',
+
+        description:
+          'Configura cómo los usuarios crean solicitudes y qué información debe recopilar TitanMDM.',
+
+        actions: [
+          {
+            title:
+              'Plantillas de tickets',
+
+            description:
+              'Crea formularios guiados por categoría con preguntas obligatorias para solicitudes frecuentes.',
+
+            path:
+              '/helpdesk/templates?workspace=helpdesk',
+
+            icon:
+              FileText,
+
+            permissions: [
+              helpdeskPermissions
+                .templatesView,
+
+              helpdeskPermissions
+                .templatesManage,
+
+              helpdeskPermissions
+                .adminAccess,
+
+              'helpdesk.manage',
+
+              'settings.manage',
+            ],
+          },
+        ],
+      },
+
+      {
+        title:
           'Integraciones',
 
         description:
-          'Conecta TitanMDM con el directorio corporativo y el buzón de Mesa de Ayuda.',
+          'Conecta TitanMDM con Microsoft 365 y el directorio corporativo.',
 
         actions: [
           {
@@ -181,7 +221,7 @@ export function HelpdeskAdminHome() {
               'Microsoft Entra ID',
 
             description:
-              'Directorio, sincronización de usuarios y acceso corporativo.',
+              'Sincronización del directorio, vinculación de usuarios e inicio de sesión corporativo.',
 
             path:
               '/helpdesk/entra?workspace=helpdesk',
@@ -204,7 +244,7 @@ export function HelpdeskAdminHome() {
               'Correo Microsoft 365',
 
             description:
-              'Buzón de Mesa de Ayuda, entrada, salida, reintentos y diagnóstico Graph.',
+              'Configura el buzón, recepción, envío, reintentos, dead-letter y diagnóstico Microsoft Graph.',
 
             path:
               '/helpdesk/mail?workspace=helpdesk',
@@ -218,6 +258,9 @@ export function HelpdeskAdminHome() {
 
               helpdeskPermissions
                 .mailManage,
+
+              helpdeskPermissions
+                .adminAccess,
             ],
           },
         ],
@@ -225,10 +268,10 @@ export function HelpdeskAdminHome() {
 
       {
         title:
-          'Configuración de servicio',
+          'Configuración del servicio',
 
         description:
-          'Parámetros operativos que ya están disponibles en TitanMDM.',
+          'Define los parámetros que gobiernan el ciclo de vida y los compromisos de atención.',
 
         actions: [
           {
@@ -236,7 +279,7 @@ export function HelpdeskAdminHome() {
               'SLA y reapertura',
 
             description:
-              'Tiempos de respuesta, resolución, pausas, escalamiento y reapertura.',
+              'Configura primera respuesta, resolución, pausas, escalamiento y período de reapertura.',
 
             path:
               '/helpdesk/centro/configuracion?workspace=helpdesk',
@@ -283,10 +326,11 @@ export function HelpdeskAdminHome() {
           </h1>
 
           <p>
-            Configura únicamente
-            funciones operativas
-            disponibles y listas para
-            utilizar.
+            Configura la operación,
+            experiencia del solicitante,
+            integraciones y parámetros
+            del servicio desde un único
+            punto.
           </p>
         </div>
       </header>
@@ -299,10 +343,9 @@ export function HelpdeskAdminHome() {
             const actions =
               section.actions.filter(
                 action =>
-                  action.permissions
-                    .some(
-                      hasPermission,
-                    )
+                  action.permissions.some(
+                    hasPermission,
+                  )
                   ||
                   hasPermission(
                     helpdeskPermissions
